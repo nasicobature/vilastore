@@ -1,0 +1,137 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Dashboard</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+        <h1>VilaStore</h1>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="{% url 'index' %}" class="nav-link active"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+        <a href="{% url 'product' %}" class="nav-link"><i data-lucide="package"></i><span>Products</span></a>
+        <a href="{% url 'inventory' %}" class="nav-link"><i data-lucide="boxes"></i><span>Inventory</span></a>
+        <a href="{% url 'sales-history' %}" class="nav-link"><i data-lucide="receipt"></i><span>Sales History</span></a>
+        <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
+        <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
+        <a href="{% url 'customer' %}" class="nav-link"><i data-lucide="users"></i><span>Customers</span></a>
+        <a href="{% url 'settings' %}" class="nav-link"><i data-lucide="settings"></i><span>Settings</span></a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <h1>Dashboard</h1>
+        <p>Welcome back! Today is {{ today_date|date:"F d, Y" }}.</p>
+      </header>
+
+      {% if messages %}
+      <section style="margin-bottom: 1rem;">
+        {% for message in messages %}
+        <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      <section class="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Today's Sales</span>
+            <div class="stat-card-icon primary"><i data-lucide="trending-up"></i></div>
+          </div>
+          <div class="stat-card-value">₦{{ today_sales|floatformat:2 }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Today's Profit</span>
+            <div class="stat-card-icon primary"><i data-lucide="wallet"></i></div>
+          </div>
+          <div class="stat-card-value">₦{{ today_profit|floatformat:2 }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Total Products</span>
+            <div class="stat-card-icon primary"><i data-lucide="package"></i></div>
+          </div>
+          <div class="stat-card-value">{{ total_products }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Low Stock Items</span>
+            <div class="stat-card-icon warning"><i data-lucide="alert-triangle"></i></div>
+          </div>
+          <div class="stat-card-value">{{ low_stock_count }}</div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <h2>Top Products</h2>
+          <a href="{% url 'product' %}" class="btn btn-outline">Go to Sales <i data-lucide="arrow-right"></i></a>
+        </div>
+        <div class="products-grid">
+          {% for product in top_products %}
+          <div class="product-card">
+            <div class="product-card-image"><i data-lucide="package"></i></div>
+            <div class="product-card-content">
+              <h3>{{ product.name }}</h3>
+              <p>₦{{ product.selling_price|floatformat:2 }}</p>
+              <small>Stock: {{ product.stock }} | Sold: {{ product.total_sold|default:0 }}</small>
+            </div>
+          </div>
+          {% empty %}
+          <p>No products available yet.</p>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Today's Transactions</h2>
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Items</th>
+                <th>Amount</th>
+                <th>Profit</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sale in today_transactions %}
+              <tr>
+                <td>{{ sale.items_count|default:0 }}</td>
+                <td>₦{{ sale.total_amount|floatformat:2 }}</td>
+                <td class="text-profit">₦{{ sale.total_profit|floatformat:2 }}</td>
+                <td>{{ sale.created_at|date:"M d, H:i" }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="4" class="empty-state">
+                  <i data-lucide="receipt"></i>
+                  <p>No transactions yet</p>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

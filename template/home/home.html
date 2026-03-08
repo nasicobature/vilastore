@@ -1,0 +1,338 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Smart Business Management</title>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-2: #242834;
+      --border: #2e3345;
+      --text: #e8eaf0;
+      --text-muted: #8b92a8;
+      --primary: #6c5ce7;
+      --primary-light: #a29bfe;
+      --accent: #00cec9;
+      --accent-2: #fd79a8;
+      --gradient: linear-gradient(135deg, #6c5ce7, #a29bfe);
+      --gradient-2: linear-gradient(135deg, #00cec9, #81ecec);
+      --gradient-3: linear-gradient(135deg, #fd79a8, #e17055);
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    a { color: var(--primary-light); text-decoration: none; }
+
+    /* NAV */
+    .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; background: rgba(15,17,23,0.85); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
+    .nav-logo { display: flex; align-items: center; gap: 0.75rem; font-size: 1.5rem; font-weight: 800; }
+    .nav-logo-icon { width: 40px; height: 40px; background: var(--gradient); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; }
+    .nav-logo-icon svg { color: #fff; }
+    .nav-links { display: flex; gap: 0.5rem; }
+    .nav-links a { padding: 0.6rem 1.25rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; }
+    .nav-links .btn-outline { border: 1px solid var(--border); color: var(--text); }
+    .nav-links .btn-outline:hover { border-color: var(--primary); color: var(--primary-light); }
+    .nav-links .btn-primary { background: var(--gradient); color: #fff; }
+    .nav-links .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* HERO */
+    .hero { min-height: 100vh; display: flex; align-items: center; justify-content: center; text-align: center; padding: 8rem 2rem 4rem; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; width: 600px; height: 600px; background: radial-gradient(circle, rgba(108,92,231,0.15), transparent 70%); top: -100px; right: -100px; }
+    .hero::after { content: ''; position: absolute; width: 400px; height: 400px; background: radial-gradient(circle, rgba(0,206,201,0.1), transparent 70%); bottom: -50px; left: -50px; }
+    .hero-content { position: relative; z-index: 1; max-width: 720px; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 1rem; border-radius: 50px; background: var(--surface); border: 1px solid var(--border); font-size: 0.85rem; color: var(--accent); margin-bottom: 2rem; }
+    .hero h1 { font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 900; line-height: 1.1; margin-bottom: 1.5rem; }
+    .hero h1 span { background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p { font-size: 1.15rem; color: var(--text-muted); max-width: 540px; margin: 0 auto 2.5rem; }
+    .hero-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .hero-buttons a { padding: 0.85rem 2rem; border-radius: var(--radius-sm); font-weight: 700; font-size: 1rem; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.25s; }
+    .hero-buttons .btn-hero { background: var(--gradient); color: #fff; box-shadow: 0 8px 30px rgba(108,92,231,0.3); }
+    .hero-buttons .btn-hero:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(108,92,231,0.4); }
+    .hero-buttons .btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+    .hero-buttons .btn-secondary:hover { border-color: var(--primary); }
+
+    /* SECTIONS */
+    .section { padding: 5rem 2rem; max-width: 1100px; margin: 0 auto; }
+    .section-title { text-align: center; margin-bottom: 3rem; }
+    .section-title h2 { font-size: 2.2rem; font-weight: 800; margin-bottom: 0.75rem; }
+    .section-title p { color: var(--text-muted); font-size: 1.05rem; }
+
+    /* PORTALS */
+    .portals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+    .portal-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; transition: all 0.3s; position: relative; overflow: hidden; }
+    .portal-card:hover { transform: translateY(-4px); border-color: var(--primary); box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .portal-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .portal-card.owner::before { background: var(--gradient); }
+    .portal-card.shopboy::before { background: var(--gradient-2); }
+    .portal-card.register::before { background: var(--gradient-3); }
+    .portal-icon { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem; }
+    .portal-card.owner .portal-icon { background: rgba(108,92,231,0.15); color: var(--primary-light); }
+    .portal-card.shopboy .portal-icon { background: rgba(0,206,201,0.15); color: var(--accent); }
+    .portal-card.register .portal-icon { background: rgba(253,121,168,0.15); color: var(--accent-2); }
+    .portal-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .portal-card p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+    .portal-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1.5rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; border: none; cursor: pointer; }
+    .portal-card.owner .portal-btn { background: var(--gradient); color: #fff; }
+    .portal-card.shopboy .portal-btn { background: var(--gradient-2); color: var(--bg); }
+    .portal-card.register .portal-btn { background: var(--gradient-3); color: #fff; }
+    .portal-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* HOW IT WORKS */
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2rem; counter-reset: step; }
+    .step { text-align: center; position: relative; }
+    .step-num { width: 48px; height: 48px; border-radius: 50%; background: var(--gradient); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem; margin: 0 auto 1rem; color: #fff; }
+    .step h4 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .step p { color: var(--text-muted); font-size: 0.9rem; }
+
+    /* FEATURES */
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.25rem; }
+    .feature { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; transition: border-color 0.3s; }
+    .feature:hover { border-color: var(--primary); }
+    .feature-icon { width: 44px; height: 44px; border-radius: 10px; background: rgba(108,92,231,0.12); color: var(--primary-light); display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; }
+    .feature h4 { font-weight: 700; margin-bottom: 0.4rem; }
+    .feature p { color: var(--text-muted); font-size: 0.88rem; }
+
+    /* FEEDBACK */
+    .feedback-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2.5rem; max-width: 640px; margin: 0 auto; }
+    .feedback-section h3 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .feedback-section > p { color: var(--text-muted); margin-bottom: 1.5rem; }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-group label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.4rem; }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%; padding: 0.75rem 1rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text); font-size: 0.95rem; font-family: inherit; outline: none; transition: border-color 0.2s;
+    }
+    .form-group input:focus, .form-group textarea:focus { border-color: var(--primary); }
+    .form-group textarea { resize: vertical; min-height: 120px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .btn-submit { width: 100%; padding: 0.85rem; background: var(--gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s; }
+    .btn-submit:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* FOOTER */
+    .footer { text-align: center; padding: 2rem; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem; margin-top: 3rem; }
+
+    /* TOAST */
+    .toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 999; }
+    .toast { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 1rem 1.5rem; border-radius: var(--radius-sm); box-shadow: 0 10px 40px rgba(0,0,0,0.4); animation: slideUp 0.3s ease; }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    @media (max-width: 768px) {
+      .nav { padding: 0.75rem 1rem; }
+      .nav-links { gap: 0.25rem; }
+      .nav-links a { padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+      .section { padding: 3rem 1rem; }
+      .form-row { grid-template-columns: 1fr; }
+      .hero { padding: 6rem 1rem 3rem; }
+    }
+
+    @media (max-width: 480px) {
+      .nav { flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+      .nav-logo { font-size: 1.25rem; }
+      .nav-links { width: 100%; flex-wrap: wrap; }
+      .nav-links a { flex: 1 1 auto; text-align: center; }
+      .hero-badge { font-size: 0.75rem; }
+      .hero h1 { font-size: 2.1rem; }
+      .hero p { font-size: 1rem; }
+      .section-title h2 { font-size: 1.8rem; }
+      .feedback-section { padding: 1.5rem; }
+      .portal-card, .feature { padding: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-logo">
+      <div class="nav-logo-icon"><i data-lucide="store" style="width:22px;height:22px;"></i></div>
+      VilaStore
+    </div>
+    <div class="nav-links">
+      <a href="{% url 'login' %}" class="btn-outline">Sign In</a>
+      <a href="{% url 'signup' %}" class="btn-primary">Get Started</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-badge"><i data-lucide="zap" style="width:16px;height:16px;"></i> Built for African businesses</div>
+      <h1>Manage Your Business <span>Smarter & Faster</span></h1>
+      <p>VilaStore helps you track sales, manage inventory, monitor expenses, and grow your business &mdash; all from one simple dashboard.</p>
+      <div class="hero-buttons">
+        <a href="{% url 'signup' %}" class="btn-hero"><i data-lucide="rocket" style="width:20px;height:20px;"></i> Start Free Trial</a>
+        <a href="#how-it-works" class="btn-secondary"><i data-lucide="play-circle" style="width:20px;height:20px;"></i> How It Works</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- PORTALS -->
+  <section class="section">
+    <div class="section-title">
+      <h2>Access Your Portal</h2>
+      <p>Choose where you want to go</p>
+    </div>
+    <div class="portals-grid">
+      <div class="portal-card owner">
+        <div class="portal-icon"><i data-lucide="briefcase" style="width:28px;height:28px;"></i></div>
+        <h3>Shop Owner Login</h3>
+        <p>Access your full business dashboard &mdash; manage products, view reports, track sales, and control everything about your shop.</p>
+        <a href="{% url 'login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Owner Login</a>
+      </div>
+      <div class="portal-card shopboy">
+        <div class="portal-icon"><i data-lucide="user-check" style="width:28px;height:28px;"></i></div>
+        <h3>Shop Boy Login</h3>
+        <p>Quick access for shop assistants &mdash; process sales, update stock, and handle customer orders assigned to you by the owner.</p>
+        <a href="{% url 'shopboy_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Shop Boy Login</a>
+      </div>
+      <div class="portal-card register">
+        <div class="portal-icon"><i data-lucide="user-plus" style="width:28px;height:28px;"></i></div>
+        <h3>Register Your Shop</h3>
+        <p>New to VilaStore? Create your account in minutes &mdash; set up your business profile, choose a plan, and start selling right away.</p>
+        <a href="{% url 'signup' %}" class="portal-btn"><i data-lucide="arrow-right" style="width:18px;height:18px;"></i> Create Account</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section" id="how-it-works">
+    <div class="section-title">
+      <h2>How VilaStore Works</h2>
+      <p>Get up and running in 4 simple steps</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h4>Create Account</h4>
+        <p>Sign up with your business details and choose a subscription plan that fits your needs.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h4>Add Products</h4>
+        <p>List your products with prices, cost, and stock quantities. Organise by category for easy tracking.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h4>Start Selling</h4>
+        <p>Use Quick Sell from the dashboard to record sales instantly. Inventory updates automatically.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h4>Track & Grow</h4>
+        <p>View real-time reports on profit, expenses, and trends. Make smarter decisions to grow your business.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="section">
+    <div class="section-title">
+      <h2>Everything You Need</h2>
+      <p>Powerful tools to run your business efficiently</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature">
+        <div class="feature-icon"><i data-lucide="shopping-cart" style="width:22px;height:22px;"></i></div>
+        <h4>Quick Sales</h4>
+        <p>Record sales in seconds. Profit and stock update automatically.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon"><i data-lucide="package" style="width:22px;height:22px;"></i></div>
+        <h4>Inventory Management</h4>
+        <p>Track stock levels, get low-stock alerts, and manage product categories.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon"><i data-lucide="bar-chart-3" style="width:22px;height:22px;"></i></div>
+        <h4>Smart Reports</h4>
+        <p>Daily, weekly, and monthly reports with profit margins and trends.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon"><i data-lucide="users" style="width:22px;height:22px;"></i></div>
+        <h4>Customer CRM</h4>
+        <p>Store customer details, track purchases, and send WhatsApp messages.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon"><i data-lucide="wallet" style="width:22px;height:22px;"></i></div>
+        <h4>Expense Tracking</h4>
+        <p>Log business expenses and see true profit after all costs.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon"><i data-lucide="store" style="width:22px;height:22px;"></i></div>
+        <h4>Marketplace</h4>
+        <p>List your shop on the marketplace and reach more customers.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEEDBACK -->
+  <section class="section">
+    <div class="section-title">
+      <h2>We'd Love Your Feedback</h2>
+      <p>Help us improve VilaStore for you</p>
+    </div>
+    <div class="feedback-section">
+      <h3>Send Us a Message</h3>
+      <p>Tell us what you think, report an issue, or suggest a feature.</p>
+      {% if messages %}
+      <section style="margin-bottom:1rem;">
+        {% for message in messages %}
+        <div class="card" style="padding:0.75rem 1rem;margin-bottom:0.5rem;">{{ message }}</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+      <form id="feedbackForm" method="POST" action="{% url 'submit_feedback' %}">
+        {% csrf_token %}
+        <div class="form-row">
+          <div class="form-group">
+            <label>Your Name</label>
+            <input type="text" id="fbName" name="name" placeholder="John Doe" required>
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="fbEmail" name="email" placeholder="john@example.com" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="fbCategory" name="category">
+            <option value="general">General Feedback</option>
+            <option value="bug">Bug Report</option>
+            <option value="feature">Feature Request</option>
+            <option value="support">Support</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Your Message</label>
+          <textarea id="fbMessage" name="message" placeholder="Tell us what's on your mind..." required></textarea>
+        </div>
+        <button type="submit" class="btn-submit"><i data-lucide="send" style="width:18px;height:18px;"></i> Send Feedback</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <p>&copy; 2025 VilaStore. Built with &#10084; for African businesses.</p>
+  </footer>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script>
+    lucide.createIcons();
+
+    function showToast(msg) {
+      const c = document.getElementById('toastContainer');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => t.remove(), 3000);
+    }
+  </script>
+</body>
+</html>

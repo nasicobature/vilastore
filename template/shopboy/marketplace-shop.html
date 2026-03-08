@@ -1,0 +1,164 @@
+﻿{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ shop_owner.business_name|default:shop_owner.username }} - Marketplace</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <header class="marketplace-header">
+    <div class="marketplace-header-inner">
+      <a href="{% url 'marketplace' %}" class="marketplace-logo">
+        <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+        <span>Marketplace</span>
+      </a>
+      <div class="marketplace-actions">
+        <a href="{% url 'marketplace' %}" class="btn btn-ghost"><i data-lucide="arrow-left"></i> Back</a>
+        {% if buyer %}
+        <a href="{% url 'marketplace_account' %}" class="btn btn-ghost">My Orders</a>
+        <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
+        {% else %}
+        <a href="{% url 'marketplace_login' %}" class="btn btn-ghost">Sign In</a>
+        <a href="{% url 'marketplace_signup' %}" class="btn btn-primary">Create Account</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <form method="POST" action="{% url 'marketplace_place_order' shop_owner.username %}" id="marketplaceOrderForm">
+    {% csrf_token %}
+    <div class="marketplace-container marketplace-shop-layout">
+      <aside class="marketplace-sidebar marketplace-shop-sidebar">
+        <div class="marketplace-shop-hero">
+          <div class="marketplace-shop-cover">
+            {% if profile.cover_image %}
+              <img src="{{ profile.cover_image.url }}" alt="{{ shop_owner.business_name|default:shop_owner.username }}">
+            {% else %}
+              <div class="marketplace-shop-cover-fallback"></div>
+            {% endif %}
+          </div>
+          <div class="marketplace-shop-identity">
+            {% if profile.logo %}
+              <img src="{{ profile.logo.url }}" alt="{{ shop_owner.business_name|default:shop_owner.username }}" class="marketplace-shop-logo">
+            {% else %}
+              <div class="marketplace-shop-logo marketplace-shop-logo-fallback"><i data-lucide="store"></i></div>
+            {% endif %}
+            <div>
+              <h2>{{ shop_owner.business_name|default:shop_owner.username }}</h2>
+              <p>@{{ shop_owner.username }}</p>
+            </div>
+          </div>
+          {% if profile.description %}
+          <p class="marketplace-shop-description">{{ profile.description }}</p>
+          {% endif %}
+          <div class="marketplace-shop-meta">
+            <span><i data-lucide="star"></i> {{ profile.rating }}</span>
+            <span><i data-lucide="map-pin"></i> {{ profile.location|default:"-" }}</span>
+          </div>
+        </div>
+
+        <div class="card marketplace-shop-card">
+          <h4>Buyer Details</h4>
+          <div class="form-group">
+            <label>Your Name</label>
+            <input type="text" name="buyer_name" class="input" required>
+          </div>
+          <div class="form-group">
+            <label>Phone or Email</label>
+            <input type="text" name="buyer_contact" class="input" value="{% if buyer %}{{ buyer.email }}{% endif %}" required>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Delivery Address (optional)</label>
+            <input type="text" name="buyer_address" class="input">
+          </div>
+        </div>
+
+        <div class="card marketplace-shop-card">
+          <h4>Order Summary</h4>
+          <div id="selectedItems" class="marketplace-selected-items">
+            <p class="marketplace-empty-selection">No items selected yet.</p>
+          </div>
+          <div class="marketplace-selected-total">
+            <span>Total</span>
+            <span id="selectedTotal">&#8358;0.00</span>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full" id="submitOrderBtn">
+            <i data-lucide="shopping-bag"></i> Send Order to Shop
+          </button>
+        </div>
+      </aside>
+
+      <main class="marketplace-main">
+        {% if messages %}
+        <section style="margin-bottom: 1rem;">
+          {% for message in messages %}
+          <div class="card" style="padding:0.75rem 1rem;">{{ message }}</div>
+          {% endfor %}
+        </section>
+        {% endif %}
+
+        <div class="marketplace-results-header">
+          <h2>{{ products|length }} product{{ products|length|pluralize }} available</h2>
+        </div>
+
+        <div class="products-grid marketplace-shop-grid">
+          {% for product in products %}
+          <article class="product-card marketplace-product-card" data-product-id="{{ product.id }}" data-product-name="{{ product.name }}" data-product-price="{{ product.selling_price }}" data-max-stock="{{ product.stock }}">
+            <div class="product-card-image">
+              {% if product.image %}
+                {% with file_url=product.image.url|lower %}
+                  {% if ".mp4" in file_url or ".webm" in file_url or ".ogg" in file_url %}
+                    <video class="product-media-video" muted loop autoplay playsinline preload="metadata">
+                      <source src="{{ product.image.url }}">
+                    </video>
+                    <span class="media-type-badge"><i data-lucide="video"></i> Video</span>
+                  {% else %}
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                  {% endif %}
+                {% endwith %}
+              {% else %}
+                <i data-lucide="package" class="product-card-placeholder"></i>
+              {% endif %}
+              {% if product.stock <= 0 %}
+              <span class="stock-badge out">Out of Stock</span>
+              {% endif %}
+            </div>
+
+            <div class="product-card-content">
+              <h3 class="product-card-name">{{ product.name }}</h3>
+              <div class="product-card-details">
+                <div class="product-card-price">&#8358;{{ product.selling_price|floatformat:2 }}</div>
+                <div class="product-card-meta">
+                  <div class="product-card-stock">{{ product.stock }} left</div>
+                </div>
+              </div>
+
+              <div class="marketplace-qty-controls">
+                <button class="btn btn-ghost qty-btn" type="button" data-action="decrease" data-product-id="{{ product.id }}" {% if product.stock <= 0 %}disabled{% endif %}><i data-lucide="minus"></i></button>
+                <input type="number" name="qty_{{ product.id }}" id="qty_{{ product.id }}" class="input qty-input" min="0" max="{{ product.stock }}" value="0" {% if product.stock <= 0 %}disabled{% endif %}>
+                <button class="btn btn-ghost qty-btn" type="button" data-action="increase" data-product-id="{{ product.id }}" {% if product.stock <= 0 %}disabled{% endif %}><i data-lucide="plus"></i></button>
+              </div>
+
+              <button class="btn btn-outline btn-full add-to-cart-btn" type="button" data-product-id="{{ product.id }}" {% if product.stock <= 0 %}disabled{% endif %}>
+                <i data-lucide="shopping-cart"></i> Add to Cart
+              </button>
+            </div>
+          </article>
+          {% empty %}
+          <div class="card" style="grid-column:1/-1;text-align:center;padding:2rem;">
+            <i data-lucide="package" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
+            <p style="color:var(--muted-foreground);">No products in this shop yet.</p>
+          </div>
+          {% endfor %}
+        </div>
+      </main>
+    </div>
+  </form>
+
+  <div id="toastContainer" class="toast-container"></div>
+  <script src="{% static 'js/marketplace-shop.js' %}"></script>
+</body>
+</html>

@@ -1,0 +1,407 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Reports</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">
+          <i data-lucide="store"></i>
+        </div>
+        <h1>VilaStore</h1>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="{% url 'index' %}" class="nav-link">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="{% url 'product' %}" class="nav-link">
+          <i data-lucide="package"></i>
+          <span>Products</span>
+        </a>
+        <a href="{% url 'inventory' %}" class="nav-link">
+          <i data-lucide="boxes"></i>
+          <span>Inventory</span>
+        </a>
+        <a href="{% url 'sales-history' %}" class="nav-link">
+          <i data-lucide="receipt"></i>
+          <span>Sales History</span>
+        </a>
+        <a href="{% url 'expenses' %}" class="nav-link">
+          <i data-lucide="wallet"></i>
+          <span>Expenses</span>
+        </a>
+        <a href="{% url 'reports' %}" class="nav-link active">
+          <i data-lucide="bar-chart-3"></i>
+          <span>Reports</span>
+        </a>
+        <a href="{% url 'customer' %}" class="nav-link">
+          <i data-lucide="users"></i>
+          <span>Customers</span>
+        </a>
+        <a href="{% url 'settings' %}" class="nav-link">
+          <i data-lucide="settings"></i>
+          <span>Settings</span>
+        </a>
+        {% if is_nigeria %}
+        <a href="#nrs-tax-filing" class="nav-link" onclick="scrollToTaxFiling(event)">
+          <i data-lucide="file-text"></i>
+          <span>NRS Tax Filing</span>
+        </a>
+        {% endif %}
+      </nav>
+
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div class="page-header-content">
+          <h1>Reports</h1>
+          <p>View your business performance and analytics</p>
+        </div>
+        <div class="header-actions">
+          <select id="periodFilter" class="input" onchange="updateReports()">
+            <option value="today" {% if period == "today" %}selected{% endif %}>Today</option>
+            <option value="week" {% if period == "week" %}selected{% endif %}>This Week</option>
+            <option value="month" {% if period == "month" %}selected{% endif %}>This Month</option>
+            <option value="year" {% if period == "year" %}selected{% endif %}>This Year</option>
+            <option value="all" {% if period == "all" %}selected{% endif %}>All Time</option>
+            <option value="custom" {% if period == "custom" %}selected{% endif %}>Custom Range</option>
+          </select>
+          <input type="date" id="startDate" class="input" value="{{ start_date|date:'Y-m-d' }}">
+          <input type="date" id="endDate" class="input" value="{{ end_date|date:'Y-m-d' }}">
+          <button type="button" class="btn btn-outline" onclick="updateReports()">Apply</button>
+        </div>
+      </header>
+
+      <section class="stats-grid stats-grid-5">
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Total Revenue</span>
+            <div class="stat-card-icon primary">
+              <i data-lucide="trending-up"></i>
+            </div>
+          </div>
+          <div class="stat-card-value" id="totalRevenue">₦{{ total_revenue|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Total Profit</span>
+            <div class="stat-card-icon primary">
+              <i data-lucide="wallet"></i>
+            </div>
+          </div>
+          <div class="stat-card-value text-profit" id="totalProfit">₦{{ total_profit|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Total Expenses</span>
+            <div class="stat-card-icon destructive">
+              <i data-lucide="trending-down"></i>
+            </div>
+          </div>
+          <div class="stat-card-value text-destructive" id="totalExpensesValue">₦{{ total_expenses|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Net Profit</span>
+            <div class="stat-card-icon primary">
+              <i data-lucide="banknote"></i>
+            </div>
+          </div>
+          <div class="stat-card-value" id="netProfit">₦{{ net_profit|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Transactions</span>
+            <div class="stat-card-icon primary">
+              <i data-lucide="receipt"></i>
+            </div>
+          </div>
+          <div class="stat-card-value" id="totalTransactions">{{ total_transactions }}</div>
+        </div>
+      </section>
+
+      <section class="reports-grid">
+        <div class="card report-card">
+          <div class="card-header">
+            <h3>Profit Margin</h3>
+          </div>
+          <div class="profit-margin-display">
+            <div class="profit-circle">
+              <svg viewBox="0 0 100 100">
+                <circle class="bg" cx="50" cy="50" r="45"/>
+                <circle class="progress" cx="50" cy="50" r="45" id="profitProgress"/>
+              </svg>
+              <div class="profit-value" id="profitMarginValue">
+                {% if total_revenue %}{{ total_profit|floatformat:0 }}%{% else %}0%{% endif %}
+              </div>
+            </div>
+            <div class="profit-legend">
+              <div class="legend-item">
+                <span class="legend-color profit"></span>
+                <span>Profit</span>
+              </div>
+              <div class="legend-item">
+                <span class="legend-color cost"></span>
+                <span>Cost</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card report-card">
+          <div class="card-header">
+            <h3>Top Selling Products</h3>
+          </div>
+          <div class="top-products" id="topProducts">
+            <div class="empty-state-small">
+              <i data-lucide="package-x"></i>
+              <p>No sales data</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card report-card">
+          <div class="card-header">
+            <h3>Expense Breakdown</h3>
+          </div>
+          <div class="expense-breakdown" id="expenseBreakdown">
+            <div class="empty-state-small">
+              <i data-lucide="wallet"></i>
+              <p>No expense data</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card report-card full-width">
+          <div class="card-header">
+            <h3>Sales Summary</h3>
+          </div>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <span class="summary-label">Average Transaction</span>
+              <span class="summary-value" id="avgTransaction">₦{{ avg_transaction|floatformat:2 }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Items Sold</span>
+              <span class="summary-value" id="itemsSold">{{ items_sold }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Avg Profit/Sale</span>
+              <span class="summary-value text-profit" id="avgProfit">₦{{ avg_profit_per_sale|floatformat:2 }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Total Cost</span>
+              <span class="summary-value" id="totalCost">₦{{ total_revenue|floatformat:2 }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {% if is_nigeria %}
+      <section class="tax-filing-section" id="nrs-tax-filing">
+        <div class="section-header-box">
+          <div class="section-header-icon">
+            <i data-lucide="file-text"></i>
+          </div>
+          <div class="section-header-text">
+            <h2>NRS Tax Filing</h2>
+            <p>Generate Companies Income Tax (CIT) and Value Added Tax (VAT) returns for FIRS submission</p>
+          </div>
+        </div>
+
+        <div class="tax-tabs">
+          <button class="tax-tab active" data-tab="cit" onclick="switchTaxTab('cit')">
+            <i data-lucide="building-2"></i>
+            Companies Income Tax (CIT)
+          </button>
+          <button class="tax-tab" data-tab="vat" onclick="switchTaxTab('vat')">
+            <i data-lucide="receipt"></i>
+            Value Added Tax (VAT)
+          </button>
+        </div>
+
+        <div class="tax-form-container" id="citForm">
+          <div class="card tax-form-card">
+            <div class="tax-form-header">
+              <div class="tax-form-title">
+                <h3>Companies Income Tax Return</h3>
+                <span class="tax-badge">FIRS CIT Form</span>
+              </div>
+              <div class="tax-period-selector">
+                <label>Accounting Year End:</label>
+                <select id="citYear" class="input" onchange="updateCITForm()">
+                  <option value="{{ cit_year }}">31 December {{ cit_year }}</option>
+                  <option value="{{ cit_year|add:'-1' }}">31 December {{ cit_year|add:"-1" }}</option>
+                  <option value="{{ cit_year|add:'-2' }}">31 December {{ cit_year|add:"-2" }}</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="tax-form-body">
+              <div class="tax-section">
+                <div class="tax-section-header"><span class="section-number">2</span><h4>Income Statement</h4></div>
+                <div class="tax-table">
+                  <div class="tax-row"><span class="tax-label">Revenue (Gross Sales)</span><span class="tax-value" id="citRevenue">₦{{ cit_revenue|floatformat:2 }}</span></div>
+                  <div class="tax-row"><span class="tax-label">Cost of Sales</span><span class="tax-value negative" id="citCostOfSales">₦{{ cit_cost|floatformat:2 }}</span></div>
+                  <div class="tax-row highlight"><span class="tax-label">Gross Profit</span><span class="tax-value" id="citGrossProfit">₦{{ cit_gross_profit|floatformat:2 }}</span></div>
+                </div>
+              </div>
+
+              <div class="tax-section">
+                <div class="tax-section-header"><span class="section-number">3</span><h4>Deductions</h4></div>
+                <div class="tax-table">
+                  <div class="tax-row"><span class="tax-label">Operating Expenses</span><span class="tax-value negative" id="citOperatingExpenses">₦{{ cit_operating_expenses|floatformat:2 }}</span></div>
+                  <div class="tax-row highlight"><span class="tax-label">Assessable Profit</span><span class="tax-value" id="citAssessableProfit">₦{{ cit_assessable_profit|floatformat:2 }}</span></div>
+                  <div class="tax-row highlight primary"><span class="tax-label">Total Profit (Taxable Profit)</span><span class="tax-value" id="citTaxableProfit">₦{{ cit_taxable_profit|floatformat:2 }}</span></div>
+                </div>
+              </div>
+
+              <div class="tax-section">
+                <div class="tax-section-header"><span class="section-number">4</span><h4>Tax Calculation</h4></div>
+                <div class="tax-table">
+                  <div class="tax-row"><span class="tax-label">CIT Rate Applied</span><span class="tax-value">30%</span></div>
+                  <div class="tax-row highlight"><span class="tax-label">Company Income Tax Due</span><span class="tax-value" id="citTaxDue">₦{{ cit_tax_due|floatformat:2 }}</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tax-form-container hidden" id="vatForm">
+          <div class="card tax-form-card">
+            <div class="tax-form-header">
+              <div class="tax-form-title">
+                <h3>Value Added Tax Return</h3>
+                <span class="tax-badge vat">FIRS VAT Form</span>
+              </div>
+              <div class="tax-period-selector">
+                <label>Tax Period:</label>
+                <select id="vatPeriod" class="input" onchange="updateVATForm()">
+                  <option value="{{ vat_year }}-{{ vat_month|stringformat:'02d' }}">{{ vat_month }}/{{ vat_year }}</option>
+                </select>
+              </div>
+            </div>
+            <div class="tax-form-body">
+              <div class="tax-section">
+                <div class="tax-section-header"><span class="section-number">2</span><h4>Output VAT (Sales)</h4></div>
+                <div class="tax-table">
+                  <div class="tax-row"><span class="tax-label">Total Taxable Sales</span><span class="tax-value" id="vatTaxableSales">₦{{ vat_taxable_sales|floatformat:2 }}</span></div>
+                  <div class="tax-row highlight"><span class="tax-label">Output VAT (VAT Collected)</span><span class="tax-value" id="vatOutputVat">₦{{ vat_output_vat|floatformat:2 }}</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+    </main>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    lucide.createIcons();
+    switchTaxTab('cit');
+});
+
+function updateReports() {
+    const period = document.getElementById("periodFilter").value;
+    const startDate = document.getElementById("startDate") ? document.getElementById("startDate").value : "";
+    const endDate = document.getElementById("endDate") ? document.getElementById("endDate").value : "";
+    const params = [];
+    if (period) {
+        params.push(`period=${encodeURIComponent(period)}`);
+    }
+    if (period === "custom") {
+        if (startDate) {
+            params.push(`start_date=${encodeURIComponent(startDate)}`);
+        }
+        if (endDate) {
+            params.push(`end_date=${encodeURIComponent(endDate)}`);
+        }
+    }
+    window.location.href = `{% url 'reports' %}?${params.join("&")}`;
+}
+
+function updateCITForm() {
+    const period = document.getElementById("periodFilter").value;
+    const year = document.getElementById("citYear").value;
+    const startDate = document.getElementById("startDate") ? document.getElementById("startDate").value : "";
+    const endDate = document.getElementById("endDate") ? document.getElementById("endDate").value : "";
+    const params = [
+        `period=${encodeURIComponent(period)}`,
+        `cit_year=${encodeURIComponent(year)}`
+    ];
+    if (period === "custom") {
+        if (startDate) {
+            params.push(`start_date=${encodeURIComponent(startDate)}`);
+        }
+        if (endDate) {
+            params.push(`end_date=${encodeURIComponent(endDate)}`);
+        }
+    }
+    window.location.href = `{% url 'reports' %}?${params.join("&")}`;
+}
+
+function updateVATForm() {
+    const period = document.getElementById("periodFilter").value;
+    const raw = document.getElementById("vatPeriod").value.split("-");
+    const year = raw[0];
+    const month = raw[1];
+    const startDate = document.getElementById("startDate") ? document.getElementById("startDate").value : "";
+    const endDate = document.getElementById("endDate") ? document.getElementById("endDate").value : "";
+    const params = [
+        `period=${encodeURIComponent(period)}`,
+        `vat_year=${encodeURIComponent(year)}`,
+        `vat_month=${encodeURIComponent(month)}`
+    ];
+    if (period === "custom") {
+        if (startDate) {
+            params.push(`start_date=${encodeURIComponent(startDate)}`);
+        }
+        if (endDate) {
+            params.push(`end_date=${encodeURIComponent(endDate)}`);
+        }
+    }
+    window.location.href = `{% url 'reports' %}?${params.join("&")}`;
+}
+
+function scrollToTaxFiling(event) {
+    event.preventDefault();
+    document.getElementById("nrs-tax-filing").scrollIntoView({ behavior: "smooth" });
+}
+
+function switchTaxTab(tabName) {
+    const citForm = document.getElementById("citForm");
+    const vatForm = document.getElementById("vatForm");
+    const tabs = document.querySelectorAll(".tax-tab");
+    tabs.forEach(tab => tab.classList.remove("active"));
+    citForm.classList.add("hidden");
+    vatForm.classList.add("hidden");
+    if (tabName === "cit") {
+        citForm.classList.remove("hidden");
+        document.querySelector('[data-tab="cit"]').classList.add("active");
+    }
+    if (tabName === "vat") {
+        vatForm.classList.remove("hidden");
+        document.querySelector('[data-tab="vat"]').classList.add("active");
+    }
+}
+</script>
+</body>
+</html>

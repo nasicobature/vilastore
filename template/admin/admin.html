@@ -1,0 +1,210 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Admin Panel</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div style="max-width:1200px;margin:0 auto;padding:2rem;">
+    <div style="margin-bottom:2rem;">
+      <h1 style="display:flex;align-items:center;gap:0.75rem;font-size:1.875rem;">
+        <i data-lucide="shield" style="width:32px;height:32px;"></i> Developer Admin Panel
+      </h1>
+      <p style="color:var(--muted-foreground);">Manage core app metrics and operations</p>
+      <div style="margin-top:0.75rem;">
+        <a href="{% url 'admin_portal_logout' %}" class="btn btn-ghost"><i data-lucide="log-out"></i> Logout</a>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:0.5rem;margin-bottom:2rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+      <button class="tax-tab active" data-tab="dashboard" onclick="switchAdminTab('dashboard')"><i data-lucide="layout-dashboard"></i> Dashboard</button>
+      <button class="tax-tab" data-tab="investors" onclick="switchAdminTab('investors')"><i data-lucide="briefcase"></i> Investors</button>
+      <button class="tax-tab" data-tab="staff" onclick="switchAdminTab('staff')"><i data-lucide="users"></i> Staff</button>
+      <button class="tax-tab" data-tab="feedback" onclick="switchAdminTab('feedback')"><i data-lucide="message-square"></i> Feedback</button>
+          </div>
+
+    <!-- Dashboard Tab -->
+    <div id="tab-dashboard">
+      <div class="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-card-header"><span class="stat-card-title">Monthly Revenue</span><div class="stat-card-icon primary"><i data-lucide="trending-up"></i></div></div>
+          <div class="stat-card-value" id="adminRevenue">&#8358;{{ month_revenue|floatformat:2 }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header"><span class="stat-card-title">Monthly Profit</span><div class="stat-card-icon primary"><i data-lucide="wallet"></i></div></div>
+          <div class="stat-card-value text-profit" id="adminProfit">&#8358;{{ month_profit|floatformat:2 }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header"><span class="stat-card-title">Active Shops</span><div class="stat-card-icon primary"><i data-lucide="store"></i></div></div>
+          <div class="stat-card-value" id="adminShops">{{ active_shops }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header"><span class="stat-card-title">Total Shops</span><div class="stat-card-icon primary"><i data-lucide="briefcase"></i></div></div>
+          <div class="stat-card-value" id="adminInvestors">{{ total_shops }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:1.5rem;">
+      <div class="card-header"><h3>Recent Signups</h3></div>
+      <div class="table-container" style="margin-top:1rem;">
+        <table class="table">
+          <thead><tr><th>Name</th><th>Email</th><th>Joined</th></tr></thead>
+          <tbody>
+            {% for u in recent_users %}
+            <tr>
+              <td>{{ u.first_name }} {{ u.last_name }}</td>
+              <td>{{ u.email }}</td>
+              <td>{{ u.date_joined|date:"M d, Y" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="empty-state"><p>No users yet</p></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Investors Tab -->
+    <div id="tab-investors" style="display:none;">
+      <div class="card">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3>Investor Management</h3>
+          <button class="btn btn-primary" onclick="openInvestorModal()"><i data-lucide="plus"></i> Add Investor</button>
+        </div>
+        <div class="table-container" style="margin-top:1rem;">
+          <table class="table">
+            <thead><tr><th>Name</th><th>Email</th><th>Investment</th><th>Ownership</th><th>Monthly Return</th><th>Actions</th></tr></thead>
+            <tbody id="investorTableBody" data-source="django">
+              {% for investor in investors %}
+              <tr>
+                <td><strong>{{ investor.name }}</strong></td>
+                <td>{{ investor.email }}</td>
+                <td>&#8358;{{ investor.investment_amount|floatformat:2 }}</td>
+                <td>{{ investor.ownership_percent }}%</td>
+                <td class="text-profit">&#8358;{{ investor.monthly_return|floatformat:2 }}</td>
+                <td>
+                  <div class="action-buttons">
+                    <form method="POST" action="{% url 'admin_portal_toggle_investor' investor.id %}" style="display:inline;">
+                      {% csrf_token %}
+                      <button class="btn btn-ghost btn-sm" type="submit" title="Toggle Active">
+                        <i data-lucide="power"></i>
+                      </button>
+                    </form>
+                    <form method="POST" action="{% url 'admin_portal_delete_investor' investor.id %}" style="display:inline;" onsubmit="return confirm('Delete {{ investor.name }}?')">
+                      {% csrf_token %}
+                      <button class="btn btn-ghost btn-sm text-destructive" type="submit" title="Delete">
+                        <i data-lucide="trash-2"></i>
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="empty-state"><p>No investors yet</p></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Staff Tab -->
+    <div id="tab-staff" style="display:none;">
+      <div class="card">
+        <div class="card-header"><h3>Developer Staff</h3></div>
+        <p style="color:var(--muted-foreground);margin-top:1rem;">Staff management coming soon.</p>
+      </div>
+    </div>
+
+    <!-- Feedback Tab -->
+    <div id="tab-feedback" style="display:none;">
+      <div class="card">
+        <div class="card-header"><h3>User Feedback</h3></div>
+        <div class="table-container" style="margin-top:1rem;">
+          <table class="table">
+            <thead><tr><th>Name</th><th>Email</th><th>Category</th><th>Message</th><th>Date</th></tr></thead>
+            <tbody>
+              {% for fb in feedbacks %}
+              <tr>
+                <td><strong>{{ fb.name }}</strong></td>
+                <td>{{ fb.email }}</td>
+                <td>{{ fb.get_category_display }}</td>
+                <td>{{ fb.message|truncatechars:120 }}</td>
+                <td>{{ fb.created_at|date:"M d, Y" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" class="empty-state"><p>No feedback yet</p></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    
+    </div>
+  </div>
+
+  <!-- Investor Modal -->
+  <div class="modal-overlay" id="investorModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Investor</h3>
+        <button class="modal-close" onclick="closeInvestorModal()"><i data-lucide="x"></i></button>
+      </div>
+      <form id="investorForm" class="modal-form" method="post" action="{% url 'admin_portal_add_investor' %}">
+        {% csrf_token %}
+        <div class="form-row">
+          <div class="form-group"><label>Name</label><input type="text" id="invName" name="name" class="input" required></div>
+          <div class="form-group"><label>Email</label><input type="email" id="invEmail" name="email" class="input" required></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Investment Amount (&#8358;)</label><input type="number" id="invAmount" name="investment_amount" class="input" required></div>
+          <div class="form-group"><label>Ownership %</label><input type="number" id="invOwnership" name="ownership_percent" class="input" step="0.1" required></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Login Password</label>
+            <input type="password" id="invPin" name="password" class="input" placeholder="Create a password" required>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" name="is_active" checked>
+              <span>Active</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-buttons">
+          <button type="button" class="btn btn-outline" onclick="closeInvestorModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="{% static 'js/utils.js' %}"></script>
+  <script src="{% static 'js/admin.js' %}?v=20260306"></script>
+  <script>
+    if (typeof switchAdminTab !== 'function') {
+      window.switchAdminTab = function(tab) {
+        ['dashboard', 'investors', 'staff', 'shopboys', 'feedback'].forEach(function(t) {
+          var panel = document.getElementById('tab-' + t);
+          if (!panel) return;
+          panel.style.display = t === tab ? 'block' : 'none';
+        });
+        document.querySelectorAll('.tax-tab').forEach(function(btn) {
+          btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+      };
+    }
+  </script>
+      </body>
+</html>

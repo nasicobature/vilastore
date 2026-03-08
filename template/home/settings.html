@@ -1,0 +1,220 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Settings</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div class="sidebar-logo-icon"><i data-lucide="store"></i></div><h1>VilaStore</h1></div>
+      <nav class="sidebar-nav">
+        <a href="{% url 'index' %}" class="nav-link"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+        <a href="{% url 'product' %}" class="nav-link"><i data-lucide="package"></i><span>Products</span></a>
+        <a href="{% url 'inventory' %}" class="nav-link"><i data-lucide="boxes"></i><span>Inventory</span></a>
+        <a href="{% url 'sales-history' %}" class="nav-link"><i data-lucide="receipt"></i><span>Sales History</span></a>
+        <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
+        <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
+        <a href="{% url 'customer' %}" class="nav-link"><i data-lucide="users"></i><span>Customers</span></a>
+        <a href="{% url 'settings' %}" class="nav-link active"><i data-lucide="settings"></i><span>Settings</span></a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <h1><i data-lucide="settings" style="display:inline;width:28px;height:28px;vertical-align:middle;margin-right:8px;"></i>Settings</h1>
+        <p>Manage your shop settings and staff</p>
+      </header>
+
+      {% if messages %}
+      <section style="margin-bottom: 1rem;">
+        {% for message in messages %}
+        <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      <section class="card" style="margin-bottom:1.5rem;">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3>Shop Boy Management</h3>
+          <button class="btn btn-primary" type="button" onclick="openShopBoyModal()"><i data-lucide="user-plus"></i> Add Shop Boy</button>
+        </div>
+        <div class="table-container" style="margin-top:1rem;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Marketplace Access</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sb in shopboys %}
+              <tr>
+                <td>{{ sb.full_name }}</td>
+                <td>{{ sb.username }}</td>
+                <td>
+                  {% if sb.can_use_marketplace %}
+                  <span class="badge badge-success">Yes</span>
+                  {% else %}
+                  <span class="badge badge-warning">No</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if sb.is_active %}
+                  <span class="badge badge-success">Active</span>
+                  {% else %}
+                  <span class="badge badge-destructive">Inactive</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="action-buttons">
+                    <form method="POST" action="{% url 'toggle_shopboy' sb.id %}" style="display:inline;">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-ghost btn-sm" title="Toggle Status">
+                        <i data-lucide="refresh-ccw"></i>
+                      </button>
+                    </form>
+                    <form method="POST" action="{% url 'delete_shopboy' sb.id %}" style="display:inline;" onsubmit="return confirm('Delete {{ sb.full_name }}?')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-ghost btn-sm text-destructive" title="Delete">
+                        <i data-lucide="trash-2"></i>
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" class="empty-state"><p>No shop boys added yet</p></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" style="margin-bottom:1.5rem;">
+        <div class="card-header"><h3>Marketplace Handler</h3></div>
+        <form method="POST" action="{% url 'update_marketplace_assignment' %}" style="margin-top:1rem;">
+          {% csrf_token %}
+          <div class="form-group">
+            <label>Assign a Shop Boy to Handle Marketplace Orders</label>
+            <select name="assigned_shopboy" class="input">
+              <option value="">Auto-assign (first available)</option>
+              {% for sb in shopboys %}
+                {% if sb.can_use_marketplace and sb.is_active %}
+                <option value="{{ sb.id }}" {% if marketplace_settings.assigned_shopboy and marketplace_settings.assigned_shopboy.id == sb.id %}selected{% endif %}>
+                  {{ sb.full_name }} ({{ sb.username }})
+                </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Assignment</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h3>Shop Profile</h3></div>
+        <form method="POST" action="{% url 'update_profile' %}" style="margin-top:1rem;">
+          {% csrf_token %}
+          <div class="form-group">
+            <label>Shop Code (for Shop Boy Login)</label>
+            <input type="text" class="input" value="{{ request.user.shop_code }}" readonly>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Business Name</label>
+              <input type="text" name="business_name" class="input" value="{{ request.user.business_name|default:'' }}" required>
+            </div>
+            <div class="form-group">
+              <label>Country</label>
+              <select name="country" class="input" required>
+                <option value="">Select country</option>
+                <option value="Nigeria" {% if request.user.country == "Nigeria" %}selected{% endif %}>Nigeria</option>
+                <option value="Ghana" {% if request.user.country == "Ghana" %}selected{% endif %}>Ghana</option>
+                <option value="Kenya" {% if request.user.country == "Kenya" %}selected{% endif %}>Kenya</option>
+                <option value="South Africa" {% if request.user.country == "South Africa" %}selected{% endif %}>South Africa</option>
+                <option value="Other" {% if request.user.country == "Other" %}selected{% endif %}>Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Business Address</label>
+            <input type="text" name="address" class="input" value="{{ request.user.address|default:'' }}" required>
+          </div>
+          <div class="form-group">
+            <label>Phone</label>
+            <input type="tel" name="phone" class="input" value="{{ request.user.phone|default:'' }}" required>
+          </div>
+          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Profile</button>
+        </form>
+      </section>
+
+      <section class="card" style="margin-top:1.5rem;">
+        <div class="card-header"><h3>Account</h3></div>
+        <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
+          <a href="{% url 'logout' %}" class="btn btn-ghost">
+            <i data-lucide="log-out"></i>
+            Logout
+          </a>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="shopBoyModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Shop Boy</h3>
+        <button class="modal-close" type="button" onclick="closeShopBoyModal()"><i data-lucide="x"></i></button>
+      </div>
+      <form method="POST" action="{% url 'add_shopboy' %}" class="modal-form">
+        {% csrf_token %}
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" name="full_name" class="input" placeholder="Full name" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" name="username" class="input" placeholder="username" required>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" name="password" class="input" placeholder="Password" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" name="can_use_marketplace">
+            <span>Can handle marketplace orders</span>
+          </label>
+        </div>
+        <div class="form-buttons">
+          <button type="button" class="btn btn-outline" onclick="closeShopBoyModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      lucide.createIcons();
+    });
+    function openShopBoyModal() { document.getElementById('shopBoyModal').classList.add('active'); }
+    function closeShopBoyModal() { document.getElementById('shopBoyModal').classList.remove('active'); }
+    document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) overlay.classList.remove('active');
+      });
+    });
+  </script>
+</body>
+</html>

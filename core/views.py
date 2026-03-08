@@ -1,0 +1,2867 @@
+from django.shortcuts import render,redirect
+from django.urls import reverse
+from django.conf import settings as django_settings
+import requests
+from django.contrib.auth import authenticate, login, logout
+from django.utils import timezone
+from django.utils.dateparse import parse_date
+from datetime import timedelta
+from django.http import JsonResponse, HttpResponseForbidden
+from .models import (
+    User,
+    Sale,
+    Product,
+    SaleItem,
+    Category,
+    Expense,
+    Customer,
+    Investor,
+    ShopBoy,
+    MarketplaceShopProfile,
+    MarketplaceSettings,
+    MarketplaceOrder,
+    MarketplaceOrderItem,
+    MarketplaceChatMessage,
+    MarketplaceBuyer,
+    Feedback,
+)
+from .subscription import subscription_is_active
+import random
+import string
+from django.core.mail import send_mail
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+import json
+from django.db.models import F, Sum, Q
+from django.db import transaction
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.views.decorators.http import require_POST
+from django.shortcuts import redirect, get_object_or_404
+from decimal import Decimal
+from django.contrib import messages
+from datetime import datetime
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import check_password
+import re
+
+
+
+# Create your views here.
+
+
+def home(request):
+    return render(request, 'home/home.html')
+
+
+@require_POST
+def submit_feedback(request):
+    name = (request.POST.get("name") or "").strip()
+    email = (request.POST.get("email") or "").strip()
+    category = (request.POST.get("category") or Feedback.CATEGORY_GENERAL).strip()
+    message = (request.POST.get("message") or "").strip()
+
+    if not name or not email or not message:
+        messages.error(request, "Please fill in your name, email, and message.")
+        return redirect("home")
+
+    try:
+        validate_email(email)
+    except ValidationError:
+        messages.error(request, "Please enter a valid email address.")
+        return redirect("home")
+
+    valid_categories = {choice[0] for choice in Feedback.CATEGORY_CHOICES}
+    if category not in valid_categories:
+        category = Feedback.CATEGORY_GENERAL
+
+    Feedback.objects.create(
+        name=name,
+        email=email,
+        category=category,
+        message=message,
+    )
+    messages.success(request, "Thank you! Your feedback has been sent.")
+    return redirect("home")
+
+
+# Dashborad
+
+@login_required
+def index(request):
+    user = request.user
+
+    today = timezone.localdate()
+
+    today_sales = Sale.objects.filter(user=user, created_at__date=today).aggregate(total=Sum('total_amount'))['total'] or Decimal("0.00")
+    today_profit = Sale.objects.filter(user=user, created_at__date=today).aggregate(total=Sum('total_profit'))['total'] or Decimal("0.00")
+    total_products = Product.objects.filter(user=user).count()
+
+    low_stock_count = Product.objects.filter(user=user, stock__lte=F('low_stock_threshold'), stock__gt=0).count()
+
+    today_transactions = (
+        Sale.objects.filter(user=user, created_at__date=today)
+        .annotate(items_count=Sum('items__quantity'))
+        .order_by('-created_at')[:5]
+    )
+
+    top_products = (
+        Product.objects.filter(user=user)
+        .annotate(total_sold=Sum('saleitem__quantity'))
+        .order_by('-total_sold', '-created_at')[:6]
+    )
+
+    context = {
+        'today_date': today,
+        'today_sales': today_sales,
+        'today_profit': today_profit,
+        'total_products': total_products,
+        'low_stock_count': low_stock_count,
+        'today_transactions': today_transactions,
+        'top_products': top_products,
+    }
+    return render(request, 'home/index.html', context)
+
+
+#   PRODUCT
+
+@login_required
+def product(request):
+    category_id = (request.GET.get("category") or "").strip()
+    products = Product.objects.filter(user=request.user)
+    if category_id:
+        products = products.filter(category_id=category_id)
+
+    categories = Category.objects.filter(user=request.user).order_by("name")
+    cart = request.session.get('cart', {})
+    last_sale = None
+    last_sale_id = request.session.get('last_sale_id')
+    if last_sale_id:
+        last_sale = Sale.objects.filter(user=request.user, id=last_sale_id).first()
+        if not last_sale:
+            request.session.pop('last_sale_id', None)
+
+    total = sum(
+        (Decimal(str(item['price'])) * item['quantity'] for item in cart.values()),
+        Decimal("0.00"),
+    )
+
+    return render(request, 'home/product.html', {
+        'products': products,
+        'cart': cart,
+        'cart_total': total.quantize(Decimal("0.01")),
+        'categories': categories,
+        'selected_category': category_id,
+        'last_sale': last_sale,
+    })
+
+
+@login_required
+@require_POST
+def add_to_cart(request, product_id):
+    product = get_object_or_404(Product, id=product_id, user=request.user)
+
+    cart = request.session.get('cart', {})
+    product_key = str(product_id)
+
+    if product.stock <= 0:
+        messages.error(request, f"{product.name} is out of stock.")
+        return redirect('product')
+
+    if product_key in cart:
+        if cart[product_key]['quantity'] < product.stock:
+            cart[product_key]['quantity'] += 1
+        else:
+            messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+    else:
+        cart[product_key] = {
+            'name': product.name,
+            'price': float(product.selling_price),
+            'cost': float(product.cost_price),
+            'quantity': 1
+        }
+
+    request.session['cart'] = cart
+    return redirect('product')
+
+@login_required
+@require_POST
+def update_cart(request, product_id):
+    cart = request.session.get('cart', {})
+    product_id = str(product_id)
+    action = request.POST.get('action')
+
+    if product_id in cart:
+        product = get_object_or_404(Product, id=product_id, user=request.user)
+
+        if action == "increase":
+            if cart[product_id]['quantity'] < product.stock:
+                cart[product_id]['quantity'] += 1
+            else:
+                messages.warning(request, f"Cannot add more than available stock ({product.stock}).")
+        elif action == "decrease":
+            cart[product_id]['quantity'] -= 1
+            if cart[product_id]['quantity'] <= 0:
+                del cart[product_id]
+
+    request.session['cart'] = cart
+    return redirect('product')
+
+@login_required
+@require_POST
+def remove_from_cart(request, product_id):
+    cart = request.session.get('cart', {})
+    cart.pop(str(product_id), None)
+    request.session['cart'] = cart
+    return redirect('product')
+
+
+@login_required
+@require_POST
+def checkout(request):
+    cart = request.session.get('cart', {})
+    if not cart:
+        messages.warning(request, "Cart is empty.")
+        return redirect('product')
+
+    product_ids = [int(pid) for pid in cart.keys()]
+
+    total_amount = Decimal("0.00")
+    total_profit = Decimal("0.00")
+    line_items = []
+
+    with transaction.atomic():
+        products = Product.objects.select_for_update().filter(user=request.user, id__in=product_ids)
+        product_map = {str(p.id): p for p in products}
+
+        for pid, item in cart.items():
+            product = product_map.get(pid)
+            if not product:
+                messages.error(request, "A cart item no longer exists.")
+                return redirect('product')
+
+            quantity = int(item['quantity'])
+            if quantity <= 0:
+                continue
+
+            if product.stock < quantity:
+                messages.error(request, f"Not enough stock for {product.name}. Available: {product.stock}.")
+                return redirect('product')
+
+            price = Decimal(str(item['price']))
+            cost = Decimal(str(item['cost']))
+            line_total = price * quantity
+            line_profit = (price - cost) * quantity
+            total_amount += line_total
+            total_profit += line_profit
+
+            line_items.append({
+                "product": product,
+                "quantity": quantity,
+                "price": price,
+                "profit": line_profit,
+            })
+
+        if not line_items:
+            messages.warning(request, "Cart is empty.")
+            return redirect('product')
+
+        sale = Sale.objects.create(
+            user=request.user,
+            sales_channel=Sale.CHANNEL_OWNER_POS,
+            total_amount=total_amount.quantize(Decimal("0.01")),
+            total_profit=total_profit.quantize(Decimal("0.01")),
+        )
+
+        for row in line_items:
+            SaleItem.objects.create(
+                sale=sale,
+                product=row["product"],
+                quantity=row["quantity"],
+                price=row["price"].quantize(Decimal("0.01")),
+                profit=row["profit"].quantize(Decimal("0.01")),
+            )
+            row["product"].stock -= row["quantity"]
+            row["product"].save(update_fields=["stock"])
+
+    request.session['last_sale_id'] = sale.id
+    request.session['cart'] = {}
+    messages.success(request, "Sale completed successfully.")
+    return redirect('product')
+    
+
+
+#INVENTORY
+
+@login_required
+def inventory(request):
+    products = Product.objects.filter(user=request.user)
+    categories = Category.objects.filter(user=request.user)
+
+    total_products = products.count()
+    total_value = sum(p.selling_price * p.stock for p in products)
+    low_stock = products.filter(stock__lte=F('low_stock_threshold'), stock__gt=0).count()
+    out_of_stock = products.filter(stock=0).count()
+
+    context = {
+        'products': products,
+        'categories': categories,
+        'total_products': total_products,
+        'total_value': total_value,
+        'low_stock': low_stock,
+        'out_of_stock': out_of_stock,
+    }
+
+    return render(request, 'home/inventory.html', context)
+
+@login_required
+@require_POST
+def add_product(request):
+    name = (request.POST.get('name') or '').strip()
+    category_id = request.POST.get('category') or None
+
+    try:
+        stock = int(request.POST.get('stock', 0))
+        low_stock_threshold = int(request.POST.get('low_stock_threshold', 5))
+        cost_price = Decimal(request.POST.get('cost_price'))
+        selling_price = Decimal(request.POST.get('selling_price'))
+    except Exception:
+        messages.error(request, "Invalid product values.")
+        return redirect('inventory')
+
+    if not name:
+        messages.error(request, "Product name is required.")
+        return redirect('inventory')
+
+    if stock < 0 or low_stock_threshold < 0:
+        messages.error(request, "Stock values cannot be negative.")
+        return redirect('inventory')
+
+    if cost_price < 0 or selling_price < 0:
+        messages.error(request, "Prices cannot be negative.")
+        return redirect('inventory')
+
+    if category_id:
+        category_exists = Category.objects.filter(id=category_id, user=request.user).exists()
+        if not category_exists:
+            messages.error(request, "Selected category is invalid.")
+            return redirect('inventory')
+
+    Product.objects.create(
+        user=request.user,
+        name=name,
+        category_id=category_id,
+        stock=stock,
+        cost_price=cost_price,
+        selling_price=selling_price,
+        low_stock_threshold=low_stock_threshold,
+        image=request.FILES.get('image')
+    )
+    messages.success(request, "Product added successfully.")
+    return redirect('inventory')
+
+
+@login_required
+@require_POST
+def add_category(request):
+    name = (request.POST.get('name') or '').strip()
+    if not name:
+        messages.error(request, "Category name is required.")
+        return redirect('inventory')
+
+    if Category.objects.filter(user=request.user, name__iexact=name).exists():
+        messages.warning(request, "Category already exists.")
+        return redirect('inventory')
+
+    Category.objects.create(
+        user=request.user,
+        name=name
+    )
+    messages.success(request, "Category added successfully.")
+    return redirect('inventory')
+
+@login_required
+@require_POST
+def adjust_stock(request, pk):
+    product = get_object_or_404(Product, pk=pk, user=request.user)
+
+    adjustment = int(request.POST.get('adjustment', 0))
+    product.stock = max(0, product.stock + adjustment)
+    product.save(update_fields=['stock'])
+
+    return redirect('inventory')
+
+@login_required
+@require_POST
+def delete_product(request, pk):
+    product = get_object_or_404(Product, pk=pk, user=request.user)
+    product.delete()
+    messages.success(request, "Product deleted.")
+    return redirect('inventory')
+
+@login_required
+@require_POST
+def edit_product(request, pk):
+    product = get_object_or_404(Product, pk=pk, user=request.user)
+
+    product.name = request.POST.get('name')
+    product.category_id = request.POST.get('category') or None
+    product.stock = request.POST.get('stock')
+    product.cost_price = request.POST.get('cost_price')
+    product.selling_price = request.POST.get('selling_price')
+    product.low_stock_threshold = request.POST.get('low_stock_threshold')
+
+    if request.FILES.get('image'):
+        product.image = request.FILES.get('image')
+
+    product.save()
+    messages.success(request, "Product updated.")
+
+    return redirect('inventory')
+
+
+
+
+
+#SALES HISTORY
+
+@login_required
+def sales_history(request):
+    start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
+    end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
+    search_query = (request.GET.get("q") or "").strip()
+    if start_date and end_date and start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    sales = (
+        Sale.objects.filter(user=request.user)
+        .select_related("handled_by_shopboy")
+        .prefetch_related('items__product')
+        .order_by('-created_at')
+    )
+    if start_date:
+        sales = sales.filter(created_at__date__gte=start_date)
+    if end_date:
+        sales = sales.filter(created_at__date__lte=end_date)
+    if search_query:
+        search_filters = (
+            Q(items__product__name__icontains=search_query) |
+            Q(handled_by_shopboy__full_name__icontains=search_query) |
+            Q(handled_by_shopboy__username__icontains=search_query) |
+            Q(customer__first_name__icontains=search_query) |
+            Q(customer__last_name__icontains=search_query) |
+            Q(sales_channel__icontains=search_query)
+        )
+
+        if search_query.isdigit():
+            search_filters = search_filters | Q(id=int(search_query))
+
+        search_date = parse_date(search_query)
+        if search_date:
+            search_filters = search_filters | Q(created_at__date=search_date)
+
+        sales = sales.filter(search_filters).distinct()
+
+    total_sales = sales.aggregate(total=Sum('total_amount'))['total'] or Decimal("0.00")
+    total_profit = sales.aggregate(total=Sum('total_profit'))['total'] or Decimal("0.00")
+    total_transactions = sales.count()
+
+    context = {
+        'sales': sales,
+        'total_sales': total_sales,
+        'total_profit': total_profit,
+        'total_transactions': total_transactions,
+        'start_date': start_date,
+        'end_date': end_date,
+        'search_query': search_query,
+    }
+
+    return render(request, 'home/sales-history.html', context)
+
+
+@login_required
+def sale_receipt(request, sale_id):
+    sale = get_object_or_404(
+        Sale.objects.filter(user=request.user)
+        .select_related("customer", "handled_by_shopboy")
+        .prefetch_related("items__product"),
+        id=sale_id,
+    )
+
+    line_items = []
+    for item in sale.items.all():
+        line_total = (item.price or Decimal("0.00")) * item.quantity
+        line_items.append({
+            "name": item.product.name,
+            "quantity": item.quantity,
+            "price": item.price,
+            "total": line_total,
+        })
+
+    return render(request, "home/sale-receipt.html", {
+        "sale": sale,
+        "line_items": line_items,
+        "business": request.user,
+    })
+
+
+
+
+@login_required
+def expenses(request):
+    if request.method == "POST":
+        category = request.POST.get("category", "").strip()
+        title = request.POST.get("title", "").strip()
+        amount = request.POST.get("amount")
+        expense_date = request.POST.get("date")
+
+        valid_categories = {choice[0] for choice in Expense.CATEGORY_CHOICES}
+        if category not in valid_categories:
+            messages.error(request, "Please select a valid expense category.")
+            return redirect("expenses")
+
+        if not title:
+            messages.error(request, "Expense title is required.")
+            return redirect("expenses")
+
+        try:
+            amount_value = Decimal(amount)
+            if amount_value <= 0:
+                raise ValueError
+        except Exception:
+            messages.error(request, "Amount must be greater than 0.")
+            return redirect("expenses")
+
+        if not expense_date:
+            messages.error(request, "Expense date is required.")
+            return redirect("expenses")
+
+        Expense.objects.create(
+            user=request.user,
+            category=category,
+            title=title,
+            amount=amount_value,
+            date=expense_date,
+        )
+        messages.success(request, "Expense added successfully.")
+        return redirect("expenses")
+
+    today = timezone.localdate()
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+
+    expenses_qs = Expense.objects.filter(user=request.user).order_by("-date", "-created_at")
+
+    today_expenses = Expense.objects.filter(user=request.user, date=today).aggregate(total=Sum("amount"))["total"] or 0
+    week_expenses = Expense.objects.filter(user=request.user, date__gte=week_start, date__lte=today).aggregate(total=Sum("amount"))["total"] or 0
+    month_expenses = Expense.objects.filter(user=request.user, date__gte=month_start, date__lte=today).aggregate(total=Sum("amount"))["total"] or 0
+
+    context = {
+        "expenses": expenses_qs,
+        "today_expenses": today_expenses,
+        "week_expenses": week_expenses,
+        "month_expenses": month_expenses,
+        "total_records": expenses_qs.count(),
+    }
+    return render(request, "home/expenses.html", context)
+
+
+
+
+
+@login_required
+def reports(request):
+
+    now = timezone.now()
+    period = request.GET.get("period", "month")
+    start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
+    end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
+    custom_range = bool(start_date or end_date)
+    if period == "custom" and not custom_range:
+        period = "month"
+    if start_date and end_date and start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    # =========================
+    # PERIOD FILTER
+    # =========================
+
+    if custom_range:
+        period = "custom"
+        start = None
+    else:
+        if period == "today":
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif period == "week":
+            start = now - timedelta(days=7)
+        elif period == "year":
+            start = now.replace(month=1, day=1)
+        elif period == "all":
+            start = None
+        else:  # month
+            start = now.replace(day=1)
+
+    sales = Sale.objects.filter(user=request.user)
+    expenses = Expense.objects.filter(user=request.user)
+
+    if start is not None:
+        sales = sales.filter(created_at__gte=start)
+        expenses = expenses.filter(date__gte=start.date())
+    if start_date:
+        sales = sales.filter(created_at__date__gte=start_date)
+        expenses = expenses.filter(date__gte=start_date)
+    if end_date:
+        sales = sales.filter(created_at__date__lte=end_date)
+        expenses = expenses.filter(date__lte=end_date)
+
+    total_revenue = sales.aggregate(
+        total=Sum("total_amount")
+    )["total"] or 0
+
+    total_profit = sales.aggregate(
+        total=Sum("total_profit")
+    )["total"] or 0
+
+    total_expenses = expenses.aggregate(
+        total=Sum("amount")
+    )["total"] or 0
+
+    net_profit = total_profit - total_expenses
+    total_transactions = sales.count()
+    avg_transaction = (total_revenue / total_transactions) if total_transactions else 0
+    avg_profit_per_sale = (total_profit / total_transactions) if total_transactions else 0
+
+    items_sold = SaleItem.objects.filter(
+        sale__in=sales
+    ).aggregate(total=Sum("quantity"))["total"] or 0
+
+    # =========================
+    # ===== CIT CALCULATION ===
+    # =========================
+
+    try:
+        cit_year = int(request.GET.get("cit_year", now.year))
+    except (TypeError, ValueError):
+        cit_year = now.year
+
+    year_sales = Sale.objects.filter(
+        created_at__year=cit_year,
+        user=request.user
+    )
+
+    year_expenses = Expense.objects.filter(
+        created_at__year=cit_year,
+        user=request.user
+    )
+
+    cit_revenue = year_sales.aggregate(
+        total=Sum("total_amount")
+    )["total"] or 0
+
+    cit_profit = year_sales.aggregate(
+        total=Sum("total_profit")
+    )["total"] or 0
+
+    cit_cost = cit_revenue - cit_profit
+    cit_gross_profit = cit_profit
+
+    cit_operating_expenses = year_expenses.aggregate(
+        total=Sum("amount")
+    )["total"] or 0
+
+    cit_assessable_profit = cit_gross_profit - cit_operating_expenses
+    cit_taxable_profit = max(0, cit_assessable_profit)
+    cit_tax_due = cit_taxable_profit * Decimal("0.30")  # 30% CIT
+
+    # =========================
+    # ===== VAT CALCULATION ===
+    # =========================
+
+    try:
+        vat_month = int(request.GET.get("vat_month", now.month))
+    except (TypeError, ValueError):
+        vat_month = now.month
+
+    try:
+        vat_year = int(request.GET.get("vat_year", now.year))
+    except (TypeError, ValueError):
+        vat_year = now.year
+
+    if vat_month < 1 or vat_month > 12:
+        vat_month = now.month
+
+    month_start = datetime(vat_year, vat_month, 1)
+
+    if vat_month == 12:
+        month_end = datetime(vat_year + 1, 1, 1)
+    else:
+        month_end = datetime(vat_year, vat_month + 1, 1)
+
+    vat_sales = Sale.objects.filter(
+        created_at__range=(month_start, month_end),
+        user=request.user
+    )
+
+    vat_taxable_sales = vat_sales.aggregate(
+        total=Sum("total_amount")
+    )["total"] or 0
+
+    vat_output_vat = vat_taxable_sales * Decimal("0.075")  # 7.5% VAT
+
+    # =========================
+    # CONTEXT
+    # =========================
+
+    context = {
+        # Main report
+        "total_revenue": total_revenue,
+        "total_profit": total_profit,
+        "total_expenses": total_expenses,
+        "net_profit": net_profit,
+        "total_transactions": total_transactions,
+        "items_sold": items_sold,
+        "avg_transaction": avg_transaction,
+        "avg_profit_per_sale": avg_profit_per_sale,
+        "period": period,
+        "start_date": start_date,
+        "end_date": end_date,
+
+        # CIT
+        "cit_year": cit_year,
+        "cit_revenue": cit_revenue,
+        "cit_cost": cit_cost,
+        "cit_gross_profit": cit_gross_profit,
+        "cit_operating_expenses": cit_operating_expenses,
+        "cit_assessable_profit": cit_assessable_profit,
+        "cit_taxable_profit": cit_taxable_profit,
+        "cit_tax_due": cit_tax_due,
+
+        # VAT
+        "vat_year": vat_year,
+        "vat_month": vat_month,
+        "vat_taxable_sales": vat_taxable_sales,
+        "vat_output_vat": vat_output_vat,
+        "is_nigeria": (request.user.country or "").strip().lower() == "nigeria",
+    }
+
+    return render(request, "home/reports.html", context)
+
+
+
+
+
+
+
+
+@login_required
+def customer(request):
+    q = (request.GET.get("q") or "").strip()
+    customers = Customer.objects.filter(user=request.user)
+
+    if q:
+        customers = customers.filter(
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q) |
+            Q(phone__icontains=q) |
+            Q(email__icontains=q) |
+            Q(religion__icontains=q) |
+            Q(tribe__icontains=q)
+        )
+
+    customers = customers.order_by("first_name", "last_name")
+    return render(request, 'home/customer.html', {
+        "customers": customers,
+        "q": q,
+    })
+
+
+@login_required
+@require_POST
+def add_customer(request):
+    first_name = (request.POST.get("first_name") or "").strip()
+    last_name = (request.POST.get("last_name") or "").strip()
+    phone = (request.POST.get("phone") or "").strip()
+    email = (request.POST.get("email") or "").strip() or None
+    birthday = (request.POST.get("birthday") or "").strip() or None
+    religion = (request.POST.get("religion") or "").strip()
+    tribe = (request.POST.get("tribe") or "").strip()
+    notes = (request.POST.get("notes") or "").strip()
+
+    if not first_name or not last_name or not phone:
+        messages.error(request, "First name, last name and phone are required.")
+        return redirect("customer")
+
+    valid_religions = {choice[0] for choice in Customer.RELIGION_CHOICES}
+    if religion not in valid_religions:
+        religion = ""
+
+    Customer.objects.create(
+        user=request.user,
+        first_name=first_name,
+        last_name=last_name,
+        phone=phone,
+        email=email,
+        birthday=birthday,
+        religion=religion,
+        tribe=tribe,
+        notes=notes,
+    )
+    messages.success(request, "Customer added.")
+    return redirect("customer")
+
+
+@login_required
+@require_POST
+def edit_customer(request, pk):
+    customer_obj = get_object_or_404(Customer, pk=pk, user=request.user)
+
+    first_name = (request.POST.get("first_name") or "").strip()
+    last_name = (request.POST.get("last_name") or "").strip()
+    phone = (request.POST.get("phone") or "").strip()
+    email = (request.POST.get("email") or "").strip() or None
+    birthday = (request.POST.get("birthday") or "").strip() or None
+    religion = (request.POST.get("religion") or "").strip()
+    tribe = (request.POST.get("tribe") or "").strip()
+    notes = (request.POST.get("notes") or "").strip()
+
+    if not first_name or not last_name or not phone:
+        messages.error(request, "First name, last name and phone are required.")
+        return redirect("customer")
+
+    valid_religions = {choice[0] for choice in Customer.RELIGION_CHOICES}
+    if religion not in valid_religions:
+        religion = ""
+
+    customer_obj.first_name = first_name
+    customer_obj.last_name = last_name
+    customer_obj.phone = phone
+    customer_obj.email = email
+    customer_obj.birthday = birthday
+    customer_obj.religion = religion
+    customer_obj.tribe = tribe
+    customer_obj.notes = notes
+    customer_obj.save()
+
+    messages.success(request, "Customer updated.")
+    return redirect("customer")
+
+
+@login_required
+@require_POST
+def delete_customer(request, pk):
+    customer_obj = get_object_or_404(Customer, pk=pk, user=request.user)
+    customer_obj.delete()
+    messages.success(request, "Customer deleted.")
+    return redirect("customer")
+
+@login_required
+def settings(request):
+    shopboys = ShopBoy.objects.filter(user=request.user).order_by("-id")
+    marketplace_settings = _get_marketplace_settings(request.user)
+    _ensure_shop_code(request.user)
+    return render(request, 'home/settings.html', {
+        "shopboys": shopboys,
+        "marketplace_settings": marketplace_settings,
+    })
+
+
+@login_required
+@require_POST
+def update_profile(request):
+    user = request.user
+    user.business_name = (request.POST.get("business_name") or "").strip()
+    user.country = (request.POST.get("country") or "").strip()
+    user.address = (request.POST.get("address") or "").strip()
+    user.phone = (request.POST.get("phone") or "").strip()
+    user.save(update_fields=["business_name", "country", "address", "phone"])
+    messages.success(request, "Profile updated.")
+    return redirect("settings")
+
+
+@login_required
+@require_POST
+def add_shopboy(request):
+    full_name = (request.POST.get("full_name") or "").strip()
+    username = (request.POST.get("username") or "").strip()
+    password = (request.POST.get("password") or "").strip()
+    can_use_marketplace = request.POST.get("can_use_marketplace") == "on"
+
+    if not full_name or not username or not password:
+        messages.error(request, "Full name, username, and password are required.")
+        return redirect("settings")
+
+    if ShopBoy.objects.filter(user=request.user, username__iexact=username).exists():
+        messages.error(request, "Shop boy username already exists.")
+        return redirect("settings")
+
+    ShopBoy.objects.create(
+        user=request.user,
+        full_name=full_name,
+        username=username,
+        password=make_password(password),
+        can_use_marketplace=can_use_marketplace,
+        is_active=True,
+    )
+    messages.success(request, "Shop boy added.")
+    return redirect("settings")
+
+
+@login_required
+@require_POST
+def toggle_shopboy(request, pk):
+    shopboy = get_object_or_404(ShopBoy, pk=pk, user=request.user)
+    shopboy.is_active = not shopboy.is_active
+    shopboy.save(update_fields=["is_active"])
+    messages.success(request, "Shop boy status updated.")
+    return redirect("settings")
+
+
+@login_required
+@require_POST
+def delete_shopboy(request, pk):
+    shopboy = get_object_or_404(ShopBoy, pk=pk, user=request.user)
+    shopboy.delete()
+    messages.success(request, "Shop boy deleted.")
+    return redirect("settings")
+
+
+# Authentication
+
+def _password_meets_rules(password):
+    if not password:
+        return False
+    has_upper = any(c.isupper() for c in password)
+    has_number = any(c.isdigit() for c in password)
+    has_special = any(not c.isalnum() for c in password)
+    return has_upper and has_number and has_special
+
+
+def _username_is_valid(username):
+    return bool(re.fullmatch(r"[A-Za-z0-9._-]{3,30}", username or ""))
+
+
+TRIAL_DAYS = 30
+BASE_FEE = 6000
+MONTHLY_SUBSCRIPTION_FEE = 1000
+
+
+def _plan_pricing():
+    return {
+        "starter": MONTHLY_SUBSCRIPTION_FEE,
+        "professional": MONTHLY_SUBSCRIPTION_FEE,
+    }
+
+
+def _authenticate_with_identifier(request, identifier, password):
+    identity = (identifier or "").strip()
+    if not identity or not password:
+        return None
+
+    account = (
+        User.objects.filter(Q(email__iexact=identity) | Q(username__iexact=identity))
+        .order_by("-is_active", "-id")
+        .first()
+    )
+    auth_username = account.username if account else identity
+    return authenticate(request, username=auth_username, password=password)
+
+
+def _get_signup_user(request):
+    signup_user_id = request.session.get("signup_user_id")
+    if not signup_user_id:
+        return None
+    return User.objects.filter(id=signup_user_id).first()
+
+
+def _send_signup_code(user):
+    code = str(random.randint(100000, 999999))
+    user.email_verification_code = code
+    user.email_code_sent_at = timezone.now()
+    user.save(update_fields=["email_verification_code", "email_code_sent_at"])
+
+    send_mail(
+        "Your VilaStore verification code",
+        f"Your verification code is {code}. It will expire in 10 minutes.",
+        getattr(django_settings, "DEFAULT_FROM_EMAIL", "no-reply@vilastore.local"),
+        [user.email],
+        fail_silently=False,
+    )
+
+
+@require_POST
+def signup_create_account(request):
+    first_name = (request.POST.get("first_name") or "").strip()
+    last_name = (request.POST.get("last_name") or "").strip()
+    username = (request.POST.get("username") or "").strip()
+    email = (request.POST.get("email") or "").strip().lower()
+    phone = (request.POST.get("phone") or "").strip()
+    password = request.POST.get("password") or ""
+    confirm_password = request.POST.get("confirm_password") or ""
+
+    if not first_name or not last_name or not username or not email or not password or not confirm_password or not phone:
+        messages.error(request, "First name, last name, username, email, phone, and passwords are required.")
+        return redirect(f"{reverse('signup')}?step=1")
+
+    if not _username_is_valid(username):
+        messages.error(request, "Username must be 3-30 characters and use only letters, numbers, dot, dash, or underscore.")
+        return redirect(f"{reverse('signup')}?step=1")
+
+    if password != confirm_password:
+        messages.error(request, "Passwords do not match.")
+        return redirect(f"{reverse('signup')}?step=1")
+
+    if not _password_meets_rules(password):
+        messages.error(request, "Password must include uppercase, number, and special character.")
+        return redirect(f"{reverse('signup')}?step=1")
+
+    current_signup_user = _get_signup_user(request)
+    current_signup_user_id = current_signup_user.id if current_signup_user else None
+
+    existing_email_account = (
+        User.objects.filter(email__iexact=email)
+        .exclude(id=current_signup_user_id)
+        .filter(Q(is_active=True) | Q(is_email_verified=True))
+        .first()
+    )
+    if existing_email_account:
+        messages.error(request, "Email already registered. Use another email or sign in.")
+        return redirect(f"{reverse('signup')}?step=1")
+
+    username_qs = User.objects.filter(username__iexact=username)
+    if current_signup_user_id:
+        username_qs = username_qs.exclude(id=current_signup_user_id)
+    if username_qs.exists():
+        messages.error(request, "This username is already taken. Please choose another one.")
+        return redirect(f"{reverse('signup')}?step=1")
+
+    phone_qs = User.objects.filter(phone=phone)
+    if current_signup_user_id:
+        phone_qs = phone_qs.exclude(id=current_signup_user_id)
+    if phone_qs.filter(Q(is_active=True) | Q(is_email_verified=True)).exists():
+        messages.error(request, "Phone number already in use. Please use another one.")
+        return redirect(f"{reverse('signup')}?step=1")
+
+    signup_user = current_signup_user
+    if not signup_user or signup_user.is_active or signup_user.is_email_verified:
+        signup_user = (
+            User.objects.filter(email__iexact=email, is_active=False, is_email_verified=False)
+            .order_by("-id")
+            .first()
+        )
+
+    if signup_user:
+        signup_user.first_name = first_name
+        signup_user.last_name = last_name
+        signup_user.username = username
+        signup_user.email = email
+        signup_user.phone = phone
+        signup_user.set_password(password)
+        signup_user.is_active = False
+        signup_user.is_email_verified = False
+        signup_user.email_verification_code = ""
+        signup_user.email_code_sent_at = None
+        signup_user.is_paid = False
+        if not signup_user.business_name:
+            signup_user.business_name = f"{first_name}'s Shop"
+        if not signup_user.business_type:
+            signup_user.business_type = "other"
+        if not signup_user.state:
+            signup_user.state = "pending"
+        if not signup_user.address:
+            signup_user.address = "pending"
+        if not signup_user.country:
+            signup_user.country = "pending"
+        if not signup_user.plan:
+            signup_user.plan = "starter"
+        signup_user.save()
+    else:
+        signup_user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone,
+            business_name=f"{first_name}'s Shop",
+            business_type="other",
+            state="pending",
+            address="pending",
+            country="pending",
+            plan="starter",
+            is_paid=False,
+            is_active=False,
+            is_email_verified=False,
+        )
+
+    request.session["signup_user_id"] = signup_user.id
+    request.session.pop("verified_signup_user_id", None)
+    request.session.pop("verified_email", None)
+    request.session.pop("otp_email", None)
+    request.session.pop("otp_code", None)
+    request.session.pop("otp_sent_at", None)
+
+    try:
+        _send_signup_code(signup_user)
+        messages.success(request, f"Account created for @{signup_user.username}. Verification code sent to {signup_user.email}.")
+    except Exception:
+        messages.warning(request, "Account created. Could not send verification email now; use Send Code after checking email settings.")
+
+    return redirect(f"{reverse('signup')}?step=2")
+
+
+def signup(request):
+    if request.method == "POST":
+        signup_user = _get_signup_user(request)
+        verified_signup_user_id = request.session.get("verified_signup_user_id")
+
+        if not signup_user:
+            messages.error(request, "Start by creating your account first.")
+            return redirect(f"{reverse('signup')}?step=1")
+
+        if verified_signup_user_id != signup_user.id or not signup_user.is_email_verified:
+            messages.error(request, "Please verify your email before completing shop setup.")
+            return redirect(f"{reverse('signup')}?step=2")
+
+        business_name = (request.POST.get("business_name") or "").strip()
+        business_type = (request.POST.get("business_type") or "").strip()
+        country = (request.POST.get("country") or "").strip()
+        address = (request.POST.get("address") or "").strip()
+        state = (request.POST.get("state") or "").strip()
+        plan = (request.POST.get("plan") or "starter").strip() or "starter"
+        shop_description = (request.POST.get("shop_description") or "").strip()
+        shop_category = (request.POST.get("shop_category") or "").strip()
+        shop_location = (request.POST.get("shop_location") or "").strip()
+        phone = (request.POST.get("phone") or "").strip()
+
+        if not business_name or not business_type or not country or not address or not state:
+            messages.error(request, "Business name, business type, country, address, and state are required.")
+            return redirect(f"{reverse('signup')}?step=3")
+
+        if phone:
+            if User.objects.filter(phone=phone).exclude(id=signup_user.id).filter(Q(is_active=True) | Q(is_email_verified=True)).exists():
+                messages.error(request, "Phone number already in use. Please use another one.")
+                return redirect(f"{reverse('signup')}?step=3")
+            signup_user.phone = phone
+
+        plan_prices = _plan_pricing()
+        if plan not in plan_prices:
+            plan = "starter"
+
+        trial_end = timezone.now().date() + timedelta(days=TRIAL_DAYS)
+
+        signup_user.business_name = business_name
+        signup_user.business_type = business_type
+        signup_user.country = country
+        signup_user.address = address
+        signup_user.state = state
+        signup_user.plan = plan
+        signup_user.is_paid = False
+        signup_user.monthly_fee = plan_prices[plan]
+        signup_user.is_active = True
+        signup_user.subscription_active_until = trial_end
+
+        profile_image = request.FILES.get("profile_image")
+        if profile_image:
+            signup_user.profile_image = profile_image
+        signup_user.save()
+
+        marketplace_profile, _ = MarketplaceShopProfile.objects.get_or_create(user=signup_user)
+        marketplace_profile.description = shop_description
+        marketplace_profile.category = shop_category
+        marketplace_profile.location = shop_location
+
+        marketplace_logo = request.FILES.get("marketplace_logo")
+        if marketplace_logo:
+            marketplace_profile.logo = marketplace_logo
+
+        marketplace_cover_image = request.FILES.get("marketplace_cover_image")
+        if marketplace_cover_image:
+            marketplace_profile.cover_image = marketplace_cover_image
+
+        marketplace_profile.save()
+
+        _ensure_shop_code(signup_user)
+        login(request, signup_user, backend="django.contrib.auth.backends.ModelBackend")
+
+        request.session.pop("signup_user_id", None)
+        request.session.pop("verified_signup_user_id", None)
+        request.session.pop("verified_email", None)
+        request.session.pop("otp_email", None)
+        request.session.pop("otp_code", None)
+        request.session.pop("otp_sent_at", None)
+
+        trial_end_display = trial_end.strftime("%b %d, %Y")
+        first_payment_total = BASE_FEE + MONTHLY_SUBSCRIPTION_FEE
+        messages.success(
+            request,
+            "Signup completed successfully. "
+            f"Your free trial runs until {trial_end_display}. "
+            f"First payment due after trial is NGN {first_payment_total:,} "
+            f"(NGN {BASE_FEE:,} base + NGN {MONTHLY_SUBSCRIPTION_FEE:,} subscription), "
+            f"then NGN {MONTHLY_SUBSCRIPTION_FEE:,}/month.",
+        )
+        return redirect("index")
+
+    signup_user = _get_signup_user(request)
+    marketplace_profile = None
+    if signup_user:
+        marketplace_profile = MarketplaceShopProfile.objects.filter(user=signup_user).first()
+
+    def _prefill(value):
+        if not value:
+            return ""
+        if isinstance(value, str) and value.strip().lower() == "pending":
+            return ""
+        return value
+
+    default_step = "1"
+    if signup_user:
+        default_step = "3" if signup_user.is_email_verified else "2"
+
+    current_step = request.GET.get("step", default_step)
+    if current_step not in {"1", "2", "3"}:
+        current_step = default_step
+
+    return render(request, "auth/signup.html", {
+        "PAYSTACK_PUBLIC_KEY": getattr(django_settings, "PAYSTACK_PUBLIC_KEY", ""),
+        "current_step": current_step,
+        "email_verified": bool(signup_user and signup_user.is_email_verified),
+        "prefill_first_name": signup_user.first_name if signup_user else "",
+        "prefill_last_name": signup_user.last_name if signup_user else "",
+        "prefill_username": signup_user.username if signup_user else "",
+        "prefill_email": signup_user.email if signup_user else "",
+        "prefill_phone": signup_user.phone if signup_user else "",
+        "prefill_business_name": _prefill(signup_user.business_name) if signup_user else "",
+        "prefill_business_type": _prefill(signup_user.business_type) if signup_user else "",
+        "prefill_country": _prefill(signup_user.country) if signup_user else "",
+        "prefill_address": _prefill(signup_user.address) if signup_user else "",
+        "prefill_state": _prefill(signup_user.state) if signup_user else "",
+        "prefill_plan": signup_user.plan if signup_user else "starter",
+        "prefill_shop_description": marketplace_profile.description if marketplace_profile else "",
+        "prefill_shop_category": marketplace_profile.category if marketplace_profile else "",
+        "prefill_shop_location": marketplace_profile.location if marketplace_profile else "",
+        "base_fee": BASE_FEE,
+        "monthly_fee": MONTHLY_SUBSCRIPTION_FEE,
+        "first_payment_total": BASE_FEE + MONTHLY_SUBSCRIPTION_FEE,
+    })
+
+
+def login_view(request):
+    if request.user.is_authenticated:
+        return redirect("index")
+
+    if request.method == "POST":
+        identifier = (request.POST.get("email") or "").strip()
+        password = request.POST.get("password") or ""
+
+        user = _authenticate_with_identifier(request, identifier, password)
+        if user is not None:
+            if not subscription_is_active(user):
+                request.session["pending_payment_user_id"] = user.id
+                messages.error(request, "Subscription payment required. Please make the payment to continue.")
+                return redirect("subscription_payment")
+            login(request, user)
+            request.session.pop("pending_payment_user_id", None)
+            return redirect("index")
+
+        pending_user = User.objects.filter(
+            Q(email__iexact=identifier) | Q(username__iexact=identifier),
+            is_active=False,
+        ).first()
+        if pending_user:
+            messages.error(request, "Your account setup is not complete yet. Finish signup and verify your email.")
+        else:
+            messages.error(request, "Invalid email/username or password")
+
+    return render(request, "auth/login.html")
+
+
+def logout_view(request):
+    logout(request)
+    return redirect("login")
+
+
+# =============================
+# Investor Portal
+# =============================
+
+def _get_investor_session(request):
+    investor_id = request.session.get("investor_id")
+    if not investor_id:
+        return None
+    return Investor.objects.filter(id=investor_id, is_active=True).first()
+
+
+def investor_login(request):
+    if _get_investor_session(request):
+        return redirect("investor_dashboard")
+
+    if request.method == "POST":
+        email = (request.POST.get("email") or "").strip().lower()
+        password = request.POST.get("password") or ""
+
+        investor = Investor.objects.filter(email__iexact=email, is_active=True).first()
+        if not investor or not check_password(password, investor.password):
+            messages.error(request, "Invalid email or password.")
+            return render(request, "investor/investor-login.html")
+
+        request.session["investor_id"] = investor.id
+        investor.last_login = timezone.now()
+        investor.save(update_fields=["last_login"])
+        return redirect("investor_dashboard")
+
+    return render(request, "investor/investor-login.html")
+
+
+def investor_logout(request):
+    request.session.pop("investor_id", None)
+    return redirect("investor_login")
+
+
+def investor_dashboard(request):
+    investor = _get_investor_session(request)
+    if not investor:
+        return redirect("investor_login")
+
+    today = timezone.localdate()
+    active_qs = User.objects.filter(
+        subscription_active_until__gte=today,
+        is_paid=True,
+        is_staff=False,
+        is_superuser=False,
+    )
+    active_shops = active_qs.count()
+    monthly_revenue = active_qs.aggregate(total=Sum("monthly_fee"))["total"] or Decimal("0.00")
+
+    ownership_ratio = (investor.ownership_percent or Decimal("0")) / Decimal("100")
+    monthly_return = (monthly_revenue * ownership_ratio).quantize(Decimal("0.01"))
+
+    return render(request, "investor/investor-dashboard.html", {
+        "investor": investor,
+        "active_shops": active_shops,
+        "monthly_revenue": monthly_revenue,
+        "monthly_return": monthly_return,
+    })
+
+
+def subscription_payment(request):
+    user = request.user if request.user.is_authenticated else None
+    pending_user_id = request.session.get("pending_payment_user_id")
+    if not user and pending_user_id:
+        user = User.objects.filter(id=pending_user_id).first()
+    if not user:
+        messages.error(request, "Please log in to continue.")
+        return redirect("login")
+    today = timezone.localdate()
+
+    if subscription_is_active(user):
+        request.session.pop("pending_payment_user_id", None)
+        if request.user.is_authenticated:
+            messages.success(request, "Your subscription is already active.")
+            return redirect("index")
+        messages.success(request, "Your subscription is already active. Please log in.")
+        return redirect("login")
+
+    registration_due = not user.is_paid
+    amount_due = BASE_FEE + MONTHLY_SUBSCRIPTION_FEE if registration_due else MONTHLY_SUBSCRIPTION_FEE
+
+    if request.method == "POST":
+        payment_reference = (request.POST.get("payment_reference") or "").strip()
+        if not payment_reference:
+            messages.error(request, "Payment reference is missing. Complete payment to continue.")
+            return redirect("subscription_payment")
+
+        paystack_secret = (getattr(django_settings, "PAYSTACK_SECRET_KEY", "") or "").strip()
+        if not paystack_secret:
+            messages.error(request, "Paystack secret key is not configured.")
+            return redirect("subscription_payment")
+
+        try:
+            verify_response = requests.get(
+                f"https://api.paystack.co/transaction/verify/{payment_reference}",
+                headers={"Authorization": f"Bearer {paystack_secret}"},
+                timeout=15,
+            )
+            verify_payload = verify_response.json()
+        except Exception:
+            messages.error(request, "Could not verify payment right now. Please try again.")
+            return redirect("subscription_payment")
+
+        tx_data = verify_payload.get("data") or {}
+        tx_status = (tx_data.get("status") or "").strip().lower()
+        if not verify_payload.get("status") or tx_status != "success":
+            messages.error(request, "Payment was not successful.")
+            return redirect("subscription_payment")
+
+        expected_amount_kobo = amount_due * 100
+        try:
+            paid_amount_kobo = int(tx_data.get("amount") or 0)
+        except (TypeError, ValueError):
+            paid_amount_kobo = 0
+        if paid_amount_kobo < expected_amount_kobo:
+            messages.error(request, "Paid amount does not match the required subscription fee.")
+            return redirect("subscription_payment")
+
+        customer = tx_data.get("customer") or {}
+        paystack_email = (customer.get("email") or "").strip().lower()
+        if paystack_email and paystack_email != (user.email or "").strip().lower():
+            messages.error(request, "Payment email does not match your account email.")
+            return redirect("subscription_payment")
+
+        start_date = today
+        if user.subscription_active_until and user.subscription_active_until > today:
+            start_date = user.subscription_active_until
+
+        user.is_paid = True
+        user.monthly_fee = MONTHLY_SUBSCRIPTION_FEE
+        user.subscription_active_until = start_date + timedelta(days=30)
+        user.save(update_fields=["is_paid", "monthly_fee", "subscription_active_until"])
+
+        if not request.user.is_authenticated:
+            login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        request.session.pop("pending_payment_user_id", None)
+
+        active_until_display = user.subscription_active_until.strftime("%b %d, %Y")
+        messages.success(request, f"Payment confirmed. Subscription active until {active_until_display}.")
+        return redirect("index")
+
+    context = {
+        "PAYSTACK_PUBLIC_KEY": getattr(django_settings, "PAYSTACK_PUBLIC_KEY", ""),
+        "amount_due": amount_due,
+        "amount_due_kobo": amount_due * 100,
+        "registration_due": registration_due,
+        "base_fee": BASE_FEE,
+        "monthly_fee": MONTHLY_SUBSCRIPTION_FEE,
+        "first_payment_total": BASE_FEE + MONTHLY_SUBSCRIPTION_FEE,
+        "subscription_active_until": user.subscription_active_until,
+        "subscription_email": user.email,
+    }
+    return render(request, "auth/subscription-payment.html", context)
+
+
+@require_POST
+def send_code(request):
+    is_json = bool(request.content_type and "application/json" in request.content_type)
+    signup_user = _get_signup_user(request)
+
+    if not signup_user:
+        if is_json:
+            return JsonResponse({"success": False, "message": "Create your account first."}, status=400)
+        messages.error(request, "Create your account first.")
+        return redirect(f"{reverse('signup')}?step=1")
+
+    if signup_user.is_email_verified:
+        request.session["verified_signup_user_id"] = signup_user.id
+        request.session["verified_email"] = signup_user.email
+        if is_json:
+            return JsonResponse({"success": True, "message": "Email already verified"})
+        messages.success(request, "Email already verified.")
+        return redirect(f"{reverse('signup')}?step=3")
+
+    try:
+        _send_signup_code(signup_user)
+    except Exception as exc:
+        if is_json:
+            return JsonResponse({
+                "success": False,
+                "message": "Failed to send OTP email. Configure email settings.",
+                "error": str(exc),
+            }, status=500)
+        messages.error(request, "Failed to send OTP email. Configure email settings.")
+        return redirect(f"{reverse('signup')}?step=2")
+
+    if is_json:
+        return JsonResponse({"success": True, "message": f"Code sent to {signup_user.email}"})
+    messages.success(request, f"Code sent to {signup_user.email}")
+    return redirect(f"{reverse('signup')}?step=2")
+
+
+@require_POST
+def verify_code(request):
+    is_json = bool(request.content_type and "application/json" in request.content_type)
+    if is_json:
+        data = json.loads(request.body or "{}")
+    else:
+        data = request.POST
+
+    code = (data.get("code") or "").strip()
+    signup_user = _get_signup_user(request)
+
+    if not signup_user:
+        if is_json:
+            return JsonResponse({"success": False, "message": "Create account first."}, status=400)
+        messages.error(request, "Create account first.")
+        return redirect(f"{reverse('signup')}?step=1")
+
+    if not code:
+        if is_json:
+            return JsonResponse({"success": False, "message": "Verification code is required."}, status=400)
+        messages.error(request, "Verification code is required.")
+        return redirect(f"{reverse('signup')}?step=2")
+
+    sent_at = signup_user.email_code_sent_at
+    if not signup_user.email_verification_code or not sent_at:
+        if is_json:
+            return JsonResponse({"success": False, "message": "No OTP found. Send code first."}, status=400)
+        messages.error(request, "No OTP found. Send code first.")
+        return redirect(f"{reverse('signup')}?step=2")
+
+    if timezone.now() - sent_at > timedelta(minutes=10):
+        if is_json:
+            return JsonResponse({"success": False, "message": "OTP expired. Send a new code."}, status=400)
+        messages.error(request, "OTP expired. Send a new code.")
+        return redirect(f"{reverse('signup')}?step=2")
+
+    if code != signup_user.email_verification_code:
+        if is_json:
+            return JsonResponse({"success": False, "message": "Invalid code"}, status=400)
+        messages.error(request, "Invalid code.")
+        return redirect(f"{reverse('signup')}?step=2")
+
+    signup_user.is_email_verified = True
+    signup_user.email_verification_code = ""
+    signup_user.email_code_sent_at = None
+    signup_user.save(update_fields=["is_email_verified", "email_verification_code", "email_code_sent_at"])
+
+    request.session["verified_signup_user_id"] = signup_user.id
+    request.session["verified_email"] = signup_user.email
+
+    if is_json:
+        return JsonResponse({"success": True, "message": "Email verified"})
+
+    messages.success(request, "Email verified successfully.")
+    return redirect(f"{reverse('signup')}?step=3")
+
+
+def forgot_password(request):
+    reset_step = request.session.get("reset_step", "email")
+    reset_email = request.session.get("reset_email", "")
+    return render(request, "auth/forgot-password.html", {
+        "reset_step": reset_step,
+        "reset_email": reset_email,
+    })
+
+
+@require_POST
+def forgot_password_send_code(request):
+    is_json = request.content_type == "application/json"
+    if is_json:
+        data = json.loads(request.body or "{}")
+    else:
+        data = request.POST
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        if is_json:
+            return JsonResponse({"success": False, "message": "Email is required"}, status=400)
+        messages.error(request, "Email is required.")
+        return redirect("forgot_password")
+
+    user = User.objects.filter(email=email).first()
+    if not user:
+        if is_json:
+            return JsonResponse({"success": True, "message": "If this email exists, a code has been sent."})
+        messages.success(request, "If this email exists, a code has been sent.")
+        return redirect("forgot_password")
+
+    code = str(random.randint(100000, 999999))
+    request.session["reset_email"] = email
+    request.session["reset_code"] = code
+    request.session["reset_sent_at"] = timezone.now().isoformat()
+    request.session["reset_verified"] = False
+    request.session["reset_step"] = "otp"
+    request.session.modified = True
+
+    try:
+        send_mail(
+            "Password Reset Code",
+            f"Your password reset code is {code}",
+            getattr(django_settings, "DEFAULT_FROM_EMAIL", "no-reply@vilastore.local"),
+            [email],
+            fail_silently=False,
+        )
+    except Exception as exc:
+        if is_json:
+            return JsonResponse({
+                "success": False,
+                "message": "Failed to send reset email. Check email settings.",
+                "error": str(exc),
+            }, status=500)
+        messages.error(request, "Failed to send reset email. Check email settings.")
+        return redirect("forgot_password")
+
+    if is_json:
+        return JsonResponse({"success": True, "message": "Verification code sent."})
+    messages.success(request, "Verification code sent.")
+    return redirect("forgot_password")
+
+
+@require_POST
+def forgot_password_verify_code(request):
+    is_json = request.content_type == "application/json"
+    if is_json:
+        data = json.loads(request.body or "{}")
+    else:
+        data = request.POST
+    email = (data.get("email") or "").strip().lower()
+    code = (data.get("code") or "").strip()
+
+    session_email = request.session.get("reset_email")
+    session_code = request.session.get("reset_code")
+    sent_at_raw = request.session.get("reset_sent_at")
+
+    if not session_email or not session_code or not sent_at_raw:
+        if is_json:
+            return JsonResponse({"success": False, "message": "No reset code found. Send code first."}, status=400)
+        messages.error(request, "No reset code found. Send code first.")
+        return redirect("forgot_password")
+
+    try:
+        sent_at = datetime.fromisoformat(sent_at_raw)
+    except ValueError:
+        if is_json:
+            return JsonResponse({"success": False, "message": "Invalid reset session. Send code again."}, status=400)
+        messages.error(request, "Invalid reset session. Send code again.")
+        return redirect("forgot_password")
+
+    if timezone.now() - sent_at > timedelta(minutes=10):
+        if is_json:
+            return JsonResponse({"success": False, "message": "Reset code expired. Send a new code."}, status=400)
+        messages.error(request, "Reset code expired. Send a new code.")
+        return redirect("forgot_password")
+
+    if email == session_email and code == session_code:
+        request.session["reset_verified"] = True
+        request.session["reset_step"] = "reset"
+        if is_json:
+            return JsonResponse({"success": True, "message": "Code verified"})
+        messages.success(request, "Code verified. Set your new password.")
+        return redirect("forgot_password")
+
+    if is_json:
+        return JsonResponse({"success": False, "message": "Invalid code"}, status=400)
+    messages.error(request, "Invalid code.")
+    return redirect("forgot_password")
+
+
+@require_POST
+def forgot_password_reset(request):
+    is_json = request.content_type == "application/json"
+    if is_json:
+        data = json.loads(request.body or "{}")
+    else:
+        data = request.POST
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    confirm_password = data.get("confirm_password") or ""
+
+    if not email:
+        if is_json:
+            return JsonResponse({"success": False, "message": "Email is required"}, status=400)
+        messages.error(request, "Email is required.")
+        return redirect("forgot_password")
+
+    if password != confirm_password:
+        if is_json:
+            return JsonResponse({"success": False, "message": "Passwords do not match"}, status=400)
+        messages.error(request, "Passwords do not match.")
+        return redirect("forgot_password")
+
+    if not (any(c.isupper() for c in password) and any(c.isdigit() for c in password) and any(not c.isalnum() for c in password)):
+        if is_json:
+            return JsonResponse({"success": False, "message": "Password must include uppercase, number, and special character"}, status=400)
+        messages.error(request, "Password must include uppercase, number, and special character.")
+        return redirect("forgot_password")
+
+    if request.session.get("reset_verified") is not True or request.session.get("reset_email") != email:
+        if is_json:
+            return JsonResponse({"success": False, "message": "Reset not verified"}, status=400)
+        messages.error(request, "Reset not verified.")
+        return redirect("forgot_password")
+
+    user = User.objects.filter(email=email).first()
+    if not user:
+        if is_json:
+            return JsonResponse({"success": False, "message": "User not found"}, status=404)
+        messages.error(request, "User not found.")
+        return redirect("forgot_password")
+
+    user.set_password(password)
+    user.save(update_fields=["password"])
+
+    request.session.pop("reset_email", None)
+    request.session.pop("reset_code", None)
+    request.session.pop("reset_sent_at", None)
+    request.session.pop("reset_verified", None)
+    request.session.pop("reset_step", None)
+
+    if is_json:
+        return JsonResponse({"success": True, "message": "Password reset successful"})
+    messages.success(request, "Password reset successful. Please login.")
+    return redirect("login")
+
+
+def shopboy_login(request):
+    if request.session.get("shopboy_id"):
+        return redirect("shopboy_dashboard")
+
+    if request.method == "POST":
+        shop_code = (request.POST.get("shop_code") or "").strip().upper()
+        username = (request.POST.get("username") or "").strip()
+        password = request.POST.get("password") or ""
+
+        if not shop_code:
+            messages.error(request, "Shop code is required.")
+            return render(request, "shopboy/shopboy-login.html")
+
+        owner = User.objects.filter(shop_code__iexact=shop_code).first()
+        if not owner:
+            messages.error(request, "Invalid shop code.")
+            return render(request, "shopboy/shopboy-login.html")
+
+        shopboy = ShopBoy.objects.filter(
+            username__iexact=username,
+            is_active=True,
+            user=owner,
+        ).select_related("user").first()
+        if not shopboy:
+            messages.error(request, "Invalid username or password.")
+            return render(request, "shopboy/shopboy-login.html")
+
+        valid = check_password(password, shopboy.password) or (shopboy.password == password)
+        if not valid:
+            messages.error(request, "Invalid username or password.")
+            return render(request, "shopboy/shopboy-login.html")
+
+        request.session["shopboy_id"] = shopboy.id
+        request.session["shopboy_owner_id"] = shopboy.user_id
+        request.session["shopboy_name"] = shopboy.full_name
+        return redirect("shopboy_dashboard")
+
+    return render(request, "shopboy/shopboy-login.html")
+
+
+def shopboy_logout(request):
+    request.session.pop("shopboy_id", None)
+    request.session.pop("shopboy_owner_id", None)
+    request.session.pop("shopboy_name", None)
+    return redirect("shopboy_login")
+
+
+def shopboy_profile(request):
+    shopboy_id = request.session.get("shopboy_id")
+    if not shopboy_id:
+        return redirect("shopboy_login")
+
+    shopboy = get_object_or_404(ShopBoy.objects.select_related("user"), id=shopboy_id, is_active=True)
+    context = {
+        "shopboy": shopboy,
+        "owner": shopboy.user,
+    }
+    return render(request, "shopboy/shop-profile.html", context)
+
+
+def shopboy_dashboard(request):
+    shopboy_id = request.session.get("shopboy_id")
+    if not shopboy_id:
+        return redirect("shopboy_login")
+
+    shopboy = get_object_or_404(ShopBoy.objects.select_related("user"), id=shopboy_id, is_active=True)
+    category_id = (request.GET.get("category") or "").strip()
+    products = Product.objects.filter(user=shopboy.user).order_by("name")
+    if category_id:
+        products = products.filter(category_id=category_id)
+    categories = Category.objects.filter(user=shopboy.user).order_by("name")
+    cart = request.session.get("shopboy_cart", {})
+    total = sum(
+        (Decimal(str(item["price"])) * item["quantity"] for item in cart.values()),
+        Decimal("0.00"),
+    )
+
+    return render(request, "shopboy/shopboy-dashboard.html", {
+        "shopboy": shopboy,
+        "owner": shopboy.user,
+        "products": products,
+        "categories": categories,
+        "selected_category": category_id,
+        "cart": cart,
+        "cart_total": total.quantize(Decimal("0.01")),
+    })
+
+
+@require_POST
+def shopboy_add_to_cart(request, product_id):
+    shopboy = _get_shopboy_session(request)
+    if not shopboy:
+        return redirect("shopboy_login")
+
+    product = get_object_or_404(Product, id=product_id, user=shopboy.user)
+    cart = request.session.get("shopboy_cart", {})
+    product_key = str(product_id)
+
+    if product.stock <= 0:
+        messages.error(request, f"{product.name} is out of stock.")
+        return redirect("shopboy_dashboard")
+
+    if product_key in cart:
+        if cart[product_key]["quantity"] < product.stock:
+            cart[product_key]["quantity"] += 1
+        else:
+            messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+    else:
+        cart[product_key] = {
+            "name": product.name,
+            "price": float(product.selling_price),
+            "cost": float(product.cost_price),
+            "quantity": 1,
+        }
+
+    request.session["shopboy_cart"] = cart
+    return redirect("shopboy_dashboard")
+
+
+@require_POST
+def shopboy_update_cart(request, product_id):
+    shopboy = _get_shopboy_session(request)
+    if not shopboy:
+        return redirect("shopboy_login")
+
+    cart = request.session.get("shopboy_cart", {})
+    product_id = str(product_id)
+    action = request.POST.get("action")
+
+    if product_id in cart:
+        product = get_object_or_404(Product, id=product_id, user=shopboy.user)
+
+        if action == "increase":
+            if cart[product_id]["quantity"] < product.stock:
+                cart[product_id]["quantity"] += 1
+            else:
+                messages.warning(request, f"Cannot add more than available stock ({product.stock}).")
+        elif action == "decrease":
+            cart[product_id]["quantity"] -= 1
+            if cart[product_id]["quantity"] <= 0:
+                del cart[product_id]
+
+    request.session["shopboy_cart"] = cart
+    return redirect("shopboy_dashboard")
+
+
+@require_POST
+def shopboy_remove_from_cart(request, product_id):
+    shopboy = _get_shopboy_session(request)
+    if not shopboy:
+        return redirect("shopboy_login")
+
+    cart = request.session.get("shopboy_cart", {})
+    cart.pop(str(product_id), None)
+    request.session["shopboy_cart"] = cart
+    return redirect("shopboy_dashboard")
+
+
+@require_POST
+def shopboy_checkout(request):
+    shopboy = _get_shopboy_session(request)
+    if not shopboy:
+        return redirect("shopboy_login")
+
+    cart = request.session.get("shopboy_cart", {})
+    if not cart:
+        messages.warning(request, "Cart is empty.")
+        return redirect("shopboy_dashboard")
+
+    product_ids = [int(pid) for pid in cart.keys()]
+
+    total_amount = Decimal("0.00")
+    total_profit = Decimal("0.00")
+    line_items = []
+
+    with transaction.atomic():
+        products = Product.objects.select_for_update().filter(user=shopboy.user, id__in=product_ids)
+        product_map = {str(p.id): p for p in products}
+
+        for pid, item in cart.items():
+            product = product_map.get(pid)
+            if not product:
+                messages.error(request, "A cart item no longer exists.")
+                return redirect("shopboy_dashboard")
+
+            quantity = int(item["quantity"])
+            if quantity <= 0:
+                continue
+
+            if product.stock < quantity:
+                messages.error(request, f"Not enough stock for {product.name}. Available: {product.stock}.")
+                return redirect("shopboy_dashboard")
+
+            price = Decimal(str(item["price"]))
+            cost = Decimal(str(item["cost"]))
+            line_total = price * quantity
+            line_profit = (price - cost) * quantity
+            total_amount += line_total
+            total_profit += line_profit
+
+            line_items.append({
+                "product": product,
+                "quantity": quantity,
+                "price": price,
+                "profit": line_profit,
+            })
+
+        if not line_items:
+            messages.warning(request, "Cart is empty.")
+            return redirect("shopboy_dashboard")
+
+        sale = Sale.objects.create(
+            user=shopboy.user,
+            sales_channel=Sale.CHANNEL_SHOPBOY_PORTAL,
+            handled_by_shopboy=shopboy,
+            total_amount=total_amount.quantize(Decimal("0.01")),
+            total_profit=total_profit.quantize(Decimal("0.01")),
+        )
+
+        for row in line_items:
+            SaleItem.objects.create(
+                sale=sale,
+                product=row["product"],
+                quantity=row["quantity"],
+                price=row["price"].quantize(Decimal("0.01")),
+                profit=row["profit"].quantize(Decimal("0.01")),
+            )
+            row["product"].stock -= row["quantity"]
+            row["product"].save(update_fields=["stock"])
+
+    request.session["shopboy_cart"] = {}
+    messages.success(request, "Sale completed successfully.")
+    return redirect("shopboy_dashboard")
+
+
+@require_POST
+def shopboy_sell_product(request, product_id):
+    shopboy_id = request.session.get("shopboy_id")
+    if not shopboy_id:
+        return redirect("shopboy_login")
+
+    shopboy = get_object_or_404(ShopBoy.objects.select_related("user"), id=shopboy_id, is_active=True)
+
+    try:
+        qty = int(request.POST.get("quantity", 1))
+    except ValueError:
+        messages.error(request, "Invalid quantity.")
+        return redirect("shopboy_dashboard")
+
+    if qty <= 0:
+        messages.error(request, "Quantity must be at least 1.")
+        return redirect("shopboy_dashboard")
+
+    with transaction.atomic():
+        product = get_object_or_404(Product.objects.select_for_update(), id=product_id, user=shopboy.user)
+
+        if product.stock < qty:
+            messages.error(request, f"Not enough stock for {product.name}. Available: {product.stock}.")
+            return redirect("shopboy_dashboard")
+
+        total_amount = product.selling_price * qty
+        total_profit = (product.selling_price - product.cost_price) * qty
+
+        sale = Sale.objects.create(
+            user=shopboy.user,
+            sales_channel=Sale.CHANNEL_SHOPBOY_PORTAL,
+            handled_by_shopboy=shopboy,
+            total_amount=total_amount.quantize(Decimal("0.01")),
+            total_profit=total_profit.quantize(Decimal("0.01")),
+        )
+
+        SaleItem.objects.create(
+            sale=sale,
+            product=product,
+            quantity=qty,
+            price=product.selling_price.quantize(Decimal("0.01")),
+            profit=total_profit.quantize(Decimal("0.01")),
+        )
+
+        product.stock -= qty
+        product.save(update_fields=["stock"])
+
+    messages.success(request, f"Sold {qty} x {product.name}.")
+    return redirect("shopboy_dashboard")
+
+
+
+
+# =============================
+# Admin Portal
+# =============================
+
+def _admin_portal_check(user):
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
+
+
+def admin_portal_login(request):
+    if request.user.is_authenticated and _admin_portal_check(request.user):
+        return redirect("admin_portal")
+
+    if request.method == "POST":
+        email = (request.POST.get("email") or "").strip().lower()
+        password = request.POST.get("password") or ""
+
+        user = _authenticate_with_identifier(request, email, password)
+        if not user:
+            messages.error(request, "Invalid email/username or password")
+            return render(request, "admin/admin-login.html")
+
+        if not _admin_portal_check(user):
+            messages.error(request, "You do not have access to the admin portal")
+            return render(request, "admin/admin-login.html")
+
+        login(request, user)
+        return redirect("admin_portal")
+
+    return render(request, "admin/admin-login.html")
+
+
+def admin_portal_logout(request):
+    logout(request)
+    return redirect("admin_portal_login")
+
+
+@user_passes_test(_admin_portal_check, login_url="admin_portal_login")
+def admin_portal(request):
+    now = timezone.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    month_sales = Sale.objects.filter(created_at__gte=month_start)
+    month_revenue = month_sales.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+    month_profit = month_sales.aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
+
+    today = timezone.localdate()
+    subscription_revenue = (
+        User.objects.filter(
+            subscription_active_until__gte=today,
+            is_paid=True,
+            is_staff=False,
+            is_superuser=False,
+        )
+        .aggregate(total=Sum("monthly_fee"))["total"]
+        or Decimal("0.00")
+    )
+
+    active_shops = User.objects.filter(is_active=True, is_paid=True).count()
+    total_shops = User.objects.count()
+    total_products = Product.objects.count()
+    total_orders = MarketplaceOrder.objects.count()
+
+    recent_users = User.objects.order_by("-date_joined")[:5]
+    investors = Investor.objects.order_by("-created_at")
+    feedbacks = Feedback.objects.order_by("-created_at")[:50]
+    for investor in investors:
+        ownership_ratio = (investor.ownership_percent or Decimal("0")) / Decimal("100")
+        investor.monthly_return = (subscription_revenue * ownership_ratio).quantize(Decimal("0.01"))
+
+    return render(request, "admin/admin.html", {
+        "month_revenue": month_revenue,
+        "month_profit": month_profit,
+        "subscription_revenue": subscription_revenue,
+        "active_shops": active_shops,
+        "total_shops": total_shops,
+        "total_products": total_products,
+        "total_orders": total_orders,
+        "recent_users": recent_users,
+        "investors": investors,
+        "feedbacks": feedbacks,
+    })
+
+
+@user_passes_test(_admin_portal_check, login_url="admin_portal_login")
+@require_POST
+def admin_portal_add_investor(request):
+    name = (request.POST.get("name") or "").strip()
+    email = (request.POST.get("email") or "").strip().lower()
+    password = request.POST.get("password") or ""
+    investment_amount = request.POST.get("investment_amount") or "0"
+    ownership_percent = request.POST.get("ownership_percent") or "0"
+    is_active = bool(request.POST.get("is_active"))
+
+    if not name or not email or not password:
+        messages.error(request, "Name, email, and password are required.")
+        return redirect("admin_portal")
+
+    if Investor.objects.filter(email__iexact=email).exists():
+        messages.error(request, "An investor with this email already exists.")
+        return redirect("admin_portal")
+
+    try:
+        investment_amount = Decimal(investment_amount)
+        ownership_percent = Decimal(ownership_percent)
+    except Exception:
+        messages.error(request, "Invalid investment or ownership value.")
+        return redirect("admin_portal")
+
+    if investment_amount < 0 or ownership_percent < 0 or ownership_percent > 100:
+        messages.error(request, "Investment must be >= 0 and ownership must be between 0 and 100.")
+        return redirect("admin_portal")
+
+    Investor.objects.create(
+        name=name,
+        email=email,
+        password=password,
+        investment_amount=investment_amount,
+        ownership_percent=ownership_percent,
+        is_active=is_active,
+    )
+    messages.success(request, "Investor created.")
+    return redirect("admin_portal")
+
+
+@user_passes_test(_admin_portal_check, login_url="admin_portal_login")
+@require_POST
+def admin_portal_delete_investor(request, pk):
+    investor = get_object_or_404(Investor, pk=pk)
+    investor.delete()
+    messages.success(request, "Investor deleted.")
+    return redirect("admin_portal")
+
+
+@user_passes_test(_admin_portal_check, login_url="admin_portal_login")
+@require_POST
+def admin_portal_toggle_investor(request, pk):
+    investor = get_object_or_404(Investor, pk=pk)
+    investor.is_active = not investor.is_active
+    investor.save(update_fields=["is_active"])
+    messages.success(request, "Investor status updated.")
+    return redirect("admin_portal")
+
+# =============================
+# Marketplace Helpers
+# =============================
+def _generate_shop_code():
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(20):
+        code = "SHOP-" + "".join(random.choices(alphabet, k=6))
+        if not User.objects.filter(shop_code=code).exists():
+            return code
+    return "SHOP-" + "".join(random.choices(alphabet, k=8))
+
+
+def _ensure_shop_code(user):
+    if not user.shop_code:
+        user.shop_code = _generate_shop_code()
+        user.save(update_fields=["shop_code"])
+    return user.shop_code
+
+
+def _get_shopboy_session(request):
+    shopboy_id = request.session.get("shopboy_id")
+    if not shopboy_id:
+        return None
+    return ShopBoy.objects.filter(id=shopboy_id, is_active=True).select_related("user").first()
+
+
+def _get_marketplace_settings(user):
+    settings_obj, _ = MarketplaceSettings.objects.get_or_create(user=user)
+    return settings_obj
+
+
+def _ensure_marketplace_profiles():
+    shop_owner_ids = list(
+        User.objects.filter(is_active=True)
+        .values_list("id", flat=True)
+        .distinct()
+    )
+    if not shop_owner_ids:
+        return
+
+    existing_ids = set(
+        MarketplaceShopProfile.objects.filter(user_id__in=shop_owner_ids)
+        .values_list("user_id", flat=True)
+    )
+    missing_profiles = [
+        MarketplaceShopProfile(user_id=user_id)
+        for user_id in shop_owner_ids
+        if user_id not in existing_ids
+    ]
+    if missing_profiles:
+        MarketplaceShopProfile.objects.bulk_create(missing_profiles)
+
+
+def _get_assigned_shopboy(user):
+    settings_obj = _get_marketplace_settings(user)
+    assigned = settings_obj.assigned_shopboy
+    if assigned and assigned.is_active and assigned.can_use_marketplace and assigned.user_id == user.id:
+        return assigned
+    fallback = ShopBoy.objects.filter(user=user, is_active=True, can_use_marketplace=True).order_by("id").first()
+    return fallback
+
+
+def _get_marketplace_buyer(request):
+    buyer_id = request.session.get("marketplace_buyer_id")
+    if not buyer_id:
+        return None
+    return MarketplaceBuyer.objects.filter(id=buyer_id, is_active=True, is_email_verified=True).first()
+
+
+def _get_pending_marketplace_buyer(request):
+    buyer_id = request.session.get("marketplace_pending_buyer_id")
+    if not buyer_id:
+        return None
+    return MarketplaceBuyer.objects.filter(id=buyer_id, is_active=True).first()
+
+
+def _login_marketplace_buyer(request, buyer):
+    request.session["marketplace_buyer_id"] = buyer.id
+    request.session["marketplace_buyer_email"] = buyer.email
+
+
+def _logout_marketplace_buyer(request):
+    request.session.pop("marketplace_buyer_id", None)
+    request.session.pop("marketplace_buyer_email", None)
+    request.session.pop("marketplace_pending_buyer_id", None)
+
+
+def _send_marketplace_verification_code(buyer):
+    code = str(random.randint(100000, 999999))
+    buyer.email_verification_code = code
+    buyer.email_code_sent_at = timezone.now()
+    buyer.save(update_fields=["email_verification_code", "email_code_sent_at"])
+
+    send_mail(
+        "Your Marketplace verification code",
+        f"Your verification code is {code}. It will expire in 10 minutes.",
+        getattr(django_settings, "DEFAULT_FROM_EMAIL", "no-reply@vilastore.local"),
+        [buyer.email],
+        fail_silently=False,
+    )
+
+
+def _send_marketplace_reset_code(buyer):
+    code = str(random.randint(100000, 999999))
+    buyer.reset_code = code
+    buyer.reset_sent_at = timezone.now()
+    buyer.save(update_fields=["reset_code", "reset_sent_at"])
+
+    send_mail(
+        "Marketplace password reset code",
+        f"Your password reset code is {code}. It will expire in 10 minutes.",
+        getattr(django_settings, "DEFAULT_FROM_EMAIL", "no-reply@vilastore.local"),
+        [buyer.email],
+        fail_silently=False,
+    )
+
+
+def _order_access_context(request, order):
+    shopboy = _get_shopboy_session(request)
+    is_seller = False
+    if shopboy and shopboy.user_id == order.shop_owner_id and shopboy.can_use_marketplace:
+        is_seller = True
+    if request.user.is_authenticated and request.user.id == order.shop_owner_id:
+        is_seller = True
+
+    buyer = _get_marketplace_buyer(request)
+    is_buyer = bool(buyer and order.buyer_id == buyer.id)
+    access_token = request.GET.get("access") or request.POST.get("access") or ""
+    if not is_buyer:
+        is_buyer = str(order.access_token) == access_token
+    return is_seller, is_buyer
+
+
+# =============================
+# Marketplace Views
+# =============================
+def marketplace_login(request):
+    buyer = _get_marketplace_buyer(request)
+    if buyer:
+        return redirect("marketplace_account")
+
+    if request.method == "POST":
+        email = (request.POST.get("email") or "").strip().lower()
+        password = request.POST.get("password") or ""
+
+        if not email or not password:
+            messages.error(request, "Email and password are required.")
+            return render(request, "shopboy/marketplace-login.html")
+
+        buyer = MarketplaceBuyer.objects.filter(email__iexact=email, is_active=True).first()
+        if not buyer or not check_password(password, buyer.password):
+            messages.error(request, "Invalid email or password.")
+            return render(request, "shopboy/marketplace-login.html")
+
+        if not buyer.is_email_verified:
+            request.session["marketplace_pending_buyer_id"] = buyer.id
+            try:
+                _send_marketplace_verification_code(buyer)
+            except Exception:
+                messages.error(request, "Could not send verification email. Please try again.")
+                return render(request, "shopboy/marketplace-login.html")
+            messages.success(request, "Verify your email to continue. We sent you a code.")
+            return redirect("marketplace_verify")
+
+        buyer.last_login = timezone.now()
+        buyer.save(update_fields=["last_login"])
+        _login_marketplace_buyer(request, buyer)
+        return redirect("marketplace_account")
+
+    return render(request, "shopboy/marketplace-login.html")
+
+
+def marketplace_signup(request):
+    buyer = _get_marketplace_buyer(request)
+    if buyer:
+        return redirect("marketplace_account")
+
+    if request.method == "POST":
+        email = (request.POST.get("email") or "").strip().lower()
+        password = request.POST.get("password") or ""
+        confirm_password = request.POST.get("confirm_password") or ""
+
+        if not email or not password or not confirm_password:
+            messages.error(request, "Email and passwords are required.")
+            return render(request, "shopboy/marketplace-signup.html")
+
+        if password != confirm_password:
+            messages.error(request, "Passwords do not match.")
+            return render(request, "shopboy/marketplace-signup.html")
+
+        if not _password_meets_rules(password):
+            messages.error(request, "Password must include uppercase, number, and special character.")
+            return render(request, "shopboy/marketplace-signup.html")
+
+        if MarketplaceBuyer.objects.filter(email__iexact=email).exists():
+            messages.error(request, "Email already registered. Please sign in.")
+            return render(request, "shopboy/marketplace-signup.html")
+
+        buyer = MarketplaceBuyer.objects.create(
+            email=email,
+            password=make_password(password),
+        )
+        request.session["marketplace_pending_buyer_id"] = buyer.id
+        try:
+            _send_marketplace_verification_code(buyer)
+        except Exception:
+            messages.error(request, "Account created, but we could not send verification email. Try again.")
+            return render(request, "shopboy/marketplace-signup.html")
+        messages.success(request, "Account created. Verify your email to continue.")
+        return redirect("marketplace_verify")
+
+    return render(request, "shopboy/marketplace-signup.html")
+
+
+def marketplace_logout(request):
+    _logout_marketplace_buyer(request)
+    return redirect("marketplace")
+
+
+def marketplace_verify(request):
+    buyer = _get_pending_marketplace_buyer(request)
+    if not buyer:
+        return redirect("marketplace_login")
+
+    if request.method == "POST":
+        code = (request.POST.get("code") or "").strip()
+        if not code:
+            messages.error(request, "Verification code is required.")
+            return render(request, "shopboy/marketplace-verify.html", {"buyer": buyer})
+
+        sent_at = buyer.email_code_sent_at
+        if not buyer.email_verification_code or not sent_at:
+            messages.error(request, "No OTP found. Send code first.")
+            return render(request, "shopboy/marketplace-verify.html", {"buyer": buyer})
+
+        if timezone.now() - sent_at > timedelta(minutes=10):
+            messages.error(request, "OTP expired. Send a new code.")
+            return render(request, "shopboy/marketplace-verify.html", {"buyer": buyer})
+
+        if code != buyer.email_verification_code:
+            messages.error(request, "Invalid code.")
+            return render(request, "shopboy/marketplace-verify.html", {"buyer": buyer})
+
+        buyer.is_email_verified = True
+        buyer.email_verification_code = ""
+        buyer.email_code_sent_at = None
+        buyer.last_login = timezone.now()
+        buyer.save(update_fields=["is_email_verified", "email_verification_code", "email_code_sent_at", "last_login"])
+
+        request.session.pop("marketplace_pending_buyer_id", None)
+        _login_marketplace_buyer(request, buyer)
+        messages.success(request, "Email verified successfully.")
+        return redirect("marketplace_account")
+
+    return render(request, "shopboy/marketplace-verify.html", {"buyer": buyer})
+
+
+@require_POST
+def marketplace_send_verification_code(request):
+    buyer = _get_pending_marketplace_buyer(request)
+    if not buyer:
+        return redirect("marketplace_login")
+
+    try:
+        _send_marketplace_verification_code(buyer)
+    except Exception:
+        messages.error(request, "Failed to send verification email. Please try again.")
+        return redirect("marketplace_verify")
+
+    messages.success(request, f"Code sent to {buyer.email}.")
+    return redirect("marketplace_verify")
+
+
+def marketplace_forgot_password(request):
+    reset_step = request.session.get("marketplace_reset_step", "email")
+    reset_email = request.session.get("marketplace_reset_email", "")
+    return render(request, "shopboy/marketplace-forgot-password.html", {
+        "reset_step": reset_step,
+        "reset_email": reset_email,
+    })
+
+
+@require_POST
+def marketplace_forgot_password_send_code(request):
+    email = (request.POST.get("email") or "").strip().lower()
+    if not email:
+        messages.error(request, "Email is required.")
+        return redirect("marketplace_forgot_password")
+
+    buyer = MarketplaceBuyer.objects.filter(email__iexact=email, is_active=True).first()
+    if not buyer:
+        messages.success(request, "If this email exists, a code has been sent.")
+        return redirect("marketplace_forgot_password")
+
+    request.session["marketplace_reset_email"] = email
+    request.session["marketplace_reset_step"] = "otp"
+    request.session["marketplace_reset_verified"] = False
+    request.session.modified = True
+
+    try:
+        _send_marketplace_reset_code(buyer)
+    except Exception:
+        messages.error(request, "Failed to send reset email. Check email settings.")
+        return redirect("marketplace_forgot_password")
+
+    messages.success(request, "Verification code sent.")
+    return redirect("marketplace_forgot_password")
+
+
+@require_POST
+def marketplace_forgot_password_verify_code(request):
+    email = (request.POST.get("email") or "").strip().lower()
+    code = (request.POST.get("code") or "").strip()
+
+    session_email = request.session.get("marketplace_reset_email")
+    if not session_email or email != session_email:
+        messages.error(request, "No reset code found. Send code first.")
+        return redirect("marketplace_forgot_password")
+
+    buyer = MarketplaceBuyer.objects.filter(email__iexact=email, is_active=True).first()
+    if not buyer or not buyer.reset_code or not buyer.reset_sent_at:
+        messages.error(request, "No reset code found. Send code first.")
+        return redirect("marketplace_forgot_password")
+
+    if timezone.now() - buyer.reset_sent_at > timedelta(minutes=10):
+        messages.error(request, "Reset code expired. Send a new code.")
+        return redirect("marketplace_forgot_password")
+
+    if code != buyer.reset_code:
+        messages.error(request, "Invalid code.")
+        return redirect("marketplace_forgot_password")
+
+    request.session["marketplace_reset_verified"] = True
+    request.session["marketplace_reset_step"] = "reset"
+    messages.success(request, "Code verified. Set your new password.")
+    return redirect("marketplace_forgot_password")
+
+
+@require_POST
+def marketplace_forgot_password_reset(request):
+    email = (request.POST.get("email") or "").strip().lower()
+    password = request.POST.get("password") or ""
+    confirm_password = request.POST.get("confirm_password") or ""
+
+    if not email:
+        messages.error(request, "Email is required.")
+        return redirect("marketplace_forgot_password")
+
+    if password != confirm_password:
+        messages.error(request, "Passwords do not match.")
+        return redirect("marketplace_forgot_password")
+
+    if not _password_meets_rules(password):
+        messages.error(request, "Password must include uppercase, number, and special character.")
+        return redirect("marketplace_forgot_password")
+
+    if request.session.get("marketplace_reset_verified") is not True or request.session.get("marketplace_reset_email") != email:
+        messages.error(request, "Reset not verified.")
+        return redirect("marketplace_forgot_password")
+
+    buyer = MarketplaceBuyer.objects.filter(email__iexact=email, is_active=True).first()
+    if not buyer:
+        messages.error(request, "Account not found.")
+        return redirect("marketplace_forgot_password")
+
+    buyer.password = make_password(password)
+    buyer.reset_code = ""
+    buyer.reset_sent_at = None
+    buyer.save(update_fields=["password", "reset_code", "reset_sent_at"])
+
+    request.session.pop("marketplace_reset_email", None)
+    request.session.pop("marketplace_reset_step", None)
+    request.session.pop("marketplace_reset_verified", None)
+
+    messages.success(request, "Password reset successful. Please sign in.")
+    return redirect("marketplace_login")
+
+
+def marketplace_account(request):
+    buyer = _get_marketplace_buyer(request)
+    if not buyer:
+        pending = _get_pending_marketplace_buyer(request)
+        if pending and not pending.is_email_verified:
+            return redirect("marketplace_verify")
+        return redirect("marketplace_login")
+
+    orders = (
+        MarketplaceOrder.objects.filter(buyer=buyer)
+        .select_related("shop_owner")
+        .order_by("-created_at")
+    )
+
+    return render(request, "shopboy/marketplace-account.html", {
+        "buyer": buyer,
+        "orders": orders,
+    })
+
+
+def marketplace(request):
+    q = (request.GET.get("q") or "").strip()
+    username_q = q[1:] if q.startswith("@") else q
+    category = (request.GET.get("category") or "").strip()
+    location = (request.GET.get("location") or "").strip()
+    verified = request.GET.get("verified") == "1"
+    sort = request.GET.get("sort") or "rating"
+
+    _ensure_marketplace_profiles()
+
+    profiles = (
+        MarketplaceShopProfile.objects.select_related("user")
+        .prefetch_related("user__product_set")
+        .filter(user__is_active=True)
+        .distinct()
+    )
+    if q:
+        profiles = profiles.filter(
+            Q(user__business_name__icontains=q) |
+            Q(user__username__icontains=username_q) |
+            Q(description__icontains=q) |
+            Q(user__product__name__icontains=q)
+        ).distinct()
+    if category:
+        profiles = profiles.filter(category__iexact=category)
+    if location:
+        profiles = profiles.filter(location__icontains=location)
+    if verified:
+        profiles = profiles.filter(is_verified=True)
+
+    profiles = profiles.annotate(
+        sales_count=Sum(
+            "user__marketplace_orders__items__quantity",
+            filter=Q(user__marketplace_orders__status__in=["paid", "shipped", "delivered"])
+        )
+    )
+
+    if sort == "sales":
+        profiles = profiles.order_by("-sales_count", "-created_at")
+    elif sort == "newest":
+        profiles = profiles.order_by("-created_at")
+    else:
+        profiles = profiles.order_by("-rating", "-created_at")
+
+    categories = (
+        MarketplaceShopProfile.objects.exclude(category="")
+        .values_list("category", flat=True)
+        .distinct()
+        .order_by("category")
+    )
+    locations = (
+        MarketplaceShopProfile.objects.exclude(location="")
+        .values_list("location", flat=True)
+        .distinct()
+        .order_by("location")
+    )
+
+    return render(request, "shopboy/marketplace.html", {
+        "buyer": _get_marketplace_buyer(request),
+        "profiles": profiles,
+        "categories": categories,
+        "locations": locations,
+        "filters": {
+            "q": q,
+            "category": category,
+            "location": location,
+            "verified": verified,
+            "sort": sort,
+        },
+    })
+
+
+def marketplace_shop(request, username):
+    shop_owner = get_object_or_404(User, username=username)
+    profile, _ = MarketplaceShopProfile.objects.get_or_create(user=shop_owner)
+    products = Product.objects.filter(user=shop_owner).order_by("name")
+
+    return render(request, "shopboy/marketplace-shop.html", {
+        "buyer": _get_marketplace_buyer(request),
+        "shop_owner": shop_owner,
+        "profile": profile,
+        "products": products,
+    })
+
+
+@require_POST
+def marketplace_place_order(request, username):
+    shop_owner = get_object_or_404(User, username=username)
+    profile, _ = MarketplaceShopProfile.objects.get_or_create(user=shop_owner)
+    buyer = _get_marketplace_buyer(request)
+
+    buyer_name = (request.POST.get("buyer_name") or "").strip()
+    buyer_contact = (request.POST.get("buyer_contact") or "").strip()
+    buyer_address = (request.POST.get("buyer_address") or "").strip()
+
+    if not buyer_name or not buyer_contact:
+        messages.error(request, "Buyer name and contact are required.")
+        return redirect("marketplace_shop", username=shop_owner.username)
+
+    products = Product.objects.filter(user=shop_owner).order_by("name")
+    item_rows = []
+    total_amount = Decimal("0.00")
+
+    with transaction.atomic():
+        for product in products.select_for_update():
+            qty_raw = request.POST.get(f"qty_{product.id}") or "0"
+            try:
+                qty = int(qty_raw)
+            except ValueError:
+                qty = 0
+            if qty <= 0:
+                continue
+            if product.stock < qty:
+                messages.error(request, f"Not enough stock for {product.name}. Available: {product.stock}.")
+                return redirect("marketplace_shop", username=shop_owner.username)
+
+            line_total = product.selling_price * qty
+            total_amount += line_total
+            item_rows.append({
+                "product": product,
+                "quantity": qty,
+                "unit_price": product.selling_price,
+            })
+
+        if not item_rows:
+            messages.error(request, "Select at least one product to place an order.")
+            return redirect("marketplace_shop", username=shop_owner.username)
+
+        order = MarketplaceOrder.objects.create(
+            shop_owner=shop_owner,
+            buyer=buyer,
+            assigned_shopboy=_get_assigned_shopboy(shop_owner),
+            buyer_name=buyer_name,
+            buyer_contact=buyer_contact,
+            buyer_address=buyer_address,
+            total_amount=total_amount.quantize(Decimal("0.01")),
+        )
+
+        for row in item_rows:
+            MarketplaceOrderItem.objects.create(
+                order=order,
+                product=row["product"],
+                quantity=row["quantity"],
+                unit_price=row["unit_price"].quantize(Decimal("0.01")),
+            )
+
+        MarketplaceChatMessage.objects.create(
+            order=order,
+            sender_type=MarketplaceChatMessage.SENDER_SYSTEM,
+            message="Order created. Waiting for confirmation."
+        )
+
+    url = reverse("marketplace_order_chat", kwargs={"public_id": order.public_id})
+    return redirect(f"{url}?access={order.access_token}")
+
+
+def marketplace_order_chat(request, public_id):
+    order = get_object_or_404(
+        MarketplaceOrder.objects.select_related("shop_owner", "assigned_shopboy").prefetch_related("items__product", "messages"),
+        public_id=public_id
+    )
+    is_seller, is_buyer = _order_access_context(request, order)
+    if not (is_seller or is_buyer):
+        return HttpResponseForbidden("You do not have access to this order.")
+
+    messages_qs = order.messages.all().order_by("created_at")
+    profile, _ = MarketplaceShopProfile.objects.get_or_create(user=order.shop_owner)
+
+    next_map = {
+        MarketplaceOrder.STATUS_PENDING: MarketplaceOrder.STATUS_CONFIRMED,
+        MarketplaceOrder.STATUS_CONFIRMED: MarketplaceOrder.STATUS_PAID,
+        MarketplaceOrder.STATUS_PAID: MarketplaceOrder.STATUS_SHIPPED,
+        MarketplaceOrder.STATUS_SHIPPED: MarketplaceOrder.STATUS_DELIVERED,
+    }
+    next_status = next_map.get(order.status)
+
+    return render(request, "shopboy/order-chat.html", {
+        "order": order,
+        "profile": profile,
+        "items": order.items.all(),
+        "chat_messages": messages_qs,
+        "is_seller": is_seller,
+        "access_token": str(order.access_token) if is_buyer else "",
+        "status_choices": MarketplaceOrder.STATUS_CHOICES,
+        "next_status": next_status,
+    })
+
+
+@require_POST
+def marketplace_add_message(request, public_id):
+    order = get_object_or_404(MarketplaceOrder, public_id=public_id)
+    is_seller, is_buyer = _order_access_context(request, order)
+    if not (is_seller or is_buyer):
+        return JsonResponse({"success": False, "error": "Access denied"}, status=403)
+
+    text = (request.POST.get("message") or "").strip()
+    if not text:
+        return JsonResponse({"success": False, "error": "Message cannot be empty"}, status=400)
+
+    sender_type = MarketplaceChatMessage.SENDER_SELLER if is_seller else MarketplaceChatMessage.SENDER_BUYER
+    msg = MarketplaceChatMessage.objects.create(
+        order=order,
+        sender_type=sender_type,
+        message=text,
+    )
+
+    return JsonResponse({
+        "success": True,
+        "message": {
+            "sender_type": msg.sender_type,
+            "message": msg.message,
+            "created_at": msg.created_at.isoformat(),
+        }
+    })
+
+
+@require_POST
+def marketplace_update_status(request, public_id):
+    order = get_object_or_404(MarketplaceOrder, public_id=public_id)
+    is_seller, _ = _order_access_context(request, order)
+    if not is_seller:
+        return JsonResponse({"success": False, "error": "Access denied"}, status=403)
+
+    acting_shopboy = _get_shopboy_session(request)
+    if acting_shopboy and not (
+        acting_shopboy.can_use_marketplace and
+        acting_shopboy.is_active and
+        acting_shopboy.user_id == order.shop_owner_id
+    ):
+        acting_shopboy = None
+
+    status = (request.POST.get("status") or "").strip()
+    valid_statuses = {choice[0] for choice in MarketplaceOrder.STATUS_CHOICES}
+    if status not in valid_statuses:
+        return JsonResponse({"success": False, "error": "Invalid status"}, status=400)
+
+    if order.status in [MarketplaceOrder.STATUS_DELIVERED, MarketplaceOrder.STATUS_CANCELLED]:
+        return JsonResponse({"success": False, "error": "Order is closed"}, status=400)
+
+    with transaction.atomic():
+        order = MarketplaceOrder.objects.select_for_update().select_related("assigned_shopboy").get(id=order.id)
+        if acting_shopboy and order.assigned_shopboy_id != acting_shopboy.id:
+            order.assigned_shopboy = acting_shopboy
+
+        if status in [MarketplaceOrder.STATUS_CONFIRMED, MarketplaceOrder.STATUS_PAID] and order.sale_id is None:
+            items = list(order.items.select_related("product").select_for_update())
+            total_amount = Decimal("0.00")
+            total_profit = Decimal("0.00")
+
+            for item in items:
+                product = item.product
+                if product.stock < item.quantity:
+                    return JsonResponse({"success": False, "error": f"Not enough stock for {product.name}."}, status=400)
+                line_total = item.unit_price * item.quantity
+                line_profit = (item.unit_price - product.cost_price) * item.quantity
+                total_amount += line_total
+                total_profit += line_profit
+
+            sale = Sale.objects.create(
+                user=order.shop_owner,
+                sales_channel=Sale.CHANNEL_MARKETPLACE,
+                handled_by_shopboy=order.assigned_shopboy,
+                total_amount=total_amount.quantize(Decimal("0.01")),
+                total_profit=total_profit.quantize(Decimal("0.01")),
+            )
+            for item in items:
+                product = item.product
+                line_profit = (item.unit_price - product.cost_price) * item.quantity
+                SaleItem.objects.create(
+                    sale=sale,
+                    product=product,
+                    quantity=item.quantity,
+                    price=item.unit_price.quantize(Decimal("0.01")),
+                    profit=line_profit.quantize(Decimal("0.01")),
+                )
+                product.stock -= item.quantity
+                product.save(update_fields=["stock"])
+
+            order.sale = sale
+            order.total_amount = total_amount.quantize(Decimal("0.01"))
+
+        order.status = status
+        fields_to_update = ["status", "updated_at"]
+        if order.sale_id is not None:
+            fields_to_update.extend(["total_amount", "sale"])
+        if acting_shopboy:
+            fields_to_update.append("assigned_shopboy")
+        order.save(update_fields=fields_to_update)
+
+        MarketplaceChatMessage.objects.create(
+            order=order,
+            sender_type=MarketplaceChatMessage.SENDER_SYSTEM,
+            message=f"Order status updated to \"{dict(MarketplaceOrder.STATUS_CHOICES).get(status, status)}\"."
+        )
+
+    return JsonResponse({
+        "success": True,
+        "status": order.status,
+    })
+
+
+def shopboy_marketplace_orders(request):
+    shopboy = _get_shopboy_session(request)
+    if not shopboy:
+        return redirect("shopboy_login")
+    if not shopboy.can_use_marketplace:
+        messages.error(request, "You are not allowed to handle marketplace orders.")
+        return redirect("shopboy_dashboard")
+
+    orders = MarketplaceOrder.objects.filter(
+        shop_owner=shopboy.user,
+    ).filter(
+        Q(assigned_shopboy=shopboy) | Q(assigned_shopboy__isnull=True)
+    ).select_related("assigned_shopboy").order_by("-created_at")
+
+    return render(request, "shopboy/marketplace-orders.html", {
+        "shopboy": shopboy,
+        "owner": shopboy.user,
+        "orders": orders,
+    })
+
+
+@login_required
+@require_POST
+def update_marketplace_assignment(request):
+    settings_obj = _get_marketplace_settings(request.user)
+    shopboy_id = request.POST.get("assigned_shopboy") or None
+    assigned = None
+    if shopboy_id:
+        assigned = ShopBoy.objects.filter(id=shopboy_id, user=request.user, is_active=True, can_use_marketplace=True).first()
+        if not assigned:
+            messages.error(request, "Invalid shop boy selection.")
+            return redirect("settings")
+
+    settings_obj.assigned_shopboy = assigned
+    settings_obj.save(update_fields=["assigned_shopboy", "updated_at"])
+    messages.success(request, "Marketplace handler updated.")
+    return redirect("settings")

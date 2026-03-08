@@ -1,0 +1,165 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Shop Boy Dashboard</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <header class="marketplace-header">
+    <div class="marketplace-header-inner">
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+        <div>
+          <h1 style="font-size:1.125rem;font-weight:700;">Shop Boy Panel</h1>
+          <p style="font-size:0.75rem;color:var(--muted-foreground);">{{ shopboy.full_name }} | {{ owner.business_name }}</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;">
+        {% if shopboy.can_use_marketplace %}
+        <a href="{% url 'shopboy_marketplace_orders' %}" class="btn btn-outline"><i data-lucide="message-circle"></i> Marketplace Orders</a>
+        {% endif %}
+        <a href="{% url 'shopboy_profile' %}" class="btn btn-outline"><i data-lucide="user"></i> Profile</a>
+        <a href="{% url 'shopboy_logout' %}" class="btn btn-ghost"><i data-lucide="log-out"></i> Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width:1200px;margin:0 auto;padding:1rem;">
+    {% if messages %}
+    <section style="margin-bottom: 1rem;">
+      {% for message in messages %}
+      <div class="card" style="padding:0.75rem 1rem;">{{ message }}</div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    <div class="products-layout">
+      <div class="products-section">
+        <div class="filters-section">
+          <div class="search-box">
+            <i data-lucide="search"></i>
+            <input type="text" class="input" placeholder="Search products..." id="productSearch" oninput="filterProducts()">
+          </div>
+        </div>
+
+        <div class="card" style="padding:1rem;margin-bottom:1rem;">
+          <h4 style="margin:0 0 0.75rem 0;">Categories</h4>
+          <div class="filter-list">
+            <a href="{% url 'shopboy_dashboard' %}" class="filter-btn {% if not selected_category %}active{% endif %}">All</a>
+            {% for category in categories %}
+              <a href="{% url 'shopboy_dashboard' %}?category={{ category.id }}" class="filter-btn {% if selected_category == category.id|stringformat:'s' %}active{% endif %}">
+                {{ category.name }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="products-grid" id="productsGrid">
+          {% for product in products %}
+          <div class="product-card product-item" data-name="{{ product.name|lower }}">
+            <form method="POST" action="{% url 'shopboy_add_to_cart' product.id %}">
+              {% csrf_token %}
+              <div class="product-card-image">
+                {% if product.image %}
+                  <img src="{{ product.image.url }}" style="width:100%;height:100%;object-fit:cover;">
+                {% else %}
+                  <i data-lucide="package" class="product-card-placeholder"></i>
+                {% endif %}
+                {% if product.stock == 0 %}
+                <span class="stock-badge out">Out of Stock</span>
+                {% elif product.stock <= product.low_stock_threshold %}
+                <span class="stock-badge low">Low Stock</span>
+                {% endif %}
+              </div>
+              <div class="product-card-content">
+                <h3 class="product-card-name">{{ product.name }}</h3>
+                <div class="product-card-details">
+                  <div class="product-card-price">&#8358;{{ product.selling_price|floatformat:2 }}</div>
+                  <div class="product-card-meta"><div class="product-card-stock">{{ product.stock }} left</div></div>
+                </div>
+                <small style="color:var(--muted-foreground);">{{ product.category.name|default:"Uncategorized" }}</small>
+              </div>
+              <button type="submit" class="btn btn-primary btn-full" {% if product.stock == 0 %}disabled{% endif %}>
+                Add to Cart
+              </button>
+            </form>
+          </div>
+          {% empty %}
+          <div class="empty-state" style="grid-column:1/-1;">
+            <i data-lucide="package"></i>
+            <p>No products available</p>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="cart-panel">
+        <h3>Customer Cart</h3>
+
+        {% if cart %}
+          <ul>
+            {% for key, item in cart.items %}
+              <li style="margin-bottom:10px;">
+                <strong>{{ item.name }}</strong><br>
+                {{ item.quantity }} × &#8358;{{ item.price }}
+
+                <div>
+                  <form method="POST" action="{% url 'shopboy_update_cart' key %}" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="decrease">
+                    <button type="submit">-</button>
+                  </form>
+
+                  <form method="POST" action="{% url 'shopboy_update_cart' key %}" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="increase">
+                    <button type="submit">+</button>
+                  </form>
+
+                  <form method="POST" action="{% url 'shopboy_remove_from_cart' key %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit">Remove</button>
+                  </form>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+
+          <hr>
+
+          <p><strong>Total:</strong> &#8358;{{ cart_total }}</p>
+
+          <form method="POST" action="{% url 'shopboy_checkout' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary">
+              Complete Sale
+            </button>
+          </form>
+
+        {% else %}
+          <p>Cart is empty</p>
+        {% endif %}
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      lucide.createIcons();
+    });
+
+    function filterProducts() {
+      const q = (document.getElementById('productSearch').value || '').toLowerCase().trim();
+      document.querySelectorAll('.product-item').forEach(function (item) {
+        const name = item.getAttribute('data-name') || '';
+        item.style.display = name.includes(q) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

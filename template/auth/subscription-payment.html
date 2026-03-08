@@ -1,0 +1,96 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Payment Required</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="auth-page">
+  <div class="auth-container">
+    <div class="auth-branding">
+      <div class="auth-branding-content">
+        <div class="auth-logo">
+          <div class="auth-logo-icon">
+            <i data-lucide="store"></i>
+          </div>
+          <h1>VilaStore</h1>
+        </div>
+        <h2>Payment Required</h2>
+        <p>Complete your subscription payment to continue managing your shop.</p>
+        <div class="auth-features">
+          <div class="auth-feature">
+            <i data-lucide="shield-check"></i>
+            <span>Secure Paystack checkout</span>
+          </div>
+          <div class="auth-feature">
+            <i data-lucide="clock"></i>
+            <span>Instant access after payment</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="auth-form-panel">
+      <div class="auth-form-container">
+        <div class="auth-form-header">
+          <h2>Subscription Payment</h2>
+          <p>Please complete the payment to unlock your dashboard.</p>
+        </div>
+
+        {% if messages %}
+        <section style="margin-bottom:1rem;">
+          {% for message in messages %}
+          <div class="card" style="padding:0.75rem 1rem;margin-bottom:0.5rem;">{{ message }}</div>
+          {% endfor %}
+        </section>
+        {% endif %}
+
+        <div class="card" style="padding:1rem;margin-bottom:1rem;">
+          {% if subscription_active_until %}
+          <p style="margin:0 0 0.5rem 0;color:var(--muted-foreground);">
+            Access ended on {{ subscription_active_until|date:"M d, Y" }}.
+          </p>
+          {% endif %}
+          {% if registration_due %}
+          <p style="margin:0 0 0.5rem 0;"><strong>Registration + first month</strong></p>
+          <p style="margin:0 0 0.25rem 0;">Registration fee: &#8358;{{ base_fee }}</p>
+          <p style="margin:0 0 0.5rem 0;">Monthly subscription: &#8358;{{ monthly_fee }}</p>
+          {% else %}
+          <p style="margin:0 0 0.5rem 0;"><strong>Monthly renewal</strong></p>
+          <p style="margin:0 0 0.5rem 0;">Monthly subscription: &#8358;{{ monthly_fee }}</p>
+          {% endif %}
+          <p style="margin:0;"><strong>Total due: &#8358;{{ amount_due }}</strong></p>
+        </div>
+
+        <form method="POST" action="{% url 'subscription_payment' %}" id="subscriptionPaymentForm">
+          {% csrf_token %}
+          <input type="hidden" id="subscriptionPaymentReference" name="payment_reference">
+          <button type="submit" class="btn btn-primary btn-lg btn-full" id="startSubscriptionPayment">
+            <i data-lucide="credit-card"></i>
+            Pay Now
+          </button>
+        </form>
+
+        <div class="auth-footer" style="margin-top:1rem;">
+          {% if request.user.is_authenticated %}
+          <a href="{% url 'logout' %}" class="link">Sign out</a>
+          {% else %}
+          <a href="{% url 'login' %}" class="link">Sign in</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.PAYSTACK_PUBLIC_KEY = "{{ PAYSTACK_PUBLIC_KEY|default:''|escapejs }}";
+    window.SUBSCRIPTION_EMAIL = "{{ subscription_email|default:''|escapejs }}";
+    window.SUBSCRIPTION_AMOUNT_KOBO = {{ amount_due_kobo|default:0 }};
+  </script>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script src="{% static 'js/subscription.js' %}?v=20260303"></script>
+</body>
+</html>

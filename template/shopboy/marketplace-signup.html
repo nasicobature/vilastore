@@ -1,0 +1,88 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketplace - Create Account</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="auth-page">
+  <div class="auth-container">
+    <div class="auth-branding">
+      <div class="auth-branding-content">
+        <div class="auth-logo">
+          <div class="auth-logo-icon">
+            <i data-lucide="store"></i>
+          </div>
+          <h1>Marketplace</h1>
+        </div>
+        <h2>Create Buyer Account</h2>
+        <p>Register with just your email and password to save your activity.</p>
+      </div>
+    </div>
+
+    <div class="auth-form-panel">
+      <div class="auth-form-container">
+        <div class="auth-form-header">
+          <h2>Buyer Sign Up</h2>
+          <p>Get an account in seconds.</p>
+        </div>
+
+        {% if messages %}
+        <section style="margin-bottom:1rem;">
+          {% for message in messages %}
+          <div class="card" style="padding:0.75rem 1rem;margin-bottom:0.5rem;">{{ message }}</div>
+          {% endfor %}
+        </section>
+        {% endif %}
+
+        <form method="POST" action="{% url 'marketplace_signup' %}" class="auth-form">
+          {% csrf_token %}
+          <div class="form-group">
+            <label for="buyerEmail">Email</label>
+            <div class="input-with-icon">
+              <i data-lucide="mail"></i>
+              <input type="email" id="buyerEmail" name="email" class="input" placeholder="you@email.com" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="buyerPassword">Password</label>
+            <div class="input-with-icon">
+              <i data-lucide="lock"></i>
+              <input type="password" id="buyerPassword" name="password" class="input" placeholder="Create a password" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="buyerConfirmPassword">Confirm Password</label>
+            <div class="input-with-icon">
+              <i data-lucide="lock"></i>
+              <input type="password" id="buyerConfirmPassword" name="confirm_password" class="input" placeholder="Re-enter password" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg btn-full">
+            <i data-lucide="user-plus"></i>
+            Create Account
+          </button>
+        </form>
+
+        <div class="auth-divider">
+          <span>or</span>
+        </div>
+
+        <div class="auth-footer">
+          <p>Already have an account?</p>
+          <a href="{% url 'marketplace_login' %}" class="btn btn-outline btn-full">
+            <i data-lucide="log-in"></i>
+            Sign In
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

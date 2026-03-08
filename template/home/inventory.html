@@ -1,0 +1,370 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Inventory</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+<div class="app-container">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <i data-lucide="store"></i>
+      </div>
+      <h1>VilaStore</h1>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="{% url 'index' %}" class="nav-link">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="{% url 'product' %}" class="nav-link">
+        <i data-lucide="package"></i>
+        <span>Products</span>
+      </a>
+      <a href="{% url 'inventory' %}" class="nav-link active">
+        <i data-lucide="boxes"></i>
+        <span>Inventory</span>
+      </a>
+      <a href="{% url 'sales-history' %}" class="nav-link">
+        <i data-lucide="receipt"></i>
+        <span>Sales History</span>
+      </a>
+      <a href="{% url 'expenses' %}" class="nav-link">
+        <i data-lucide="wallet"></i>
+        <span>Expenses</span>
+      </a>
+      <a href="{% url 'reports' %}" class="nav-link">
+        <i data-lucide="bar-chart-3"></i>
+        <span>Reports</span>
+      </a>
+      <a href="{% url 'customer' %}" class="nav-link">
+        <i data-lucide="users"></i>
+        <span>Customers</span>
+      </a>
+      <a href="{% url 'settings' %}" class="nav-link">
+        <i data-lucide="settings"></i>
+        <span>Settings</span>
+      </a>
+    </nav>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <header class="page-header">
+      <div>
+        <h1>Inventory Management</h1>
+        <p>Manage your products and stock</p>
+      </div>
+
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-outline" onclick="openCategoryModal()">
+          <i data-lucide="folder-plus"></i>
+          Add Category
+        </button>
+
+        <button class="btn btn-primary" onclick="openProductModal()">
+          <i data-lucide="plus"></i>
+          Add Product
+        </button>
+      </div>
+    </header>
+    {% if messages %}
+    <section style="margin-bottom: 1rem;">
+      {% for message in messages %}
+      <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    <!-- STATS -->
+    <section class="stats-grid">
+      <div class="card stat-card">
+        <span>Total Products</span>
+        <h2>{{ total_products }}</h2>
+      </div>
+
+      <div class="card stat-card">
+        <span>Total Stock Value</span>
+        <h2>₦{{ total_value }}</h2>
+      </div>
+
+      <div class="card stat-card">
+        <span>Low Stock</span>
+        <h2>{{ low_stock }}</h2>
+      </div>
+
+      <div class="card stat-card">
+        <span>Out of Stock</span>
+        <h2>{{ out_of_stock }}</h2>
+      </div>
+    </section>
+
+    <!-- PRODUCT TABLE -->
+    <section class="table-container">
+      <div class="table-scroll">
+        <table class="table table--responsive" id="inventoryTable" data-page-size="8">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Cost</th>
+            <th>Selling</th>
+            <th>Stock</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+        {% for product in products %}
+          <tr>
+            <td data-label="Name">{{ product.name }}</td>
+            <td data-label="Category">{{ product.category.name|default:"-" }}</td>
+            <td data-label="Cost">₦{{ product.cost_price }}</td>
+            <td data-label="Selling">₦{{ product.selling_price }}</td>
+            <td data-label="Stock">{{ product.stock }}</td>
+            <td data-label="Status">
+              {% if product.stock == 0 %}
+                <span class="badge badge-destructive">Out of Stock</span>
+              {% elif product.stock <= product.low_stock_threshold %}
+                <span class="badge badge-warning">Low Stock</span>
+              {% else %}
+                <span class="badge badge-success">In Stock</span>
+              {% endif %}
+            </td>
+            <td data-label="Action">
+              <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                <form method="POST" action="{% url 'adjust_stock' product.id %}" style="display:inline;">
+                  {% csrf_token %}
+                  <input type="hidden" name="adjustment" value="-1">
+                  <button type="submit" class="btn btn-sm btn-outline">-1</button>
+                </form>
+                <form method="POST" action="{% url 'adjust_stock' product.id %}" style="display:inline;">
+                  {% csrf_token %}
+                  <input type="hidden" name="adjustment" value="1">
+                  <button type="submit" class="btn btn-sm btn-outline">+1</button>
+                </form>
+                <form method="POST" action="{% url 'delete_product' product.id %}" style="display:inline;" onsubmit="return confirm('Delete {{ product.name }}?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr data-pagination-ignore="true">
+            <td colspan="7">No products found</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+
+      <div class="table-footer" id="inventoryTableFooter">
+        <div class="pagination-info" id="inventoryTablePaginationInfo"></div>
+        <div class="pagination-controls" id="inventoryTablePaginationControls">
+          <button type="button" class="btn btn-outline btn-sm pagination-btn" data-page="prev">Prev</button>
+          <div class="pagination-pages" id="inventoryTablePaginationPages"></div>
+          <button type="button" class="btn btn-outline btn-sm pagination-btn" data-page="next">Next</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- =========================
+     ADD PRODUCT MODAL
+========================= -->
+<div class="modal-overlay" id="productModal">
+  <div class="modal modal-lg">
+
+    <div class="modal-header">
+      <h3>Add Product</h3>
+      <button onclick="closeProductModal()">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <form method="POST" action="{% url 'add_product' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      <input type="text" name="name" placeholder="Product Name" class="input" required>
+
+      <select name="category" class="input">
+        <option value="">No category</option>
+        {% for category in categories %}
+          <option value="{{ category.id }}">{{ category.name }}</option>
+        {% endfor %}
+      </select>
+
+      <input type="number" name="cost_price" placeholder="Cost Price" class="input" required>
+      <input type="number" name="selling_price" placeholder="Selling Price" class="input" required>
+      <input type="number" name="stock" placeholder="Stock" class="input" required>
+      <input type="number" name="low_stock_threshold" value="5" class="input">
+
+      <input type="file" name="image" class="input">
+
+      <div style="margin-top:15px;">
+        <button type="button" class="btn btn-outline" onclick="closeProductModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Product</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<!-- =========================
+     ADD CATEGORY MODAL
+========================= -->
+<div class="modal-overlay" id="categoryModal">
+  <div class="modal">
+
+    <div class="modal-header">
+      <h3>Add Category</h3>
+      <button onclick="closeCategoryModal()">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <form method="POST" action="{% url 'add_category' %}">
+      {% csrf_token %}
+      <input type="text" name="name" placeholder="Category Name" class="input" required>
+
+      <div style="margin-top:15px;">
+        <button type="button" class="btn btn-outline" onclick="closeCategoryModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Category</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<!-- =========================
+     MODAL SCRIPT
+========================= -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    lucide.createIcons();
+    setupTablePagination('inventoryTable');
+});
+
+function openProductModal() {
+    document.getElementById('productModal').classList.add('active');
+}
+function closeProductModal() {
+    document.getElementById('productModal').classList.remove('active');
+}
+
+function openCategoryModal() {
+    document.getElementById('categoryModal').classList.add('active');
+}
+function closeCategoryModal() {
+    document.getElementById('categoryModal').classList.remove('active');
+}
+
+document.querySelectorAll('.modal-overlay').forEach(modal => {
+    modal.addEventListener('click', function(e){
+        if(e.target === modal){
+            modal.classList.remove('active');
+        }
+    });
+});
+
+function setupTablePagination(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table || !table.tBodies.length) {
+        return;
+    }
+
+    const tbody = table.tBodies[0];
+    const allRows = Array.from(tbody.rows);
+    const rows = allRows.filter(row => !row.dataset.paginationIgnore);
+    const emptyRow = allRows.find(row => row.dataset.paginationIgnore);
+    const pageSize = parseInt(table.dataset.pageSize || '8', 10);
+
+    const footer = document.getElementById(tableId + 'Footer');
+    const info = document.getElementById(tableId + 'PaginationInfo');
+    const pages = document.getElementById(tableId + 'PaginationPages');
+    const prevBtn = footer ? footer.querySelector('[data-page="prev"]') : null;
+    const nextBtn = footer ? footer.querySelector('[data-page="next"]') : null;
+
+    if (!footer || !info || !pages || !prevBtn || !nextBtn) {
+        return;
+    }
+
+    if (rows.length === 0) {
+        footer.style.display = 'none';
+        if (emptyRow) {
+            emptyRow.style.display = '';
+        }
+        return;
+    }
+
+    const totalPages = Math.ceil(rows.length / pageSize);
+    if (totalPages <= 1) {
+        footer.style.display = 'none';
+        rows.forEach(row => {
+            row.style.display = '';
+        });
+        if (emptyRow) {
+            emptyRow.style.display = 'none';
+        }
+        return;
+    }
+
+    let currentPage = 1;
+
+    function renderPage(page) {
+        currentPage = Math.min(Math.max(1, page), totalPages);
+        const start = (currentPage - 1) * pageSize;
+        const end = start + pageSize;
+
+        rows.forEach((row, index) => {
+            row.style.display = index >= start && index < end ? '' : 'none';
+        });
+
+        if (emptyRow) {
+            emptyRow.style.display = 'none';
+        }
+
+        const rangeStart = Math.min(start + 1, rows.length);
+        const rangeEnd = Math.min(end, rows.length);
+        info.textContent = `Showing ${rangeStart}-${rangeEnd} of ${rows.length}`;
+
+        prevBtn.disabled = currentPage === 1;
+        nextBtn.disabled = currentPage === totalPages;
+
+        pages.innerHTML = '';
+        for (let i = 1; i <= totalPages; i++) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-outline btn-sm pagination-btn';
+            if (i === currentPage) {
+                button.classList.add('is-active');
+            }
+            button.textContent = i;
+            button.addEventListener('click', () => renderPage(i));
+            pages.appendChild(button);
+        }
+    }
+
+    prevBtn.addEventListener('click', () => renderPage(currentPage - 1));
+    nextBtn.addEventListener('click', () => renderPage(currentPage + 1));
+
+    renderPage(1);
+}
+</script>
+
+</body>
+</html>

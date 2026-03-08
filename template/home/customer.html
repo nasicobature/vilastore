@@ -1,0 +1,213 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Customers</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+        <h1>VilaStore</h1>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="{% url 'index' %}" class="nav-link"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+        <a href="{% url 'product' %}" class="nav-link"><i data-lucide="package"></i><span>Products</span></a>
+        <a href="{% url 'inventory' %}" class="nav-link"><i data-lucide="boxes"></i><span>Inventory</span></a>
+        <a href="{% url 'sales-history' %}" class="nav-link"><i data-lucide="receipt"></i><span>Sales History</span></a>
+        <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
+        <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
+        <a href="{% url 'customer' %}" class="nav-link active"><i data-lucide="users"></i><span>Customers</span></a>
+        <a href="{% url 'settings' %}" class="nav-link"><i data-lucide="settings"></i><span>Settings</span></a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div class="page-header-content">
+          <h1>Customer Management</h1>
+          <p>Manage your customers in database</p>
+        </div>
+        <button class="btn btn-primary" type="button" onclick="openCustomerModal()">
+          <i data-lucide="user-plus"></i> Add Customer
+        </button>
+      </header>
+
+      {% if messages %}
+      <section style="margin-bottom: 1rem;">
+        {% for message in messages %}
+        <div class="card" style="padding:0.75rem 1rem;">{{ message }}</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      <section class="card">
+        <div class="filters-section" style="margin-bottom:1rem;">
+          <form method="GET" action="{% url 'customer' %}" class="search-box" style="display:flex;gap:0.5rem;width:100%;">
+            <i data-lucide="search"></i>
+            <input type="text" class="input" placeholder="Search customers..." name="q" value="{{ q }}">
+            <button type="submit" class="btn btn-outline">Search</button>
+          </form>
+        </div>
+
+        <div class="table-container">
+          <table class="table table--responsive">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Birthday</th>
+                <th>Religion</th>
+                <th>Tribe</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in customers %}
+              <tr>
+                <td data-label="Name"><strong>{{ c.first_name }} {{ c.last_name }}</strong></td>
+                <td data-label="Phone">{{ c.phone }}</td>
+                <td data-label="Email">{{ c.email|default:"-" }}</td>
+                <td data-label="Birthday">{{ c.birthday|date:"Y-m-d"|default:"-" }}</td>
+                <td data-label="Religion">
+                  {% if c.religion %}
+                    {{ c.get_religion_display }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td data-label="Tribe">{{ c.tribe|default:"-" }}</td>
+                <td data-label="Actions">
+                  <div class="action-buttons">
+                    <button
+                      class="btn btn-ghost btn-sm"
+                      type="button"
+                      onclick="openEditCustomerModal('{{ c.id }}','{{ c.first_name|escapejs }}','{{ c.last_name|escapejs }}','{{ c.phone|escapejs }}','{{ c.email|default:''|escapejs }}','{{ c.birthday|date:'Y-m-d'|default:'' }}','{{ c.notes|default:''|escapejs }}','{{ c.religion|default:''|escapejs }}','{{ c.tribe|default:''|escapejs }}')">
+                      <i data-lucide="edit"></i>
+                    </button>
+                    <form method="POST" action="{% url 'delete_customer' c.id %}" style="display:inline;" onsubmit="return confirm('Delete {{ c.first_name }} {{ c.last_name }}?')">
+                      {% csrf_token %}
+                      <button class="btn btn-ghost btn-sm text-destructive" type="submit"><i data-lucide="trash-2"></i></button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="7" class="empty-state"><i data-lucide="users"></i><p>No customers yet</p></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="customerModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title" id="customerModalTitle">Add Customer</h3>
+        <button class="modal-close" type="button" onclick="closeCustomerModal()"><i data-lucide="x"></i></button>
+      </div>
+      <form id="customerForm" class="modal-form" method="POST" action="{% url 'add_customer' %}">
+        {% csrf_token %}
+        <div class="form-row">
+          <div class="form-group">
+            <label for="customerFirstName">First Name</label>
+            <input type="text" id="customerFirstName" name="first_name" class="input" required>
+          </div>
+          <div class="form-group">
+            <label for="customerLastName">Last Name</label>
+            <input type="text" id="customerLastName" name="last_name" class="input" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="customerPhone">Phone Number</label>
+          <input type="tel" id="customerPhone" name="phone" class="input" required>
+        </div>
+        <div class="form-group">
+          <label for="customerEmail">Email (Optional)</label>
+          <input type="email" id="customerEmail" name="email" class="input">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="customerReligion">Religion</label>
+            <select id="customerReligion" name="religion" class="input">
+              <option value="">Not specified</option>
+              <option value="muslim">Muslim</option>
+              <option value="christian">Christian</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="customerTribe">Tribe (Optional)</label>
+            <input type="text" id="customerTribe" name="tribe" class="input">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="customerBirthday">Birthday (Optional)</label>
+          <input type="date" id="customerBirthday" name="birthday" class="input">
+        </div>
+        <div class="form-group">
+          <label for="customerNotes">Notes (Optional)</label>
+          <textarea id="customerNotes" name="notes" class="input textarea" rows="2"></textarea>
+        </div>
+        <div class="form-buttons">
+          <button type="button" class="btn btn-outline" onclick="closeCustomerModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Customer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      lucide.createIcons();
+    });
+
+    function openCustomerModal() {
+      document.getElementById('customerModalTitle').textContent = 'Add Customer';
+      const form = document.getElementById('customerForm');
+      form.action = "{% url 'add_customer' %}";
+      form.reset();
+      document.getElementById('customerModal').classList.add('active');
+      lucide.createIcons();
+    }
+
+    function openEditCustomerModal(id, firstName, lastName, phone, email, birthday, notes, religion, tribe) {
+      document.getElementById('customerModalTitle').textContent = 'Edit Customer';
+      const form = document.getElementById('customerForm');
+      form.action = `/edit-customer/${id}/`;
+      document.getElementById('customerFirstName').value = firstName || '';
+      document.getElementById('customerLastName').value = lastName || '';
+      document.getElementById('customerPhone').value = phone || '';
+      document.getElementById('customerEmail').value = email || '';
+      document.getElementById('customerBirthday').value = birthday || '';
+      document.getElementById('customerReligion').value = religion || '';
+      document.getElementById('customerTribe').value = tribe || '';
+      document.getElementById('customerNotes').value = notes || '';
+      document.getElementById('customerModal').classList.add('active');
+      lucide.createIcons();
+    }
+
+    function closeCustomerModal() {
+      document.getElementById('customerModal').classList.remove('active');
+    }
+
+    document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
+      overlay.addEventListener('click', function (event) {
+        if (event.target === overlay) {
+          overlay.classList.remove('active');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

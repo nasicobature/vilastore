@@ -1,0 +1,160 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Marketplace</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <header class="marketplace-header">
+    <div class="marketplace-header-inner">
+      <a href="{% url 'marketplace' %}" class="marketplace-logo">
+        <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+        <span>VilaStore</span>
+      </a>
+      <div class="marketplace-search">
+        <form method="get" id="filterForm" class="search-box">
+          <i data-lucide="search"></i>
+          <input type="text" class="input" placeholder="Search shops by name, @username, or product..." name="q" id="shopSearch" value="{{ filters.q }}">
+          <input type="hidden" name="category" id="categoryInput" value="{{ filters.category }}">
+          <input type="hidden" name="location" id="locationInput" value="{{ filters.location }}">
+        </form>
+      </div>
+      <div class="marketplace-actions">
+        {% if buyer %}
+        <a href="{% url 'marketplace_account' %}" class="btn btn-ghost">My Orders</a>
+        <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
+        {% else %}
+        <a href="{% url 'marketplace_login' %}" class="btn btn-ghost">Sign In</a>
+        <a href="{% url 'marketplace_signup' %}" class="btn btn-primary"><i data-lucide="user"></i> Create Account</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <div class="marketplace-container">
+    <aside class="marketplace-sidebar">
+      <div class="filter-section">
+        <h4>Categories</h4>
+        <div id="categoryFilters" class="filter-list">
+          <button class="filter-btn {% if not filters.category %}active{% endif %}" data-filter="category" data-value="">All</button>
+          {% for cat in categories %}
+          <button class="filter-btn {% if filters.category == cat %}active{% endif %}" data-filter="category" data-value="{{ cat }}">{{ cat }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <div class="filter-section">
+        <h4>Location</h4>
+        <div id="locationFilters" class="filter-list">
+          <button class="filter-btn {% if not filters.location %}active{% endif %}" data-filter="location" data-value="">All Locations</button>
+          {% for loc in locations %}
+          <button class="filter-btn {% if filters.location == loc %}active{% endif %}" data-filter="location" data-value="{{ loc }}">{{ loc }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <div class="filter-section">
+        <h4>Filters</h4>
+        <label class="checkbox-label">
+          <input type="checkbox" name="verified" value="1" form="filterForm" {% if filters.verified %}checked{% endif %}>
+          <span>Verified shops only</span>
+        </label>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <div class="filter-section">
+        <h4>Sort by</h4>
+        <select name="sort" class="input" form="filterForm">
+          <option value="rating" {% if filters.sort == "rating" %}selected{% endif %}>Highest Rating</option>
+          <option value="sales" {% if filters.sort == "sales" %}selected{% endif %}>Most Sales</option>
+          <option value="newest" {% if filters.sort == "newest" %}selected{% endif %}>Newest</option>
+        </select>
+      </div>
+    </aside>
+
+    <main class="marketplace-main">
+      <div class="marketplace-results-header">
+        <h2 id="resultsCount">{{ profiles|length }} shop{{ profiles|length|pluralize }} found</h2>
+        <button class="btn btn-ghost" id="clearFiltersBtn" style="display:{% if filters.q or filters.category or filters.location or filters.verified %}flex{% else %}none{% endif %};" type="button">
+          <i data-lucide="x"></i> Clear filters
+        </button>
+      </div>
+      <div id="shopList" class="shop-list">
+        {% for profile in profiles %}
+        <a href="{% url 'marketplace_shop' profile.user.username %}" class="shop-card">
+          <div class="shop-card-image">
+            {% if profile.cover_image %}
+              <img src="{{ profile.cover_image.url }}" alt="{{ profile.user.business_name }}">
+            {% elif profile.user.profile_image %}
+              <img src="{{ profile.user.profile_image.url }}" alt="{{ profile.user.business_name }}">
+            {% else %}
+              <div class="shop-card-image-fallback"></div>
+            {% endif %}
+            {% if profile.logo %}
+              <img src="{{ profile.logo.url }}" alt="{{ profile.user.business_name }}" class="shop-card-logo">
+            {% elif profile.user.profile_image %}
+              <img src="{{ profile.user.profile_image.url }}" alt="{{ profile.user.business_name }}" class="shop-card-logo">
+            {% else %}
+              <div class="shop-card-logo shop-card-logo-fallback">
+                <i data-lucide="store"></i>
+              </div>
+            {% endif %}
+          </div>
+          <div class="shop-card-content">
+            <div class="shop-card-header">
+              <div>
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                  <h3>{{ profile.user.business_name|default:profile.user.username }}</h3>
+                  {% if profile.is_verified %}
+                  <i data-lucide="badge-check" style="width:18px;height:18px;color:var(--primary);"></i>
+                  {% endif %}
+                </div>
+                <p style="font-size:0.875rem;color:var(--muted-foreground);">@{{ profile.user.username }}</p>
+              </div>
+              {% if profile.category %}
+              <span class="badge badge-primary">{{ profile.category }}</span>
+              {% endif %}
+            </div>
+            <p class="shop-card-desc">{{ profile.description|default:"No description yet." }}</p>
+            <div class="shop-card-products">
+              {% for product in profile.user.product_set.all|slice:":4" %}
+                <span class="shop-product-pill">
+                  {% if product.image %}
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                  {% else %}
+                    <i data-lucide="package"></i>
+                  {% endif %}
+                  <span>{{ product.name }}</span>
+                </span>
+              {% empty %}
+                <span class="shop-product-pill">
+                  <i data-lucide="package"></i>
+                  <span>No products yet</span>
+                </span>
+              {% endfor %}
+            </div>
+            <div class="shop-card-meta">
+              <span><i data-lucide="star" style="width:14px;height:14px;color:gold;"></i> {{ profile.rating }}</span>
+              <span><i data-lucide="shopping-bag" style="width:14px;height:14px;"></i> {{ profile.sales_count|default:0 }} sales</span>
+              <span><i data-lucide="map-pin" style="width:14px;height:14px;"></i> {{ profile.location|default:"-" }}</span>
+            </div>
+          </div>
+        </a>
+        {% empty %}
+        <div class="card" style="text-align:center;padding:3rem;">
+          <i data-lucide="store" style="width:48px;height:48px;margin:0 auto 1rem;display:block;color:var(--muted-foreground);"></i>
+          <h3>No shops found</h3>
+          <p style="color:var(--muted-foreground);">Try adjusting your filters</p>
+        </div>
+        {% endfor %}
+      </div>
+    </main>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+  <script src="{% static 'js/marketplace.js' %}"></script>
+</body>
+</html>

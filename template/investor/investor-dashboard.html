@@ -1,0 +1,70 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Investor Dashboard</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app-container" style="min-height:100vh;">
+    <main class="main-content" style="margin-left:0;">
+      <header class="page-header">
+        <div>
+          <h1>Welcome, {{ investor.name }}</h1>
+          <p>Your ownership: {{ investor.ownership_percent }}%</p>
+        </div>
+        <div>
+          <a href="{% url 'investor_logout' %}" class="btn btn-ghost">
+            <i data-lucide="log-out"></i> Logout
+          </a>
+        </div>
+      </header>
+
+      <section class="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Active Subscriptions</span>
+            <div class="stat-card-icon primary"><i data-lucide="users"></i></div>
+          </div>
+          <div class="stat-card-value">{{ active_shops }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Monthly Subscription Revenue</span>
+            <div class="stat-card-icon primary"><i data-lucide="wallet"></i></div>
+          </div>
+          <div class="stat-card-value">&#8358;{{ monthly_revenue|floatformat:2 }}</div>
+          <p style="color:var(--muted-foreground); font-size:0.85rem;">Based on active shops paying monthly fees.</p>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Your Monthly Return</span>
+            <div class="stat-card-icon primary"><i data-lucide="trending-up"></i></div>
+          </div>
+          <div class="stat-card-value text-profit">&#8358;{{ monthly_return|floatformat:2 }}</div>
+          <p style="color:var(--muted-foreground); font-size:0.85rem;">{{ investor.ownership_percent }}% of monthly revenue.</p>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top:1.5rem;">
+        <div class="card-header"><h3>How Returns Are Calculated</h3></div>
+        <div style="margin-top:0.75rem;">
+          <p style="margin-bottom:0.5rem;">
+            Monthly revenue = sum of all active subscriptions (default &#8358;1,000 each).
+          </p>
+          <p style="margin-bottom:0.5rem;">
+            Your return = Monthly revenue × {{ investor.ownership_percent }}%.
+          </p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () { lucide.createIcons(); });
+  </script>
+</body>
+</html>
