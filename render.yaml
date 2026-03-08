@@ -2,8 +2,7 @@ services:
   - type: web
     name: vilastore
     runtime: python
-    rootDir: VilaStore
-    buildCommand: ./build.sh
+    buildCommand: bash build.sh
     startCommand: python -m gunicorn VilaStore.wsgi:application
     envVars:
       - key: PYTHON_VERSION
