@@ -53,6 +53,10 @@ def home(request):
     return render(request, 'home/home.html')
 
 
+def not_found(request, exception):
+    return render(request, "errors/404.html", status=404)
+
+
 @require_POST
 def submit_feedback(request):
     name = (request.POST.get("name") or "").strip()
