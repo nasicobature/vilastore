@@ -22,6 +22,9 @@
       --gradient: linear-gradient(135deg, #6c5ce7, #a29bfe);
       --gradient-2: linear-gradient(135deg, #00cec9, #81ecec);
       --gradient-3: linear-gradient(135deg, #fd79a8, #e17055);
+      --gradient-4: linear-gradient(135deg, #74b9ff, #0984e3);
+      --gradient-5: linear-gradient(135deg, #fab1a0, #e84393);
+      --gradient-6: linear-gradient(135deg, #55efc4, #00b894);
       --radius: 16px;
       --radius-sm: 10px;
     }
@@ -70,16 +73,25 @@
     .portal-card.owner::before { background: var(--gradient); }
     .portal-card.shopboy::before { background: var(--gradient-2); }
     .portal-card.register::before { background: var(--gradient-3); }
+    .portal-card.marketplace::before { background: var(--gradient-4); }
+    .portal-card.investor::before { background: var(--gradient-5); }
+    .portal-card.admin::before { background: var(--gradient-6); }
     .portal-icon { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem; }
     .portal-card.owner .portal-icon { background: rgba(108,92,231,0.15); color: var(--primary-light); }
     .portal-card.shopboy .portal-icon { background: rgba(0,206,201,0.15); color: var(--accent); }
     .portal-card.register .portal-icon { background: rgba(253,121,168,0.15); color: var(--accent-2); }
+    .portal-card.marketplace .portal-icon { background: rgba(9,132,227,0.18); color: #74b9ff; }
+    .portal-card.investor .portal-icon { background: rgba(232,67,147,0.16); color: #fab1a0; }
+    .portal-card.admin .portal-icon { background: rgba(0,184,148,0.16); color: #55efc4; }
     .portal-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
     .portal-card p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
     .portal-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1.5rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; border: none; cursor: pointer; }
     .portal-card.owner .portal-btn { background: var(--gradient); color: #fff; }
     .portal-card.shopboy .portal-btn { background: var(--gradient-2); color: var(--bg); }
     .portal-card.register .portal-btn { background: var(--gradient-3); color: #fff; }
+    .portal-card.marketplace .portal-btn { background: var(--gradient-4); color: #fff; }
+    .portal-card.investor .portal-btn { background: var(--gradient-5); color: #fff; }
+    .portal-card.admin .portal-btn { background: var(--gradient-6); color: #0f1117; }
     .portal-btn:hover { opacity: 0.9; transform: translateY(-1px); }
 
     /* HOW IT WORKS */
@@ -195,6 +207,24 @@
         <h3>Register Your Shop</h3>
         <p>New to VilaStore? Create your account in minutes &mdash; set up your business profile, choose a plan, and start selling right away.</p>
         <a href="{% url 'signup' %}" class="portal-btn"><i data-lucide="arrow-right" style="width:18px;height:18px;"></i> Create Account</a>
+      </div>
+      <div class="portal-card marketplace">
+        <div class="portal-icon"><i data-lucide="shopping-bag" style="width:28px;height:28px;"></i></div>
+        <h3>Marketplace Login</h3>
+        <p>Sign in to the marketplace to manage your shop profile, listings, and customer orders in one place.</p>
+        <a href="{% url 'marketplace_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Marketplace Login</a>
+      </div>
+      <div class="portal-card investor">
+        <div class="portal-icon"><i data-lucide="line-chart" style="width:28px;height:28px;"></i></div>
+        <h3>Investor Login</h3>
+        <p>Access investor updates, performance dashboards, and your ownership summary securely.</p>
+        <a href="{% url 'investor_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Investor Login</a>
+      </div>
+      <div class="portal-card admin">
+        <div class="portal-icon"><i data-lucide="shield-check" style="width:28px;height:28px;"></i></div>
+        <h3>Admin Portal</h3>
+        <p>Administrative access for managing platform operations, users, and system settings.</p>
+        <a href="{% url 'admin_portal_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Admin Login</a>
       </div>
     </div>
   </section>
