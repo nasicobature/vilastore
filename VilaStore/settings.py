@@ -164,6 +164,7 @@ if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
     CORS_ALLOW_CREDENTIALS = True
 
+WHITENOISE_USE_FINDERS = True
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
 if render_hostname:
     render_origin = f"https://{render_hostname}"
