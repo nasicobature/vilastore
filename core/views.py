@@ -26,9 +26,9 @@ from .models import (
     Feedback,
 )
 from .subscription import subscription_is_active
+from .utils.notifications import send_email
 import random
 import string
-from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 import json
@@ -43,10 +43,13 @@ from datetime import datetime
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.hashers import check_password
 import re
+import logging
 
 
 
 # Create your views here.
+
+logger = logging.getLogger(__name__)
 
 
 def home(request):
@@ -505,6 +508,34 @@ def sale_receipt(request, sale_id):
         "sale": sale,
         "line_items": line_items,
         "business": request.user,
+    })
+
+
+def shopboy_sale_receipt(request, sale_id):
+    shopboy = _get_shopboy_session(request)
+    if not shopboy:
+        return redirect("shopboy_login")
+
+    sale = get_object_or_404(
+        Sale.objects.filter(user=shopboy.user, handled_by_shopboy=shopboy)
+        .select_related("customer", "handled_by_shopboy"),
+        id=sale_id,
+    )
+
+    line_items = []
+    for item in sale.items.select_related("product").all():
+        line_total = (item.price or Decimal("0.00")) * item.quantity
+        line_items.append({
+            "name": item.product.name,
+            "quantity": item.quantity,
+            "price": item.price,
+            "total": line_total,
+        })
+
+    return render(request, "home/sale-receipt.html", {
+        "sale": sale,
+        "line_items": line_items,
+        "business": shopboy.user,
     })
 
 
@@ -982,11 +1013,10 @@ def _send_signup_code(user):
     user.email_code_sent_at = timezone.now()
     user.save(update_fields=["email_verification_code", "email_code_sent_at"])
 
-    send_mail(
+    send_email(
+        user.email,
         "Your VilaStore verification code",
         f"Your verification code is {code}. It will expire in 10 minutes.",
-        getattr(django_settings, "DEFAULT_FROM_EMAIL", "no-reply@vilastore.local"),
-        [user.email],
         fail_silently=False,
     )
 
@@ -1107,6 +1137,7 @@ def signup_create_account(request):
         _send_signup_code(signup_user)
         messages.success(request, f"Account created for @{signup_user.username}. Verification code sent to {signup_user.email}.")
     except Exception:
+        logger.exception("Failed to send signup verification email", extra={"signup_user_id": signup_user.id, "signup_email": signup_user.email})
         messages.warning(request, "Account created. Could not send verification email now; use Send Code after checking email settings.")
 
     return redirect(f"{reverse('signup')}?step=2")
@@ -1464,6 +1495,7 @@ def send_code(request):
     try:
         _send_signup_code(signup_user)
     except Exception as exc:
+        logger.exception("Failed to resend signup verification email", extra={"signup_user_id": signup_user.id, "signup_email": signup_user.email})
         if is_json:
             return JsonResponse({
                 "success": False,
@@ -1575,11 +1607,10 @@ def forgot_password_send_code(request):
     request.session.modified = True
 
     try:
-        send_mail(
+        send_email(
+            email,
             "Password Reset Code",
             f"Your password reset code is {code}",
-            getattr(django_settings, "DEFAULT_FROM_EMAIL", "no-reply@vilastore.local"),
-            [email],
             fail_silently=False,
         )
     except Exception as exc:
@@ -1780,6 +1811,13 @@ def shopboy_dashboard(request):
         Decimal("0.00"),
     )
 
+    last_sale_id = request.session.get("shopboy_last_sale_id")
+    last_sale = None
+    if last_sale_id:
+        last_sale = Sale.objects.filter(user=shopboy.user, handled_by_shopboy=shopboy, id=last_sale_id).first()
+        if not last_sale:
+            request.session.pop("shopboy_last_sale_id", None)
+
     return render(request, "shopboy/shopboy-dashboard.html", {
         "shopboy": shopboy,
         "owner": shopboy.user,
@@ -1788,6 +1826,7 @@ def shopboy_dashboard(request):
         "selected_category": category_id,
         "cart": cart,
         "cart_total": total.quantize(Decimal("0.01")),
+        "last_sale": last_sale,
     })
 
 
@@ -1934,6 +1973,7 @@ def shopboy_checkout(request):
             row["product"].save(update_fields=["stock"])
 
     request.session["shopboy_cart"] = {}
+    request.session["shopboy_last_sale_id"] = sale.id
     messages.success(request, "Sale completed successfully.")
     return redirect("shopboy_dashboard")
 
@@ -1985,6 +2025,7 @@ def shopboy_sell_product(request, product_id):
         product.stock -= qty
         product.save(update_fields=["stock"])
 
+    request.session["shopboy_last_sale_id"] = sale.id
     messages.success(request, f"Sold {qty} x {product.name}.")
     return redirect("shopboy_dashboard")
 
@@ -2226,11 +2267,10 @@ def _send_marketplace_verification_code(buyer):
     buyer.email_code_sent_at = timezone.now()
     buyer.save(update_fields=["email_verification_code", "email_code_sent_at"])
 
-    send_mail(
+    send_email(
+        buyer.email,
         "Your Marketplace verification code",
         f"Your verification code is {code}. It will expire in 10 minutes.",
-        getattr(django_settings, "DEFAULT_FROM_EMAIL", "no-reply@vilastore.local"),
-        [buyer.email],
         fail_silently=False,
     )
 
@@ -2241,11 +2281,10 @@ def _send_marketplace_reset_code(buyer):
     buyer.reset_sent_at = timezone.now()
     buyer.save(update_fields=["reset_code", "reset_sent_at"])
 
-    send_mail(
+    send_email(
+        buyer.email,
         "Marketplace password reset code",
         f"Your password reset code is {code}. It will expire in 10 minutes.",
-        getattr(django_settings, "DEFAULT_FROM_EMAIL", "no-reply@vilastore.local"),
-        [buyer.email],
         fail_silently=False,
     )
 

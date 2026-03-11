@@ -81,6 +81,7 @@ urlpatterns = [
     path('expenses', views.expenses, name='expenses'),
     path('sales-history', views.sales_history, name='sales-history'),
     path('sales/<int:sale_id>/receipt/', views.sale_receipt, name='sale_receipt'),
+    path('shopboy/sales/<int:sale_id>/receipt/', views.shopboy_sale_receipt, name='shopboy_sale_receipt'),
     path('inventory', views.inventory, name='inventory'),
     path('product/', views.product, name='product'),
     path('index/', views.index, name='index'),

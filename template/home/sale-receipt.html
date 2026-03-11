@@ -15,7 +15,7 @@
       color: #111827;
     }
     .receipt {
-      max-width: 420px;
+      max-width: 360px;
       margin: 2rem auto;
       background: #ffffff;
       border: 1px solid #e5e7eb;
@@ -97,8 +97,13 @@
       color: #ffffff;
     }
     @media print {
+      @page {
+        size: 80mm auto;
+        margin: 4mm;
+      }
       body {
         background: #ffffff;
+        width: 80mm;
       }
       .actions {
         display: none;
@@ -107,8 +112,15 @@
         box-shadow: none;
         border: none;
         margin: 0;
-        max-width: none;
+        max-width: 80mm;
         border-radius: 0;
+        padding: 0;
+      }
+      .items-table th {
+        font-size: 0.6rem;
+      }
+      .items-table td {
+        font-size: 0.75rem;
       }
     }
   </style>

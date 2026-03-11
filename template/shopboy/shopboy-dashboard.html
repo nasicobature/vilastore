@@ -36,6 +36,19 @@
       {% endfor %}
     </section>
     {% endif %}
+    {% if last_sale %}
+    <section style="margin-bottom: 1rem;">
+      <div class="card" style="padding:0.75rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+        <div>
+          <strong>Last Sale</strong><br>
+          Receipt #{{ last_sale.id }} · &#8358;{{ last_sale.total_amount|floatformat:2 }}
+        </div>
+        <a class="btn btn-outline" href="{% url 'shopboy_sale_receipt' last_sale.id %}" target="_blank" rel="noopener">
+          <i data-lucide="receipt"></i> Print Receipt
+        </a>
+      </div>
+    </section>
+    {% endif %}
 
     <div class="products-layout">
       <div class="products-section">
