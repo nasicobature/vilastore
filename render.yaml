@@ -5,6 +5,10 @@ services:
     buildCommand: bash build.sh
     startCommand: python -m gunicorn VilaStore.wsgi:application
     envVars:
+    disk:
+      name: vilastore-media
+      mountPath: /var/data
+      sizeGB: 1
       - key: PYTHON_VERSION
         value: 3.13.2
       - key: SECRET_KEY
@@ -17,5 +21,7 @@ services:
           property: connectionString
       - key: ALLOWED_HOSTS
         value: vilastore.onrender.com
+      - key: MEDIA_ROOT
+        value: /var/data/media
 databases:
   - name: vilastore-db
