@@ -1440,6 +1440,47 @@ def agent_login(request):
     return render(request, "agent/agent-login.html")
 
 
+def agent_signup(request):
+    if _get_agent_session(request):
+        return redirect("agent_dashboard")
+
+    if request.method == "POST":
+        full_name = (request.POST.get("full_name") or "").strip()
+        username = (request.POST.get("username") or "").strip()
+        email = (request.POST.get("email") or "").strip().lower()
+        phone = (request.POST.get("phone") or "").strip()
+        password = request.POST.get("password") or ""
+        confirm_password = request.POST.get("confirm_password") or ""
+
+        if not full_name or not username or not email or not password or not confirm_password:
+            messages.error(request, "Full name, username, email, and passwords are required.")
+            return render(request, "agent/agent-signup.html")
+
+        if password != confirm_password:
+            messages.error(request, "Passwords do not match.")
+            return render(request, "agent/agent-signup.html")
+
+        if Agent.objects.filter(username__iexact=username).exists():
+            messages.error(request, "This username is already taken.")
+            return render(request, "agent/agent-signup.html")
+
+        if Agent.objects.filter(email__iexact=email).exists():
+            messages.error(request, "This email is already registered.")
+            return render(request, "agent/agent-signup.html")
+
+        agent = Agent.objects.create(
+            full_name=full_name,
+            username=username,
+            email=email,
+            phone=phone,
+            password=password,
+        )
+        messages.success(request, f"Agent account created for {agent.full_name}. Please sign in.")
+        return redirect("agent_login")
+
+    return render(request, "agent/agent-signup.html")
+
+
 def agent_logout(request):
     request.session.pop("agent_id", None)
     return redirect("agent_login")

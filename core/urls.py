@@ -51,6 +51,7 @@ urlpatterns = [
     path('investor/logout/', views.investor_logout, name='investor_logout'),
     path('investor/', views.investor_dashboard, name='investor_dashboard'),
     path('agent/login/', views.agent_login, name='agent_login'),
+    path('agent/signup/', views.agent_signup, name='agent_signup'),
     path('agent/logout/', views.agent_logout, name='agent_logout'),
     path('agent/', views.agent_dashboard, name='agent_dashboard'),
 

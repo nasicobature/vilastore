@@ -25,6 +25,7 @@
       --gradient-4: linear-gradient(135deg, #74b9ff, #0984e3);
       --gradient-5: linear-gradient(135deg, #fab1a0, #e84393);
       --gradient-6: linear-gradient(135deg, #55efc4, #00b894);
+      --gradient-7: linear-gradient(135deg, #ffeaa7, #fdcb6e);
       --radius: 16px;
       --radius-sm: 10px;
     }
@@ -76,6 +77,7 @@
     .portal-card.marketplace::before { background: var(--gradient-4); }
     .portal-card.investor::before { background: var(--gradient-5); }
     .portal-card.admin::before { background: var(--gradient-6); }
+    .portal-card.agent::before { background: var(--gradient-7); }
     .portal-icon { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem; }
     .portal-card.owner .portal-icon { background: rgba(108,92,231,0.15); color: var(--primary-light); }
     .portal-card.shopboy .portal-icon { background: rgba(0,206,201,0.15); color: var(--accent); }
@@ -83,6 +85,7 @@
     .portal-card.marketplace .portal-icon { background: rgba(9,132,227,0.18); color: #74b9ff; }
     .portal-card.investor .portal-icon { background: rgba(232,67,147,0.16); color: #fab1a0; }
     .portal-card.admin .portal-icon { background: rgba(0,184,148,0.16); color: #55efc4; }
+    .portal-card.agent .portal-icon { background: rgba(253,203,110,0.18); color: #ffeaa7; }
     .portal-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
     .portal-card p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
     .portal-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1.5rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; border: none; cursor: pointer; }
@@ -92,6 +95,7 @@
     .portal-card.marketplace .portal-btn { background: var(--gradient-4); color: #fff; }
     .portal-card.investor .portal-btn { background: var(--gradient-5); color: #fff; }
     .portal-card.admin .portal-btn { background: var(--gradient-6); color: #0f1117; }
+    .portal-card.agent .portal-btn { background: var(--gradient-7); color: #3d2e00; }
     .portal-btn:hover { opacity: 0.9; transform: translateY(-1px); }
 
     /* HOW IT WORKS */
@@ -225,6 +229,17 @@
         <h3>Admin Portal</h3>
         <p>Administrative access for managing platform operations, users, and system settings.</p>
         <a href="{% url 'admin_portal_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Admin Login</a>
+      </div>
+      <div class="portal-card agent">
+        <div class="portal-icon"><i data-lucide="users" style="width:28px;height:28px;"></i></div>
+        <h3>Agent Portal</h3>
+        <p>Invite new shop owners and earn a commission while they stay active.</p>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+          <a href="{% url 'agent_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Agent Login</a>
+          <a href="{% url 'agent_signup' %}" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
+            <i data-lucide="user-plus" style="width:18px;height:18px;"></i> Agent Sign Up
+          </a>
+        </div>
       </div>
     </div>
   </section>
