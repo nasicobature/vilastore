@@ -18,6 +18,7 @@ from .models import (
     MarketplaceBuyerToken,
     Investor,
     Feedback,
+    Agent,
 )
 
 
@@ -43,6 +44,7 @@ class CustomUserAdmin(UserAdmin):
                 "monthly_fee",
                 "is_email_verified",
                 "shop_code",
+                "referred_by_agent",
             )
         }),
     )
@@ -55,6 +57,7 @@ class CustomUserAdmin(UserAdmin):
         "is_paid",
         "is_email_verified",
         "shop_code",
+        "referred_by_agent",
         "is_staff",
     )
 
@@ -172,6 +175,14 @@ class ExpenseAdmin(admin.ModelAdmin):
 class InvestorAdmin(admin.ModelAdmin):
     list_display = ("name", "email", "ownership_percent", "investment_amount", "is_active", "created_at")
     search_fields = ("name", "email")
+    list_filter = ("is_active",)
+    readonly_fields = ("created_at", "last_login")
+
+
+@admin.register(Agent)
+class AgentAdmin(admin.ModelAdmin):
+    list_display = ("full_name", "username", "email", "referral_code", "commission_rate", "is_active", "created_at")
+    search_fields = ("full_name", "username", "email", "referral_code")
     list_filter = ("is_active",)
     readonly_fields = ("created_at", "last_login")
 

@@ -1,10 +1,47 @@
 from django.db import models
 import uuid
+from decimal import Decimal
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.hashers import make_password, identify_hasher
 
 
 # Create your models here.
+
+
+def _generate_referral_code() -> str:
+    return uuid.uuid4().hex[:10].upper()
+
+
+class Agent(models.Model):
+    full_name = models.CharField(max_length=150)
+    username = models.CharField(max_length=80, unique=True)
+    email = models.EmailField(unique=True)
+    phone = models.CharField(max_length=30, blank=True)
+    password = models.CharField(max_length=255)
+    referral_code = models.CharField(max_length=20, unique=True, blank=True)
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.15"))
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_login = models.DateTimeField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if self.password:
+            try:
+                identify_hasher(self.password)
+            except Exception:
+                self.password = make_password(self.password)
+
+        if not self.referral_code:
+            referral = _generate_referral_code()
+            while Agent.objects.filter(referral_code=referral).exists():
+                referral = _generate_referral_code()
+            self.referral_code = referral
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.full_name
+
 
 class User(AbstractUser):
     # Business Information
@@ -31,6 +68,9 @@ class User(AbstractUser):
 
     # Shop Code (for shop boy login)
     shop_code = models.CharField(max_length=20, unique=True, null=True, blank=True)
+
+    # Agent referral
+    referred_by_agent = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True, related_name="referred_users")
     
     
     subscription_active_until = models.DateField(null=True, blank=True)

@@ -1,0 +1,114 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Agent Dashboard</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app-container" style="min-height:100vh;">
+    <main class="main-content" style="margin-left:0;">
+      <header class="page-header">
+        <div>
+          <h1>Welcome, {{ agent.full_name }}</h1>
+          <p>Your commission rate: {{ commission_rate_percent }}%</p>
+        </div>
+        <div>
+          <a href="{% url 'agent_logout' %}" class="btn btn-ghost">
+            <i data-lucide="log-out"></i> Logout
+          </a>
+        </div>
+      </header>
+
+      <section class="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Active Shops</span>
+            <div class="stat-card-icon primary"><i data-lucide="store"></i></div>
+          </div>
+          <div class="stat-card-value">{{ active_count }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Inactive Shops</span>
+            <div class="stat-card-icon primary"><i data-lucide="pause-circle"></i></div>
+          </div>
+          <div class="stat-card-value">{{ inactive_count }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Estimated Monthly Commission</span>
+            <div class="stat-card-icon primary"><i data-lucide="wallet"></i></div>
+          </div>
+          <div class="stat-card-value">&#8358;{{ monthly_total|floatformat:2 }}</div>
+          <p style="color:var(--muted-foreground); font-size:0.85rem;">Paid only for active subscriptions.</p>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top:1.5rem;">
+        <div class="card-header"><h3>Your Invite Link</h3></div>
+        <div style="margin-top:0.75rem;">
+          <p style="margin-bottom:0.5rem;">Share this link to invite new shop owners.</p>
+          <div class="input-with-icon">
+            <i data-lucide="link"></i>
+            <input type="text" class="input" readonly value="{{ invite_link }}">
+          </div>
+          <p style="color:var(--muted-foreground); font-size:0.85rem;margin-top:0.5rem;">
+            Referral code: <strong>{{ agent.referral_code }}</strong>
+          </p>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top:1.5rem;">
+        <div class="card-header"><h3>Invited Shops</h3></div>
+        <div style="margin-top:0.75rem;">
+          {% if shops %}
+          <div style="overflow-x:auto;">
+            <table class="table" style="width:100%;">
+              <thead>
+                <tr>
+                  <th>Shop</th>
+                  <th>Owner Email</th>
+                  <th>Status</th>
+                  <th>Monthly Fee</th>
+                  <th>Commission</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in shops %}
+                <tr>
+                  <td>
+                    <div style="font-weight:600;">{{ item.shop.business_name|default:item.shop.username }}</div>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">@{{ item.shop.username }}</div>
+                  </td>
+                  <td>{{ item.shop.email }}</td>
+                  <td>
+                    {% if item.is_active %}
+                      <span class="badge badge-success">Active</span>
+                    {% else %}
+                      <span class="badge badge-muted">Inactive</span>
+                    {% endif %}
+                  </td>
+                  <td>&#8358;{{ item.monthly_fee|floatformat:2 }}</td>
+                  <td>&#8358;{{ item.commission|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p style="color:var(--muted-foreground);">No invited shops yet. Share your link to get started.</p>
+          {% endif %}
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () { lucide.createIcons(); });
+  </script>
+</body>
+</html>

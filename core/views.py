@@ -24,6 +24,7 @@ from .models import (
     MarketplaceChatMessage,
     MarketplaceBuyer,
     Feedback,
+    Agent,
 )
 from .subscription import subscription_is_active
 from .utils.notifications import send_email
@@ -50,6 +51,13 @@ import logging
 # Create your views here.
 
 logger = logging.getLogger(__name__)
+
+
+def _get_agent_by_code(raw_code):
+    code = (raw_code or "").strip()
+    if not code:
+        return None
+    return Agent.objects.filter(referral_code__iexact=code, is_active=True).first()
 
 
 def home(request):
@@ -1030,6 +1038,10 @@ def signup_create_account(request):
     phone = (request.POST.get("phone") or "").strip()
     password = request.POST.get("password") or ""
     confirm_password = request.POST.get("confirm_password") or ""
+    ref_code = (request.POST.get("ref_code") or request.session.get("agent_ref_code") or "").strip()
+    ref_agent = _get_agent_by_code(ref_code)
+    if ref_agent:
+        request.session["agent_ref_code"] = ref_agent.referral_code
 
     if not first_name or not last_name or not username or not email or not password or not confirm_password or not phone:
         messages.error(request, "First name, last name, username, email, phone, and passwords are required.")
@@ -1106,6 +1118,8 @@ def signup_create_account(request):
             signup_user.country = "pending"
         if not signup_user.plan:
             signup_user.plan = "starter"
+        if ref_agent and not signup_user.referred_by_agent_id:
+            signup_user.referred_by_agent = ref_agent
         signup_user.save()
     else:
         signup_user = User.objects.create_user(
@@ -1124,6 +1138,7 @@ def signup_create_account(request):
             is_paid=False,
             is_active=False,
             is_email_verified=False,
+            referred_by_agent=ref_agent,
         )
 
     request.session["signup_user_id"] = signup_user.id
@@ -1144,6 +1159,12 @@ def signup_create_account(request):
 
 
 def signup(request):
+    ref_param = request.GET.get("ref")
+    if ref_param:
+        ref_agent = _get_agent_by_code(ref_param)
+        if ref_agent:
+            request.session["agent_ref_code"] = ref_agent.referral_code
+
     if request.method == "POST":
         signup_user = _get_signup_user(request)
         verified_signup_user_id = request.session.get("verified_signup_user_id")
@@ -1223,6 +1244,7 @@ def signup(request):
         request.session.pop("otp_email", None)
         request.session.pop("otp_code", None)
         request.session.pop("otp_sent_at", None)
+        request.session.pop("agent_ref_code", None)
 
         trial_end_display = trial_end.strftime("%b %d, %Y")
         first_payment_total = BASE_FEE + MONTHLY_SUBSCRIPTION_FEE
@@ -1260,6 +1282,11 @@ def signup(request):
         "PAYSTACK_PUBLIC_KEY": getattr(django_settings, "PAYSTACK_PUBLIC_KEY", ""),
         "current_step": current_step,
         "email_verified": bool(signup_user and signup_user.is_email_verified),
+        "prefill_ref_code": (
+            signup_user.referred_by_agent.referral_code
+            if signup_user and signup_user.referred_by_agent
+            else request.session.get("agent_ref_code", "")
+        ),
         "prefill_first_name": signup_user.first_name if signup_user else "",
         "prefill_last_name": signup_user.last_name if signup_user else "",
         "prefill_username": signup_user.username if signup_user else "",
@@ -1375,6 +1402,83 @@ def investor_dashboard(request):
         "active_shops": active_shops,
         "monthly_revenue": monthly_revenue,
         "monthly_return": monthly_return,
+    })
+
+
+# =============================
+# Agent Portal
+# =============================
+
+def _get_agent_session(request):
+    agent_id = request.session.get("agent_id")
+    if not agent_id:
+        return None
+    return Agent.objects.filter(id=agent_id, is_active=True).first()
+
+
+def agent_login(request):
+    if _get_agent_session(request):
+        return redirect("agent_dashboard")
+
+    if request.method == "POST":
+        identifier = (request.POST.get("identifier") or "").strip()
+        password = request.POST.get("password") or ""
+
+        agent = Agent.objects.filter(
+            Q(email__iexact=identifier) | Q(username__iexact=identifier),
+            is_active=True,
+        ).first()
+        if not agent or not check_password(password, agent.password):
+            messages.error(request, "Invalid username/email or password.")
+            return render(request, "agent/agent-login.html")
+
+        request.session["agent_id"] = agent.id
+        agent.last_login = timezone.now()
+        agent.save(update_fields=["last_login"])
+        return redirect("agent_dashboard")
+
+    return render(request, "agent/agent-login.html")
+
+
+def agent_logout(request):
+    request.session.pop("agent_id", None)
+    return redirect("agent_login")
+
+
+def agent_dashboard(request):
+    agent = _get_agent_session(request)
+    if not agent:
+        return redirect("agent_login")
+
+    shops = User.objects.filter(referred_by_agent=agent).order_by("-date_joined")
+
+    rate = agent.commission_rate or Decimal("0.15")
+    monthly_total = Decimal("0.00")
+    items = []
+
+    for shop in shops:
+        is_active = bool(shop.is_paid and subscription_is_active(shop))
+        monthly_fee = shop.monthly_fee or Decimal("0.00")
+        commission = (monthly_fee * rate).quantize(Decimal("0.01")) if is_active else Decimal("0.00")
+        monthly_total += commission
+        items.append({
+            "shop": shop,
+            "is_active": is_active,
+            "monthly_fee": monthly_fee,
+            "commission": commission,
+        })
+
+    active_count = sum(1 for item in items if item["is_active"])
+    invite_link = request.build_absolute_uri(f"{reverse('signup')}?ref={agent.referral_code}")
+
+    return render(request, "agent/agent-dashboard.html", {
+        "agent": agent,
+        "shops": items,
+        "active_count": active_count,
+        "inactive_count": len(items) - active_count,
+        "monthly_total": monthly_total.quantize(Decimal("0.01")),
+        "commission_rate_percent": (rate * Decimal("100")).quantize(Decimal("0.01")),
+        "invite_link": invite_link,
     })
 
 

@@ -50,6 +50,9 @@ urlpatterns = [
     path('investor/login/', views.investor_login, name='investor_login'),
     path('investor/logout/', views.investor_logout, name='investor_logout'),
     path('investor/', views.investor_dashboard, name='investor_dashboard'),
+    path('agent/login/', views.agent_login, name='agent_login'),
+    path('agent/logout/', views.agent_logout, name='agent_logout'),
+    path('agent/', views.agent_dashboard, name='agent_dashboard'),
 
     path('shopboy/marketplace-orders/', views.shopboy_marketplace_orders, name='shopboy_marketplace_orders'),
     path('marketplace/login/', views.marketplace_login, name='marketplace_login'),
