@@ -80,7 +80,13 @@
         <div class="products-grid">
           {% for product in top_products %}
           <div class="product-card">
-            <div class="product-card-image"><i data-lucide="package"></i></div>
+            <div class="product-card-image">
+              {% if product.image %}
+                <img src="{{ product.image.url }}" alt="{{ product.name }}" style="width:100%;height:100%;object-fit:cover;">
+              {% else %}
+                <i data-lucide="package"></i>
+              {% endif %}
+            </div>
             <div class="product-card-content">
               <h3>{{ product.name }}</h3>
               <p>₦{{ product.selling_price|floatformat:2 }}</p>
