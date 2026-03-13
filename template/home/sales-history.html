@@ -146,6 +146,7 @@
             <th>Products</th>
             <th>Total Amount</th>
             <th>Total Profit</th>
+            <th>VAT</th>
             <th>Receipt</th>
           </tr>
         </thead>
@@ -177,6 +178,11 @@
 
             <td data-label="Total Amount">₦{{ sale.total_amount|floatformat:2 }}</td>
             <td data-label="Total Profit" class="text-profit">₦{{ sale.total_profit|floatformat:2 }}</td>
+            <td data-label="VAT">
+              {% for item in sale.items.all %}
+                {{ item.product.name }}: {{ item.vat_display }}<br>
+              {% endfor %}
+            </td>
             <td data-label="Receipt">
               <a class="btn btn-outline btn-sm" href="{% url 'sale_receipt' sale.id %}" target="_blank" rel="noopener">
                 Print
@@ -185,7 +191,7 @@
           </tr>
         {% empty %}
           <tr data-pagination-ignore="true">
-            <td colspan="7" class="empty-state">
+            <td colspan="8" class="empty-state">
               <i data-lucide="receipt"></i>
               <p>No sales found</p>
             </td>

@@ -66,6 +66,10 @@ class User(AbstractUser):
     plan = models.CharField(max_length=50)
     is_paid = models.BooleanField(default=False)
 
+    # Tax profiling
+    fixed_assets = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    is_professional_services = models.BooleanField(default=False)
+
     # Email Verification
     is_email_verified = models.BooleanField(default=False)
     email_verification_code = models.CharField(max_length=6, blank=True)
@@ -111,6 +115,16 @@ class Product(models.Model):
 
     stock = models.PositiveIntegerField(default=0)
     low_stock_threshold = models.PositiveIntegerField(default=5)
+
+    VAT_STANDARD = "standard"
+    VAT_ZERO = "zero"
+    VAT_EXEMPT = "exempt"
+    VAT_STATUS_CHOICES = [
+        (VAT_STANDARD, "Standard (7.5%)"),
+        (VAT_ZERO, "Zero-rated (0%)"),
+        (VAT_EXEMPT, "Exempt"),
+    ]
+    vat_status = models.CharField(max_length=10, choices=VAT_STATUS_CHOICES, default=VAT_STANDARD)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -189,6 +203,7 @@ class Sale(models.Model):
 
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     total_profit = models.DecimalField(max_digits=10, decimal_places=2)
+    vat_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -200,6 +215,10 @@ class SaleItem(models.Model):
     quantity = models.IntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
     profit = models.DecimalField(max_digits=10, decimal_places=2)
+    vat_status = models.CharField(max_length=10, choices=Product.VAT_STATUS_CHOICES, default=Product.VAT_STANDARD)
+    vat_rate = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal("0.00"))
+    vat_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    vat_applicable = models.BooleanField(default=False)
     
 
 class Investor(models.Model):

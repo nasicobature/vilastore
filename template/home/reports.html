@@ -273,7 +273,13 @@
               <div class="tax-section">
                 <div class="tax-section-header"><span class="section-number">4</span><h4>Tax Calculation</h4></div>
                 <div class="tax-table">
-                  <div class="tax-row"><span class="tax-label">CIT Rate Applied</span><span class="tax-value">30%</span></div>
+                  <div class="tax-row"><span class="tax-label">CIT Rate Applied</span><span class="tax-value">{{ cit_rate_percent|floatformat:2 }}%</span></div>
+                  <div class="tax-row"><span class="tax-label">Rate Basis</span><span class="tax-value">{{ cit_rate_label }}</span></div>
+                  <div class="tax-row"><span class="tax-label">Fixed Assets (Reported)</span><span class="tax-value">{% if request.user.fixed_assets %}???{{ request.user.fixed_assets|floatformat:2 }}{% else %}Not set{% endif %}</span></div>
+                  <div class="tax-row"><span class="tax-label">Professional Services</span><span class="tax-value">{{ request.user.is_professional_services|yesno:"Yes,No" }}</span></div>
+                  {% if cit_rate_note %}
+                  <div class="tax-row"><span class="tax-label">Note</span><span class="tax-value">{{ cit_rate_note }}</span></div>
+                  {% endif %}
                   <div class="tax-row highlight"><span class="tax-label">Company Income Tax Due</span><span class="tax-value" id="citTaxDue">₦{{ cit_tax_due|floatformat:2 }}</span></div>
                 </div>
               </div>
@@ -299,6 +305,10 @@
               <div class="tax-section">
                 <div class="tax-section-header"><span class="section-number">2</span><h4>Output VAT (Sales)</h4></div>
                 <div class="tax-table">
+                  <div class="tax-row"><span class="tax-label">VAT Registration</span><span class="tax-value">{% if vat_registered %}Eligible{% else %}Not eligible{% endif %}</span></div>
+                  {% if vat_registration_note %}
+                  <div class="tax-row"><span class="tax-label">Note</span><span class="tax-value">{{ vat_registration_note }}</span></div>
+                  {% endif %}
                   <div class="tax-row"><span class="tax-label">Total Taxable Sales</span><span class="tax-value" id="vatTaxableSales">₦{{ vat_taxable_sales|floatformat:2 }}</span></div>
                   <div class="tax-row highlight"><span class="tax-label">Output VAT (VAT Collected)</span><span class="tax-value" id="vatOutputVat">₦{{ vat_output_vat|floatformat:2 }}</span></div>
                 </div>

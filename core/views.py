@@ -52,6 +52,54 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+VAT_RATE = Decimal("0.075")
+VAT_SMALL_TURNOVER_THRESHOLD = Decimal("50000000")
+VAT_SMALL_FIXED_ASSETS_THRESHOLD = Decimal("250000000")
+
+
+def _is_vat_registered(user, turnover):
+    if (user.country or "").strip().lower() != "nigeria":
+        return False
+    fixed_assets = user.fixed_assets
+    is_professional_services = bool(user.is_professional_services)
+    if fixed_assets is None:
+        return True
+    is_small = (
+        turnover <= VAT_SMALL_TURNOVER_THRESHOLD and
+        fixed_assets <= VAT_SMALL_FIXED_ASSETS_THRESHOLD and
+        not is_professional_services
+    )
+    return not is_small
+
+
+def _vat_registration_note(user, turnover):
+    if (user.country or "").strip().lower() != "nigeria":
+        return "VAT applies only to Nigerian businesses."
+    if user.fixed_assets is None:
+        return "Fixed assets not set; VAT registration assumed."
+    if user.is_professional_services:
+        return "Professional services do not qualify for small-business VAT exemption."
+    if turnover <= VAT_SMALL_TURNOVER_THRESHOLD and user.fixed_assets <= VAT_SMALL_FIXED_ASSETS_THRESHOLD:
+        return "Small business exemption applies (turnover and fixed assets within limits)."
+    return ""
+
+
+def _year_turnover(user, year):
+    return Sale.objects.filter(user=user, created_at__year=year).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+
+
+def _vat_registered_for_sale(user, sale_date, additional_turnover):
+    year_total = _year_turnover(user, sale_date.year)
+    return _is_vat_registered(user, year_total + additional_turnover)
+
+
+def _calculate_item_vat(product, line_total, vat_registered):
+    vat_status = getattr(product, "vat_status", "standard")
+    vat_applicable = bool(vat_registered and vat_status == "standard")
+    vat_rate = VAT_RATE if vat_applicable else Decimal("0.00")
+    vat_amount = (line_total * vat_rate).quantize(Decimal("0.01"))
+    return vat_status, vat_applicable, vat_rate, vat_amount
+
 
 def _get_agent_by_code(raw_code):
     code = (raw_code or "").strip()
@@ -274,17 +322,33 @@ def checkout(request):
                 "quantity": quantity,
                 "price": price,
                 "profit": line_profit,
+                "line_total": line_total,
             })
 
         if not line_items:
             messages.warning(request, "Cart is empty.")
             return redirect('product')
 
+        vat_registered = _vat_registered_for_sale(request.user, timezone.now(), total_amount)
+        vat_total = Decimal("0.00")
+        for row in line_items:
+            vat_status, vat_applicable, vat_rate, vat_amount = _calculate_item_vat(
+                row["product"],
+                row["line_total"],
+                vat_registered,
+            )
+            row["vat_status"] = vat_status
+            row["vat_applicable"] = vat_applicable
+            row["vat_rate"] = vat_rate
+            row["vat_amount"] = vat_amount
+            vat_total += vat_amount
+
         sale = Sale.objects.create(
             user=request.user,
             sales_channel=Sale.CHANNEL_OWNER_POS,
             total_amount=total_amount.quantize(Decimal("0.01")),
             total_profit=total_profit.quantize(Decimal("0.01")),
+            vat_total=vat_total.quantize(Decimal("0.01")),
         )
 
         for row in line_items:
@@ -294,6 +358,10 @@ def checkout(request):
                 quantity=row["quantity"],
                 price=row["price"].quantize(Decimal("0.01")),
                 profit=row["profit"].quantize(Decimal("0.01")),
+                vat_status=row["vat_status"],
+                vat_rate=row["vat_rate"],
+                vat_amount=row["vat_amount"],
+                vat_applicable=row["vat_applicable"],
             )
             row["product"].stock -= row["quantity"]
             row["product"].save(update_fields=["stock"])
@@ -333,6 +401,7 @@ def inventory(request):
 def add_product(request):
     name = (request.POST.get('name') or '').strip()
     category_id = request.POST.get('category') or None
+    vat_status = (request.POST.get("vat_status") or Product.VAT_STANDARD).strip()
 
     try:
         stock = int(request.POST.get('stock', 0))
@@ -361,6 +430,10 @@ def add_product(request):
             messages.error(request, "Selected category is invalid.")
             return redirect('inventory')
 
+    valid_vat_status = {choice[0] for choice in Product.VAT_STATUS_CHOICES}
+    if vat_status not in valid_vat_status:
+        vat_status = Product.VAT_STANDARD
+
     Product.objects.create(
         user=request.user,
         name=name,
@@ -369,6 +442,7 @@ def add_product(request):
         cost_price=cost_price,
         selling_price=selling_price,
         low_stock_threshold=low_stock_threshold,
+        vat_status=vat_status,
         image=request.FILES.get('image')
     )
     messages.success(request, "Product added successfully.")
@@ -424,6 +498,11 @@ def edit_product(request, pk):
     product.cost_price = request.POST.get('cost_price')
     product.selling_price = request.POST.get('selling_price')
     product.low_stock_threshold = request.POST.get('low_stock_threshold')
+    vat_status = (request.POST.get("vat_status") or "").strip()
+    if vat_status:
+        valid_vat_status = {choice[0] for choice in Product.VAT_STATUS_CHOICES}
+        if vat_status in valid_vat_status:
+            product.vat_status = vat_status
 
     if request.FILES.get('image'):
         product.image = request.FILES.get('image')
@@ -479,6 +558,26 @@ def sales_history(request):
     total_sales = sales.aggregate(total=Sum('total_amount'))['total'] or Decimal("0.00")
     total_profit = sales.aggregate(total=Sum('total_profit'))['total'] or Decimal("0.00")
     total_transactions = sales.count()
+
+    years = {sale.created_at.year for sale in sales}
+    vat_registered_by_year = {
+        year: _is_vat_registered(request.user, _year_turnover(request.user, year))
+        for year in years
+    }
+    for sale in sales:
+        vat_registered = vat_registered_by_year.get(sale.created_at.year, False)
+        for item in sale.items.all():
+            line_total = (item.price or Decimal("0.00")) * item.quantity
+            use_existing = (item.vat_rate != Decimal("0.00") or item.vat_amount != Decimal("0.00") or item.vat_applicable)
+            if use_existing:
+                item.vat_display = f"₦{item.vat_amount:.2f}" if item.vat_applicable else "Not eligible"
+                continue
+            vat_status = getattr(item.product, "vat_status", "standard")
+            vat_applicable = bool(vat_registered and vat_status == Product.VAT_STANDARD)
+            if vat_applicable:
+                item.vat_display = f"₦{(line_total * VAT_RATE).quantize(Decimal('0.01')):.2f}"
+            else:
+                item.vat_display = "Not eligible"
 
     context = {
         'sales': sales,
@@ -713,7 +812,28 @@ def reports(request):
 
     cit_assessable_profit = cit_gross_profit - cit_operating_expenses
     cit_taxable_profit = max(0, cit_assessable_profit)
-    cit_tax_due = cit_taxable_profit * Decimal("0.30")  # 30% CIT
+    # Nigeria Tax Act 2025 (effective 2026): small company rate 0%, others 30%.
+    # Small company requires: turnover <= NGN 50m, fixed assets <= NGN 250m, and not a professional services company.
+    cit_small_turnover_threshold = Decimal("50000000")
+    cit_small_fixed_assets_threshold = Decimal("250000000")
+    cit_rate = Decimal("0.30")
+    cit_rate_label = "Standard rate (30%)"
+    cit_rate_note = ""
+    fixed_assets_value = request.user.fixed_assets
+    is_professional_services = bool(request.user.is_professional_services)
+    missing_assets = fixed_assets_value is None
+    qualifies_small_by_assets = (fixed_assets_value is not None and fixed_assets_value <= cit_small_fixed_assets_threshold)
+
+    if cit_revenue <= cit_small_turnover_threshold and qualifies_small_by_assets and not is_professional_services:
+        cit_rate = Decimal("0.00")
+        cit_rate_label = "Small company rate (0%)"
+    elif cit_revenue <= cit_small_turnover_threshold and missing_assets:
+        cit_rate_note = "Fixed assets are missing; small-company test cannot be fully applied."
+    elif is_professional_services and cit_revenue <= cit_small_turnover_threshold:
+        cit_rate_note = "Professional services companies do not qualify for small-company CIT relief."
+
+    cit_tax_due = (cit_taxable_profit * cit_rate)
+    cit_rate_percent = (cit_rate * Decimal("100")).quantize(Decimal("0.01"))
 
     # =========================
     # ===== VAT CALCULATION ===
@@ -744,11 +864,30 @@ def reports(request):
         user=request.user
     )
 
-    vat_taxable_sales = vat_sales.aggregate(
-        total=Sum("total_amount")
-    )["total"] or 0
+    vat_year_turnover = _year_turnover(request.user, vat_year)
+    vat_registered = _is_vat_registered(request.user, vat_year_turnover)
+    vat_registration_note = _vat_registration_note(request.user, vat_year_turnover)
 
-    vat_output_vat = vat_taxable_sales * Decimal("0.075")  # 7.5% VAT
+    vat_taxable_sales = Decimal("0.00")
+    vat_output_vat = Decimal("0.00")
+    if vat_registered:
+        vat_items = (
+            SaleItem.objects.filter(sale__in=vat_sales)
+            .select_related("product")
+        )
+        for item in vat_items:
+            line_total = (item.price or Decimal("0.00")) * item.quantity
+            use_existing = (item.vat_rate != Decimal("0.00") or item.vat_amount != Decimal("0.00") or item.vat_applicable)
+            if use_existing:
+                if item.vat_applicable:
+                    vat_taxable_sales += line_total
+                    vat_output_vat += item.vat_amount
+                continue
+
+            vat_status = getattr(item.product, "vat_status", "standard")
+            if vat_status == Product.VAT_STANDARD:
+                vat_taxable_sales += line_total
+                vat_output_vat += (line_total * VAT_RATE).quantize(Decimal("0.01"))
 
     # =========================
     # CONTEXT
@@ -777,12 +916,20 @@ def reports(request):
         "cit_assessable_profit": cit_assessable_profit,
         "cit_taxable_profit": cit_taxable_profit,
         "cit_tax_due": cit_tax_due,
+        "cit_rate": cit_rate,
+        "cit_rate_percent": cit_rate_percent,
+        "cit_rate_label": cit_rate_label,
+        "cit_rate_note": cit_rate_note,
+        "cit_small_turnover_threshold": cit_small_turnover_threshold,
+        "cit_small_fixed_assets_threshold": cit_small_fixed_assets_threshold,
 
         # VAT
         "vat_year": vat_year,
         "vat_month": vat_month,
         "vat_taxable_sales": vat_taxable_sales,
         "vat_output_vat": vat_output_vat,
+        "vat_registered": vat_registered,
+        "vat_registration_note": vat_registration_note,
         "is_nigeria": (request.user.country or "").strip().lower() == "nigeria",
     }
 
@@ -915,7 +1062,22 @@ def update_profile(request):
     user.country = (request.POST.get("country") or "").strip()
     user.address = (request.POST.get("address") or "").strip()
     user.phone = (request.POST.get("phone") or "").strip()
-    user.save(update_fields=["business_name", "country", "address", "phone"])
+    fixed_assets_raw = (request.POST.get("fixed_assets") or "").strip()
+    if fixed_assets_raw:
+        try:
+            fixed_assets_value = Decimal(fixed_assets_raw)
+            if fixed_assets_value < 0:
+                raise ValueError
+            user.fixed_assets = fixed_assets_value
+        except Exception:
+            messages.error(request, "Fixed assets must be a valid non-negative amount.")
+            return redirect("settings")
+    else:
+        user.fixed_assets = None
+
+    user.is_professional_services = request.POST.get("is_professional_services") == "on"
+
+    user.save(update_fields=["business_name", "country", "address", "phone", "fixed_assets", "is_professional_services"])
     messages.success(request, "Profile updated.")
     return redirect("settings")
 
@@ -2366,6 +2528,12 @@ def shopboy_sell_product(request, product_id):
 
         total_amount = product.selling_price * qty
         total_profit = (product.selling_price - product.cost_price) * qty
+        vat_registered = _vat_registered_for_sale(shopboy.user, timezone.now(), total_amount)
+        vat_status, vat_applicable, vat_rate, vat_amount = _calculate_item_vat(
+            product,
+            total_amount,
+            vat_registered,
+        )
 
         sale = Sale.objects.create(
             user=shopboy.user,
@@ -2373,6 +2541,7 @@ def shopboy_sell_product(request, product_id):
             handled_by_shopboy=shopboy,
             total_amount=total_amount.quantize(Decimal("0.01")),
             total_profit=total_profit.quantize(Decimal("0.01")),
+            vat_total=vat_amount.quantize(Decimal("0.01")),
         )
 
         SaleItem.objects.create(
@@ -2381,6 +2550,10 @@ def shopboy_sell_product(request, product_id):
             quantity=qty,
             price=product.selling_price.quantize(Decimal("0.01")),
             profit=total_profit.quantize(Decimal("0.01")),
+            vat_status=vat_status,
+            vat_rate=vat_rate,
+            vat_amount=vat_amount,
+            vat_applicable=vat_applicable,
         )
 
         product.stock -= qty
@@ -3175,41 +3348,60 @@ def marketplace_update_status(request, public_id):
         if acting_shopboy and order.assigned_shopboy_id != acting_shopboy.id:
             order.assigned_shopboy = acting_shopboy
 
-        if status in [MarketplaceOrder.STATUS_CONFIRMED, MarketplaceOrder.STATUS_PAID] and order.sale_id is None:
-            items = list(order.items.select_related("product").select_for_update())
-            total_amount = Decimal("0.00")
-            total_profit = Decimal("0.00")
+            if status in [MarketplaceOrder.STATUS_CONFIRMED, MarketplaceOrder.STATUS_PAID] and order.sale_id is None:
+                items = list(order.items.select_related("product").select_for_update())
+                total_amount = Decimal("0.00")
+                total_profit = Decimal("0.00")
+                vat_total = Decimal("0.00")
 
-            for item in items:
-                product = item.product
-                if product.stock < item.quantity:
-                    return JsonResponse({"success": False, "error": f"Not enough stock for {product.name}."}, status=400)
-                line_total = item.unit_price * item.quantity
-                line_profit = (item.unit_price - product.cost_price) * item.quantity
-                total_amount += line_total
-                total_profit += line_profit
+                for item in items:
+                    product = item.product
+                    if product.stock < item.quantity:
+                        return JsonResponse({"success": False, "error": f"Not enough stock for {product.name}."}, status=400)
+                    line_total = item.unit_price * item.quantity
+                    line_profit = (item.unit_price - product.cost_price) * item.quantity
+                    total_amount += line_total
+                    total_profit += line_profit
 
-            sale = Sale.objects.create(
-                user=order.shop_owner,
-                sales_channel=Sale.CHANNEL_MARKETPLACE,
-                handled_by_shopboy=order.assigned_shopboy,
-                total_amount=total_amount.quantize(Decimal("0.01")),
-                total_profit=total_profit.quantize(Decimal("0.01")),
-            )
-            for item in items:
-                product = item.product
-                line_profit = (item.unit_price - product.cost_price) * item.quantity
-                SaleItem.objects.create(
-                    sale=sale,
-                    product=product,
-                    quantity=item.quantity,
-                    price=item.unit_price.quantize(Decimal("0.01")),
-                    profit=line_profit.quantize(Decimal("0.01")),
+                vat_registered = _vat_registered_for_sale(order.shop_owner, timezone.now(), total_amount)
+
+                sale = Sale.objects.create(
+                    user=order.shop_owner,
+                    sales_channel=Sale.CHANNEL_MARKETPLACE,
+                    handled_by_shopboy=order.assigned_shopboy,
+                    total_amount=total_amount.quantize(Decimal("0.01")),
+                    total_profit=total_profit.quantize(Decimal("0.01")),
+                    vat_total=Decimal("0.00"),
                 )
-                product.stock -= item.quantity
-                product.save(update_fields=["stock"])
+                for item in items:
+                    product = item.product
+                    line_total = item.unit_price * item.quantity
+                    line_profit = (item.unit_price - product.cost_price) * item.quantity
+                    vat_status, vat_applicable, vat_rate, vat_amount = _calculate_item_vat(
+                        product,
+                        line_total,
+                        vat_registered,
+                    )
+                    vat_total += vat_amount
+                    SaleItem.objects.create(
+                        sale=sale,
+                        product=product,
+                        quantity=item.quantity,
+                        price=item.unit_price.quantize(Decimal("0.01")),
+                        profit=line_profit.quantize(Decimal("0.01")),
+                        vat_status=vat_status,
+                        vat_rate=vat_rate,
+                        vat_amount=vat_amount,
+                        vat_applicable=vat_applicable,
+                    )
+                    product.stock -= item.quantity
+                    product.save(update_fields=["stock"])
 
-            order.sale = sale
+                if vat_total:
+                    sale.vat_total = vat_total.quantize(Decimal("0.01"))
+                    sale.save(update_fields=["vat_total"])
+
+                order.sale = sale
             order.total_amount = total_amount.quantize(Decimal("0.01"))
 
         order.status = status

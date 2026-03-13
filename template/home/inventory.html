@@ -210,6 +210,12 @@
 
       <input type="number" name="cost_price" placeholder="Cost Price" class="input" required>
       <input type="number" name="selling_price" placeholder="Selling Price" class="input" required>
+      <select name="vat_status" class="input">
+        <option value="standard">VAT: Standard (7.5%)</option>
+        <option value="zero">VAT: Zero-rated (0%)</option>
+        <option value="exempt">VAT: Exempt</option>
+      </select>
+      <small style="color:var(--muted-foreground);">Use VAT schedules for exempt or zero-rated goods.</small>
       <input type="number" name="stock" placeholder="Stock" class="input" required>
       <input type="number" name="low_stock_threshold" value="5" class="input">
 
