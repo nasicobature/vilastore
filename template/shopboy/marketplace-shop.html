@@ -82,6 +82,15 @@
 
         <div class="card marketplace-shop-card">
           <h4>Order Summary</h4>
+          {% if not buyer %}
+          <div class="card" style="margin:0.75rem 0;padding:0.75rem;border:1px dashed var(--border);background:var(--surface-2);">
+            <p style="margin:0 0 0.5rem 0;font-weight:600;">Sign in required</p>
+            <p style="margin:0 0 0.75rem 0;font-size:0.85rem;color:var(--muted-foreground);">Please sign in to send your order and chat with the shop.</p>
+            <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_shop' shop_owner.username %}" class="btn btn-primary btn-full">
+              <i data-lucide="log-in"></i> Sign In to Order
+            </a>
+          </div>
+          {% endif %}
           <div id="selectedItems" class="marketplace-selected-items">
             <p class="marketplace-empty-selection">No items selected yet.</p>
           </div>
@@ -89,7 +98,7 @@
             <span>Total</span>
             <span id="selectedTotal">&#8358;0.00</span>
           </div>
-          <button type="submit" class="btn btn-primary btn-full" id="submitOrderBtn">
+          <button type="submit" class="btn btn-primary btn-full" id="submitOrderBtn" {% if not buyer %}disabled{% endif %}>
             <i data-lucide="shopping-bag"></i> Send Order to Shop
           </button>
         </div>

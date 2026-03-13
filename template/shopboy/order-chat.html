@@ -82,6 +82,16 @@
         {% endif %}
       </div>
 
+      <div class="card order-chat-card">
+        <h4 class="order-chat-card-title">Handled By</h4>
+        {% if order.assigned_shopboy %}
+        <p style="font-weight:600;">{{ order.assigned_shopboy.full_name }}</p>
+        <p style="font-size:0.75rem;color:var(--muted-foreground);">@{{ order.assigned_shopboy.username }}</p>
+        {% else %}
+        <p style="font-weight:600;">Shop Owner</p>
+        {% endif %}
+      </div>
+
       <div class="card order-chat-card order-chat-note">
         <div style="display:flex;gap:0.75rem;align-items:flex-start;">
           <i data-lucide="credit-card" style="width:20px;height:20px;color:var(--primary);flex-shrink:0;margin-top:2px;"></i>

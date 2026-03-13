@@ -2857,6 +2857,9 @@ def _order_access_context(request, order):
 def marketplace_login(request):
     buyer = _get_marketplace_buyer(request)
     if buyer:
+        next_url = (request.GET.get("next") or "").strip()
+        if next_url:
+            return redirect(next_url)
         return redirect("marketplace_account")
 
     if request.method == "POST":
@@ -2885,6 +2888,9 @@ def marketplace_login(request):
         buyer.last_login = timezone.now()
         buyer.save(update_fields=["last_login"])
         _login_marketplace_buyer(request, buyer)
+        next_url = (request.GET.get("next") or "").strip()
+        if next_url:
+            return redirect(next_url)
         return redirect("marketplace_account")
 
     return render(request, "shopboy/marketplace-login.html")
@@ -3206,6 +3212,9 @@ def marketplace_place_order(request, username):
     shop_owner = get_object_or_404(User, username=username)
     profile, _ = MarketplaceShopProfile.objects.get_or_create(user=shop_owner)
     buyer = _get_marketplace_buyer(request)
+    if not buyer:
+        messages.error(request, "Please sign in to place an order.")
+        return redirect(f"{reverse('marketplace_login')}?next={reverse('marketplace_shop', kwargs={'username': shop_owner.username})}")
 
     buyer_name = (request.POST.get("buyer_name") or "").strip()
     buyer_contact = (request.POST.get("buyer_contact") or "").strip()
