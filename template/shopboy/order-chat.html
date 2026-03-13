@@ -6,9 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ profile.user.business_name|default:profile.user.username }} - Order Chat</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
+  <form style="display:none;">{% csrf_token %}</form>
   <header class="marketplace-header">
     <div class="marketplace-header-inner">
       <a href="{% url 'marketplace' %}" class="marketplace-logo">
@@ -133,9 +135,9 @@
         {% endif %}
 
         {% for msg in chat_messages %}
-        <div class="chat-bubble-row {% if is_seller and msg.sender_type == 'seller' %}own{% elif not is_seller and msg.sender_type == 'buyer' %}own{% endif %}">
+        <div class="chat-bubble-row {% if msg.sender_type == 'buyer' %}own{% endif %}">
           <div class="chat-avatar"><i data-lucide="{% if msg.sender_type == 'seller' %}store{% elif msg.sender_type == 'system' %}info{% else %}user{% endif %}"></i></div>
-          <div class="chat-bubble {% if is_seller and msg.sender_type == 'seller' %}chat-bubble-own{% elif not is_seller and msg.sender_type == 'buyer' %}chat-bubble-own{% else %}chat-bubble-other{% endif %}">
+          <div class="chat-bubble {% if msg.sender_type == 'buyer' %}chat-bubble-own{% else %}chat-bubble-other{% endif %}">
             <p>{{ msg.message|linebreaksbr }}</p>
             <span class="chat-time">{{ msg.created_at|date:"H:i" }}</span>
           </div>

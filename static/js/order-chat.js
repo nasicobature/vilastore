@@ -42,7 +42,8 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!layout) return;
   const publicId = layout.getAttribute('data-order');
   const accessToken = layout.getAttribute('data-access') || '';
-  const isSeller = layout.getAttribute('data-is-seller') === '1';
+  const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  const csrfToken = getCookie('csrftoken') || (csrfMeta ? csrfMeta.getAttribute('content') : '');
 
   const sendBtn = document.getElementById('sendBtn');
   const input = document.getElementById('messageInput');
@@ -58,7 +59,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     fetch(`/marketplace/order/${publicId}/message/`, {
       method: 'POST',
-      headers: { 'X-CSRFToken': getCookie('csrftoken') },
+      headers: { 'X-CSRFToken': csrfToken },
       body: formData
     })
       .then(r => r.json())
@@ -68,7 +69,7 @@ document.addEventListener('DOMContentLoaded', function () {
           return;
         }
         input.value = '';
-        appendMessage(data.message, true, data.message.sender_type);
+        appendMessage(data.message, data.message.sender_type === 'buyer', data.message.sender_type);
       })
       .catch(() => showToast('Failed to send message'));
   }
@@ -91,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (accessToken) formData.append('access', accessToken);
     fetch(`/marketplace/order/${publicId}/status/`, {
       method: 'POST',
-      headers: { 'X-CSRFToken': getCookie('csrftoken') },
+      headers: { 'X-CSRFToken': csrfToken },
       body: formData
     })
       .then(r => r.json())
