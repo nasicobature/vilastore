@@ -50,6 +50,14 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY") or os.getenv("SECRET_KEY") or get_ra
 DEBUG = env_bool("DEBUG", default=False)
 
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",") if host.strip()]
+default_hosts = [
+    "vilastore.onrender.com",
+    "vilastore.store",
+    "www.vilastore.store",
+]
+for host in default_hosts:
+    if host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
 render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
 if render_hostname and render_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(render_hostname)
@@ -155,17 +163,26 @@ STATICFILES_DIRS = [
 ]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+WHITENOISE_USE_FINDERS = True
 AUTH_USER_MODEL = 'core.User'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.getenv("MEDIA_ROOT", os.path.join(BASE_DIR, 'media'))
+SERVE_MEDIA = env_bool("SERVE_MEDIA", default=True)
 
 # CORS (for Expo web / mobile dev)
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
     CORS_ALLOW_CREDENTIALS = True
 
-WHITENOISE_USE_FINDERS = True
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
+default_csrf_origins = [
+    "https://vilastore.onrender.com",
+    "https://vilastore.store",
+    "https://www.vilastore.store",
+]
+for origin in default_csrf_origins:
+    if origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origin)
 if render_hostname:
     render_origin = f"https://{render_hostname}"
     if render_origin not in CSRF_TRUSTED_ORIGINS:
@@ -187,6 +204,9 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "no-reply@vilastore.local"
 SERVER_EMAIL = os.getenv("SERVER_EMAIL") or DEFAULT_FROM_EMAIL
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "30"))
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL") or DEFAULT_FROM_EMAIL
+RESEND_API_URL = os.getenv("RESEND_API_URL", "https://api.resend.com/emails")
 
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
 if not EMAIL_BACKEND:
