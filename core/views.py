@@ -37,7 +37,7 @@ from django.db.models import F, Sum, Q
 from django.db import transaction
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.shortcuts import redirect, get_object_or_404
 from decimal import Decimal
 from django.contrib import messages
@@ -3343,6 +3343,7 @@ def marketplace_add_message(request, public_id):
     })
 
 
+@csrf_exempt
 @require_POST
 def marketplace_update_status(request, public_id):
     order = get_object_or_404(MarketplaceOrder, public_id=public_id)
