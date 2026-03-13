@@ -41,11 +41,15 @@
             {% endif %}
           </div>
           <div class="marketplace-shop-identity">
-            {% if profile.logo %}
-              <img src="{{ profile.logo.url }}" alt="{{ shop_owner.business_name|default:shop_owner.username }}" class="marketplace-shop-logo">
-            {% else %}
-              <div class="marketplace-shop-logo marketplace-shop-logo-fallback"><i data-lucide="store"></i></div>
-            {% endif %}
+            <div class="marketplace-shop-avatar-ring">
+              {% if profile.logo %}
+                <img src="{{ profile.logo.url }}" alt="{{ shop_owner.business_name|default:shop_owner.username }}" class="marketplace-shop-logo">
+              {% elif shop_owner.profile_image %}
+                <img src="{{ shop_owner.profile_image.url }}" alt="{{ shop_owner.business_name|default:shop_owner.username }}" class="marketplace-shop-logo">
+              {% else %}
+                <div class="marketplace-shop-logo marketplace-shop-logo-fallback"><i data-lucide="store"></i></div>
+              {% endif %}
+            </div>
             <div>
               <h2>{{ shop_owner.business_name|default:shop_owner.username }}</h2>
               <p>@{{ shop_owner.username }}</p>

@@ -1062,6 +1062,9 @@ def update_profile(request):
     user.country = (request.POST.get("country") or "").strip()
     user.address = (request.POST.get("address") or "").strip()
     user.phone = (request.POST.get("phone") or "").strip()
+    profile_image = request.FILES.get("profile_image")
+    if profile_image:
+        user.profile_image = profile_image
     fixed_assets_raw = (request.POST.get("fixed_assets") or "").strip()
     if fixed_assets_raw:
         try:
@@ -1077,7 +1080,16 @@ def update_profile(request):
 
     user.is_professional_services = request.POST.get("is_professional_services") == "on"
 
-    user.save(update_fields=["business_name", "country", "address", "phone", "fixed_assets", "is_professional_services"])
+    user.save(update_fields=["business_name", "country", "address", "phone", "profile_image", "fixed_assets", "is_professional_services"])
+    marketplace_profile, _ = MarketplaceShopProfile.objects.get_or_create(user=user)
+    marketplace_logo = request.FILES.get("marketplace_logo")
+    if marketplace_logo:
+        marketplace_profile.logo = marketplace_logo
+    marketplace_cover_image = request.FILES.get("marketplace_cover_image")
+    if marketplace_cover_image:
+        marketplace_profile.cover_image = marketplace_cover_image
+    if marketplace_logo or marketplace_cover_image:
+        marketplace_profile.save(update_fields=["logo", "cover_image"])
     messages.success(request, "Profile updated.")
     return redirect("settings")
 

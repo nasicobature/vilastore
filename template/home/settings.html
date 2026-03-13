@@ -121,11 +121,43 @@
 
       <section class="card">
         <div class="card-header"><h3>Shop Profile</h3></div>
-        <form method="POST" action="{% url 'update_profile' %}" style="margin-top:1rem;">
+        <form method="POST" action="{% url 'update_profile' %}" style="margin-top:1rem;" enctype="multipart/form-data">
           {% csrf_token %}
           <div class="form-group">
             <label>Shop Code (for Shop Boy Login)</label>
             <input type="text" class="input" value="{{ request.user.shop_code }}" readonly>
+          </div>
+          <div class="form-group">
+            <label>Profile Image</label>
+            {% if request.user.profile_image %}
+              <div style="margin-bottom:0.5rem;">
+                <img src="{{ request.user.profile_image.url }}" alt="Profile image" style="width:72px;height:72px;border-radius:12px;object-fit:cover;">
+              </div>
+            {% endif %}
+            <input type="file" name="profile_image" class="input" accept="image/*">
+            <small style="color:var(--muted-foreground);">Upload a square image for best results.</small>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Marketplace Logo</label>
+              {% if request.user.marketplace_profile and request.user.marketplace_profile.logo %}
+                <div style="margin-bottom:0.5rem;">
+                  <img src="{{ request.user.marketplace_profile.logo.url }}" alt="Marketplace logo" style="width:72px;height:72px;border-radius:50%;object-fit:cover;">
+                </div>
+              {% endif %}
+              <input type="file" name="marketplace_logo" class="input" accept="image/*">
+              <small style="color:var(--muted-foreground);">Used for marketplace listing and shop header.</small>
+            </div>
+            <div class="form-group">
+              <label>Marketplace Cover Image</label>
+              {% if request.user.marketplace_profile and request.user.marketplace_profile.cover_image %}
+                <div style="margin-bottom:0.5rem;">
+                  <img src="{{ request.user.marketplace_profile.cover_image.url }}" alt="Marketplace cover" style="width:160px;height:72px;border-radius:12px;object-fit:cover;">
+                </div>
+              {% endif %}
+              <input type="file" name="marketplace_cover_image" class="input" accept="image/*">
+              <small style="color:var(--muted-foreground);">Wide image looks best (e.g. 1200x400).</small>
+            </div>
           </div>
           <div class="form-row">
             <div class="form-group">

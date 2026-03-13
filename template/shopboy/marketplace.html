@@ -86,22 +86,26 @@
         {% for profile in profiles %}
         <a href="{% url 'marketplace_shop' profile.user.username %}" class="shop-card">
           <div class="shop-card-image">
-            {% if profile.cover_image %}
-              <img src="{{ profile.cover_image.url }}" alt="{{ profile.user.business_name }}">
-            {% elif profile.user.profile_image %}
-              <img src="{{ profile.user.profile_image.url }}" alt="{{ profile.user.business_name }}">
-            {% else %}
-              <div class="shop-card-image-fallback"></div>
-            {% endif %}
-            {% if profile.logo %}
-              <img src="{{ profile.logo.url }}" alt="{{ profile.user.business_name }}" class="shop-card-logo">
-            {% elif profile.user.profile_image %}
-              <img src="{{ profile.user.profile_image.url }}" alt="{{ profile.user.business_name }}" class="shop-card-logo">
-            {% else %}
-              <div class="shop-card-logo shop-card-logo-fallback">
-                <i data-lucide="store"></i>
-              </div>
-            {% endif %}
+            <div class="shop-card-media-frame">
+              {% if profile.cover_image %}
+                <img src="{{ profile.cover_image.url }}" alt="{{ profile.user.business_name }}">
+              {% elif profile.user.profile_image %}
+                <img src="{{ profile.user.profile_image.url }}" alt="{{ profile.user.business_name }}">
+              {% else %}
+                <div class="shop-card-image-fallback"></div>
+              {% endif %}
+            </div>
+            <div class="shop-card-logo-ring">
+              {% if profile.logo %}
+                <img src="{{ profile.logo.url }}" alt="{{ profile.user.business_name }}" class="shop-card-logo">
+              {% elif profile.user.profile_image %}
+                <img src="{{ profile.user.profile_image.url }}" alt="{{ profile.user.business_name }}" class="shop-card-logo">
+              {% else %}
+                <div class="shop-card-logo shop-card-logo-fallback">
+                  <i data-lucide="store"></i>
+                </div>
+              {% endif %}
+            </div>
           </div>
           <div class="shop-card-content">
             <div class="shop-card-header">
