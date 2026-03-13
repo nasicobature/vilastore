@@ -37,6 +37,7 @@ from django.db.models import F, Sum, Q
 from django.db import transaction
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.shortcuts import redirect, get_object_or_404
 from decimal import Decimal
 from django.contrib import messages
@@ -3281,6 +3282,7 @@ def marketplace_place_order(request, username):
     return redirect(f"{url}?access={order.access_token}")
 
 
+@ensure_csrf_cookie
 def marketplace_order_chat(request, public_id):
     order = get_object_or_404(
         MarketplaceOrder.objects.select_related("shop_owner", "assigned_shopboy").prefetch_related("items__product", "messages"),

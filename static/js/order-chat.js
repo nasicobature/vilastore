@@ -95,7 +95,16 @@ document.addEventListener('DOMContentLoaded', function () {
       headers: { 'X-CSRFToken': csrfToken },
       body: formData
     })
-      .then(r => r.json())
+      .then(async r => {
+        const text = await r.text();
+        let data = null;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          data = { success: false, error: text || `HTTP ${r.status}` };
+        }
+        return data;
+      })
       .then(data => {
         if (!data.success) {
           showToast(data.error || 'Failed to update status');
