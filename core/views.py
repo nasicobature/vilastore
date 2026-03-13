@@ -35,6 +35,7 @@ from django.core.exceptions import ValidationError
 import json
 from django.db.models import F, Sum, Q
 from django.db import transaction
+from django.db import OperationalError, ProgrammingError
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
@@ -3367,10 +3368,11 @@ def marketplace_update_status(request, public_id):
     if order.status in [MarketplaceOrder.STATUS_DELIVERED, MarketplaceOrder.STATUS_CANCELLED]:
         return JsonResponse({"success": False, "error": "Order is closed"}, status=400)
 
-    with transaction.atomic():
-        order = MarketplaceOrder.objects.select_for_update().select_related("assigned_shopboy").get(id=order.id)
-        if acting_shopboy and order.assigned_shopboy_id != acting_shopboy.id:
-            order.assigned_shopboy = acting_shopboy
+    try:
+        with transaction.atomic():
+            order = MarketplaceOrder.objects.select_for_update().select_related("assigned_shopboy").get(id=order.id)
+            if acting_shopboy and order.assigned_shopboy_id != acting_shopboy.id:
+                order.assigned_shopboy = acting_shopboy
 
             if status in [MarketplaceOrder.STATUS_CONFIRMED, MarketplaceOrder.STATUS_PAID] and order.sale_id is None:
                 items = list(order.items.select_related("product").select_for_update())
@@ -3426,26 +3428,38 @@ def marketplace_update_status(request, public_id):
                     sale.save(update_fields=["vat_total"])
 
                 order.sale = sale
-            order.total_amount = total_amount.quantize(Decimal("0.01"))
+                order.total_amount = total_amount.quantize(Decimal("0.01"))
 
-        order.status = status
-        fields_to_update = ["status", "updated_at"]
-        if order.sale_id is not None:
-            fields_to_update.extend(["total_amount", "sale"])
-        if acting_shopboy:
-            fields_to_update.append("assigned_shopboy")
-        order.save(update_fields=fields_to_update)
+            order.status = status
+            fields_to_update = ["status", "updated_at"]
+            if order.sale_id is not None:
+                fields_to_update.extend(["total_amount", "sale"])
+            if acting_shopboy:
+                fields_to_update.append("assigned_shopboy")
+            order.save(update_fields=fields_to_update)
 
-        MarketplaceChatMessage.objects.create(
-            order=order,
-            sender_type=MarketplaceChatMessage.SENDER_SYSTEM,
-            message=f"Order status updated to \"{dict(MarketplaceOrder.STATUS_CHOICES).get(status, status)}\"."
-        )
+            MarketplaceChatMessage.objects.create(
+                order=order,
+                sender_type=MarketplaceChatMessage.SENDER_SYSTEM,
+                message=f"Order status updated to \"{dict(MarketplaceOrder.STATUS_CHOICES).get(status, status)}\"."
+            )
 
-    return JsonResponse({
-        "success": True,
-        "status": order.status,
-    })
+        return JsonResponse({
+            "success": True,
+            "status": order.status,
+        })
+    except (OperationalError, ProgrammingError) as exc:
+        logger.exception("Marketplace status update failed due to DB/migration issue")
+        return JsonResponse({
+            "success": False,
+            "error": "Server needs database migration. Please run migrate and retry."
+        }, status=500)
+    except Exception:
+        logger.exception("Marketplace status update failed")
+        return JsonResponse({
+            "success": False,
+            "error": "Server error while updating status. Please try again."
+        }, status=500)
 
 
 def shopboy_marketplace_orders(request):
