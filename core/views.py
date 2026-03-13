@@ -58,6 +58,15 @@ VAT_RATE = Decimal("0.075")
 VAT_SMALL_TURNOVER_THRESHOLD = Decimal("50000000")
 VAT_SMALL_FIXED_ASSETS_THRESHOLD = Decimal("250000000")
 
+def _check_migrations():
+    try:
+        # Touch a new column to confirm migrations are applied
+        list(Sale.objects.values_list("vat_total", flat=True)[:1])
+        list(User.objects.values_list("fixed_assets", flat=True)[:1])
+        return ""
+    except (OperationalError, ProgrammingError):
+        return "Database migrations are missing. Please run: python manage.py migrate"
+
 
 def _is_vat_registered(user, turnover):
     if (user.country or "").strip().lower() != "nigeria":
@@ -183,6 +192,7 @@ def index(request):
         'low_stock_count': low_stock_count,
         'today_transactions': today_transactions,
         'top_products': top_products,
+        'migration_warning': _check_migrations(),
     }
     return render(request, 'home/index.html', context)
 
