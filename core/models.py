@@ -21,6 +21,11 @@ class Agent(models.Model):
     referral_code = models.CharField(max_length=20, unique=True, blank=True)
     commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.15"))
     is_active = models.BooleanField(default=True)
+    is_email_verified = models.BooleanField(default=False)
+    email_verification_code = models.CharField(max_length=6, blank=True)
+    email_code_sent_at = models.DateTimeField(null=True, blank=True)
+    reset_code = models.CharField(max_length=6, blank=True)
+    reset_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(null=True, blank=True)
 

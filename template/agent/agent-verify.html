@@ -1,0 +1,73 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Agent Verify Email</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="auth-page">
+  <div class="auth-container">
+    <div class="auth-branding">
+      <div class="auth-branding-content">
+        <div class="auth-logo">
+          <div class="auth-logo-icon">
+            <i data-lucide="mail-check"></i>
+          </div>
+          <h1>VilaStore</h1>
+        </div>
+        <h2>Verify Your Email</h2>
+        <p>We sent a 6-digit code to <strong>{{ agent.email }}</strong>.</p>
+      </div>
+    </div>
+
+    <div class="auth-form-panel">
+      <div class="auth-form-container">
+        <div class="auth-form-header">
+          <h2>Email Verification</h2>
+          <p>Enter the code below to activate your agent account.</p>
+        </div>
+
+        {% if messages %}
+        <section style="margin-bottom:1rem;">
+          {% for message in messages %}
+          <div class="card" style="padding:0.75rem 1rem;margin-bottom:0.5rem;">{{ message }}</div>
+          {% endfor %}
+        </section>
+        {% endif %}
+
+        <form method="POST" action="{% url 'agent_verify' %}" class="auth-form">
+          {% csrf_token %}
+          <div class="form-group">
+            <label for="verificationCode">Verification Code</label>
+            <div class="input-with-icon">
+              <i data-lucide="key-round"></i>
+              <input type="text" id="verificationCode" name="code" class="input" placeholder="Enter 6-digit code" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg btn-full">
+            Verify Email
+          </button>
+        </form>
+
+        <form method="POST" action="{% url 'agent_send_code' %}" style="margin-top:0.75rem;">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline btn-full">
+            Resend Code
+          </button>
+        </form>
+
+        <div class="auth-footer" style="margin-top:1rem;">
+          <a href="{% url 'agent_login' %}" class="link">Back to Sign In</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () { lucide.createIcons(); });
+  </script>
+</body>
+</html>

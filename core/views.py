@@ -1416,6 +1416,37 @@ def _get_agent_session(request):
     return Agent.objects.filter(id=agent_id, is_active=True).first()
 
 
+def _get_pending_agent(request):
+    agent_id = request.session.get("agent_pending_id")
+    if not agent_id:
+        return None
+    return Agent.objects.filter(id=agent_id, is_active=True).first()
+
+
+def _send_agent_verification_code(agent: Agent):
+    code = str(random.randint(100000, 999999))
+    agent.email_verification_code = code
+    agent.email_code_sent_at = timezone.now()
+    agent.save(update_fields=["email_verification_code", "email_code_sent_at"])
+    send_email(
+        agent.email,
+        "Your VilaStore Agent verification code",
+        f"Your verification code is {code}. It will expire in 10 minutes.",
+    )
+
+
+def _send_agent_reset_code(agent: Agent):
+    code = str(random.randint(100000, 999999))
+    agent.reset_code = code
+    agent.reset_sent_at = timezone.now()
+    agent.save(update_fields=["reset_code", "reset_sent_at"])
+    send_email(
+        agent.email,
+        "VilaStore Agent password reset code",
+        f"Your password reset code is {code}. It will expire in 10 minutes.",
+    )
+
+
 def agent_login(request):
     if _get_agent_session(request):
         return redirect("agent_dashboard")
@@ -1431,6 +1462,20 @@ def agent_login(request):
         if not agent or not check_password(password, agent.password):
             messages.error(request, "Invalid username/email or password.")
             return render(request, "agent/agent-login.html")
+
+        if not agent.is_email_verified:
+            request.session["agent_pending_id"] = agent.id
+            should_send = not agent.email_verification_code or not agent.email_code_sent_at
+            if agent.email_code_sent_at and timezone.now() - agent.email_code_sent_at > timedelta(minutes=10):
+                should_send = True
+            if should_send:
+                try:
+                    _send_agent_verification_code(agent)
+                except Exception:
+                    messages.error(request, "Failed to send verification email. Please try again.")
+                    return redirect("agent_verify")
+            messages.error(request, "Verify your email to continue. We sent you a code.")
+            return redirect("agent_verify")
 
         request.session["agent_id"] = agent.id
         agent.last_login = timezone.now()
@@ -1474,11 +1519,182 @@ def agent_signup(request):
             email=email,
             phone=phone,
             password=password,
+            is_email_verified=False,
         )
-        messages.success(request, f"Agent account created for {agent.full_name}. Please sign in.")
-        return redirect("agent_login")
+        request.session["agent_pending_id"] = agent.id
+        try:
+            _send_agent_verification_code(agent)
+            messages.success(request, f"Agent account created for {agent.full_name}. Verification code sent to {agent.email}.")
+        except Exception:
+            logger.exception("Failed to send agent verification email", extra={"agent_id": agent.id, "agent_email": agent.email})
+            messages.warning(request, "Agent account created. Could not send verification email now; use Resend Code after checking email settings.")
+        return redirect("agent_verify")
 
     return render(request, "agent/agent-signup.html")
+
+
+def agent_verify(request):
+    if _get_agent_session(request):
+        return redirect("agent_dashboard")
+
+    agent = _get_pending_agent(request)
+    if not agent:
+        messages.error(request, "No pending agent verification found. Please sign in.")
+        return redirect("agent_login")
+
+    if request.method == "POST":
+        code = (request.POST.get("code") or "").strip()
+        if not code:
+            messages.error(request, "Verification code is required.")
+            return render(request, "agent/agent-verify.html", {"agent": agent})
+
+        sent_at = agent.email_code_sent_at
+        if not agent.email_verification_code or not sent_at:
+            messages.error(request, "No OTP found. Send code first.")
+            return render(request, "agent/agent-verify.html", {"agent": agent})
+
+        if timezone.now() - sent_at > timedelta(minutes=10):
+            messages.error(request, "OTP expired. Send a new code.")
+            return render(request, "agent/agent-verify.html", {"agent": agent})
+
+        if code != agent.email_verification_code:
+            messages.error(request, "Invalid code.")
+            return render(request, "agent/agent-verify.html", {"agent": agent})
+
+        agent.is_email_verified = True
+        agent.email_verification_code = ""
+        agent.email_code_sent_at = None
+        agent.last_login = timezone.now()
+        agent.save(update_fields=["is_email_verified", "email_verification_code", "email_code_sent_at", "last_login"])
+
+        request.session.pop("agent_pending_id", None)
+        request.session["agent_id"] = agent.id
+        messages.success(request, "Email verified successfully.")
+        return redirect("agent_dashboard")
+
+    return render(request, "agent/agent-verify.html", {"agent": agent})
+
+
+@require_POST
+def agent_send_verification_code(request):
+    agent = _get_pending_agent(request)
+    if not agent:
+        messages.error(request, "No pending agent verification found.")
+        return redirect("agent_login")
+
+    try:
+        _send_agent_verification_code(agent)
+    except Exception:
+        messages.error(request, "Failed to send verification email. Please try again.")
+        return redirect("agent_verify")
+
+    messages.success(request, f"Code sent to {agent.email}.")
+    return redirect("agent_verify")
+
+
+def agent_forgot_password(request):
+    reset_step = request.session.get("agent_reset_step", "email")
+    reset_email = request.session.get("agent_reset_email", "")
+    return render(request, "agent/agent-forgot-password.html", {
+        "reset_step": reset_step,
+        "reset_email": reset_email,
+    })
+
+
+@require_POST
+def agent_forgot_password_send_code(request):
+    email = (request.POST.get("email") or "").strip().lower()
+    if not email:
+        messages.error(request, "Email is required.")
+        return redirect("agent_forgot_password")
+
+    agent = Agent.objects.filter(email__iexact=email, is_active=True).first()
+    if not agent:
+        messages.success(request, "If this email exists, a code has been sent.")
+        return redirect("agent_forgot_password")
+
+    request.session["agent_reset_email"] = email
+    request.session["agent_reset_step"] = "otp"
+    request.session["agent_reset_verified"] = False
+    request.session.modified = True
+
+    try:
+        _send_agent_reset_code(agent)
+    except Exception:
+        messages.error(request, "Failed to send reset email. Check email settings.")
+        return redirect("agent_forgot_password")
+
+    messages.success(request, "Verification code sent.")
+    return redirect("agent_forgot_password")
+
+
+@require_POST
+def agent_forgot_password_verify_code(request):
+    email = (request.POST.get("email") or "").strip().lower()
+    code = (request.POST.get("code") or "").strip()
+
+    session_email = request.session.get("agent_reset_email")
+    if not session_email or email != session_email:
+        messages.error(request, "No reset code found. Send code first.")
+        return redirect("agent_forgot_password")
+
+    agent = Agent.objects.filter(email__iexact=email, is_active=True).first()
+    if not agent or not agent.reset_code or not agent.reset_sent_at:
+        messages.error(request, "No reset code found. Send code first.")
+        return redirect("agent_forgot_password")
+
+    if timezone.now() - agent.reset_sent_at > timedelta(minutes=10):
+        messages.error(request, "Reset code expired. Send a new code.")
+        return redirect("agent_forgot_password")
+
+    if code != agent.reset_code:
+        messages.error(request, "Invalid code.")
+        return redirect("agent_forgot_password")
+
+    request.session["agent_reset_verified"] = True
+    request.session["agent_reset_step"] = "reset"
+    messages.success(request, "Code verified. Set your new password.")
+    return redirect("agent_forgot_password")
+
+
+@require_POST
+def agent_forgot_password_reset(request):
+    email = (request.POST.get("email") or "").strip().lower()
+    password = request.POST.get("password") or ""
+    confirm_password = request.POST.get("confirm_password") or ""
+
+    if not email:
+        messages.error(request, "Email is required.")
+        return redirect("agent_forgot_password")
+
+    if password != confirm_password:
+        messages.error(request, "Passwords do not match.")
+        return redirect("agent_forgot_password")
+
+    if not _password_meets_rules(password):
+        messages.error(request, "Password must include uppercase, number, and special character.")
+        return redirect("agent_forgot_password")
+
+    if request.session.get("agent_reset_verified") is not True or request.session.get("agent_reset_email") != email:
+        messages.error(request, "Reset not verified.")
+        return redirect("agent_forgot_password")
+
+    agent = Agent.objects.filter(email__iexact=email, is_active=True).first()
+    if not agent:
+        messages.error(request, "Account not found.")
+        return redirect("agent_forgot_password")
+
+    agent.password = make_password(password)
+    agent.reset_code = ""
+    agent.reset_sent_at = None
+    agent.save(update_fields=["password", "reset_code", "reset_sent_at"])
+
+    request.session.pop("agent_reset_email", None)
+    request.session.pop("agent_reset_step", None)
+    request.session.pop("agent_reset_verified", None)
+
+    messages.success(request, "Password reset successful. Please sign in.")
+    return redirect("agent_login")
 
 
 def agent_logout(request):

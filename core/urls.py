@@ -52,6 +52,12 @@ urlpatterns = [
     path('investor/', views.investor_dashboard, name='investor_dashboard'),
     path('agent/login/', views.agent_login, name='agent_login'),
     path('agent/signup/', views.agent_signup, name='agent_signup'),
+    path('agent/verify/', views.agent_verify, name='agent_verify'),
+    path('agent/send-code/', views.agent_send_verification_code, name='agent_send_code'),
+    path('agent/forgot-password/', views.agent_forgot_password, name='agent_forgot_password'),
+    path('agent/forgot-password/send-code/', views.agent_forgot_password_send_code, name='agent_forgot_password_send_code'),
+    path('agent/forgot-password/verify/', views.agent_forgot_password_verify_code, name='agent_forgot_password_verify_code'),
+    path('agent/forgot-password/reset/', views.agent_forgot_password_reset, name='agent_forgot_password_reset'),
     path('agent/logout/', views.agent_logout, name='agent_logout'),
     path('agent/', views.agent_dashboard, name='agent_dashboard'),
 
