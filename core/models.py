@@ -1,8 +1,11 @@
 from django.db import models
 import uuid
 from decimal import Decimal
+from io import BytesIO
+from django.core.files.base import ContentFile
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.hashers import make_password, identify_hasher
+from PIL import Image, ImageOps
 
 
 # Create your models here.
@@ -10,6 +13,35 @@ from django.contrib.auth.hashers import make_password, identify_hasher
 
 def _generate_referral_code() -> str:
     return uuid.uuid4().hex[:10].upper()
+
+
+def _optimize_image_field(image_field, *, max_size=1200, quality=80, suffix="_opt"):
+    if not image_field:
+        return
+
+    name = image_field.name or ""
+    if suffix in name:
+        return
+
+    try:
+        img = Image.open(image_field)
+    except Exception:
+        return
+
+    img = ImageOps.exif_transpose(img)
+    img = img.convert("RGB")
+    img.thumbnail((max_size, max_size), Image.LANCZOS)
+
+    buffer = BytesIO()
+    img.save(buffer, format="JPEG", quality=quality, optimize=True)
+    buffer.seek(0)
+
+    if "." in name:
+        base = name.rsplit(".", 1)[0]
+    else:
+        base = name
+    new_name = f"{base}{suffix}.jpg"
+    image_field.save(new_name, ContentFile(buffer.read()), save=False)
 
 
 class Agent(models.Model):
@@ -87,6 +119,11 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+    def save(self, *args, **kwargs):
+        if self.profile_image:
+            _optimize_image_field(self.profile_image, max_size=600, quality=80)
+        super().save(*args, **kwargs)
     
     
 
@@ -130,6 +167,11 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if self.image:
+            _optimize_image_field(self.image, max_size=1200, quality=80)
+        super().save(*args, **kwargs)
     
     
 class Customer(models.Model):
@@ -294,6 +336,13 @@ class MarketplaceShopProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.business_name or self.user.username} Marketplace Profile"
+
+    def save(self, *args, **kwargs):
+        if self.logo:
+            _optimize_image_field(self.logo, max_size=600, quality=80)
+        if self.cover_image:
+            _optimize_image_field(self.cover_image, max_size=1600, quality=80)
+        super().save(*args, **kwargs)
 
 
 class MarketplaceSettings(models.Model):
