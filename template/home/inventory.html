@@ -144,6 +144,22 @@
             </td>
             <td data-label="Action">
               <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline"
+                  onclick="openEditProductModal(this)"
+                  data-product-id="{{ product.id }}"
+                  data-name="{{ product.name }}"
+                  data-category-id="{{ product.category_id|default:'' }}"
+                  data-cost-price="{{ product.cost_price }}"
+                  data-selling-price="{{ product.selling_price }}"
+                  data-stock="{{ product.stock }}"
+                  data-low-stock-threshold="{{ product.low_stock_threshold }}"
+                  data-vat-status="{{ product.vat_status|default:'standard' }}"
+                  data-image-url="{% if product.image %}{{ product.image.url }}{% endif %}"
+                >
+                  Edit
+                </button>
                 <form method="POST" action="{% url 'adjust_stock' product.id %}" style="display:inline;">
                   {% csrf_token %}
                   <input type="hidden" name="adjustment" value="-1">
@@ -231,6 +247,62 @@
 </div>
 
 <!-- =========================
+     EDIT PRODUCT MODAL
+========================= -->
+<div class="modal-overlay" id="editProductModal">
+  <div class="modal modal-lg">
+
+    <div class="modal-header">
+      <h3>Edit Product</h3>
+      <button onclick="closeEditProductModal()">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <form method="POST" action="#" id="editProductForm" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      <input type="text" name="name" id="editProductName" placeholder="Product Name" class="input" required>
+
+      <select name="category" id="editProductCategory" class="input">
+        <option value="">No category</option>
+        {% for category in categories %}
+          <option value="{{ category.id }}">{{ category.name }}</option>
+        {% endfor %}
+      </select>
+
+      <input type="number" name="cost_price" id="editProductCostPrice" placeholder="Cost Price" class="input" required>
+      <input type="number" name="selling_price" id="editProductSellingPrice" placeholder="Selling Price" class="input" required>
+      <select name="vat_status" id="editProductVatStatus" class="input">
+        <option value="standard">VAT: Standard (7.5%)</option>
+        <option value="zero">VAT: Zero-rated (0%)</option>
+        <option value="exempt">VAT: Exempt</option>
+      </select>
+      <small style="color:var(--muted-foreground);">Use VAT schedules for exempt or zero-rated goods.</small>
+      <input type="number" name="stock" id="editProductStock" placeholder="Stock" class="input" required>
+      <input type="number" name="low_stock_threshold" id="editProductLowStockThreshold" class="input">
+
+      <div style="display:flex; gap:12px; align-items:center;">
+        <div style="width:72px;height:72px;border-radius:12px;overflow:hidden;background:var(--muted);display:flex;align-items:center;justify-content:center;">
+          <img id="editProductImagePreview" src="" alt="Product image" style="width:100%;height:100%;object-fit:cover;display:none;">
+          <i id="editProductImagePlaceholder" data-lucide="package" style="width:28px;height:28px;color:var(--muted-foreground);"></i>
+        </div>
+        <div style="flex:1;">
+          <input type="file" name="image" id="editProductImageInput" class="input" accept="image/*">
+          <small style="color:var(--muted-foreground);">Upload to replace the current image.</small>
+        </div>
+      </div>
+
+      <div style="margin-top:15px;">
+        <button type="button" class="btn btn-outline" onclick="closeEditProductModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Update Product</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<!-- =========================
      ADD CATEGORY MODAL
 ========================= -->
 <div class="modal-overlay" id="categoryModal">
@@ -263,6 +335,29 @@
 document.addEventListener('DOMContentLoaded', function () {
     lucide.createIcons();
     setupTablePagination('inventoryTable');
+
+    const editImageInput = document.getElementById('editProductImageInput');
+    if (editImageInput) {
+        editImageInput.addEventListener('change', function () {
+            const preview = document.getElementById('editProductImagePreview');
+            const placeholder = document.getElementById('editProductImagePlaceholder');
+            const file = editImageInput.files && editImageInput.files[0];
+            if (!file) {
+                preview.src = '';
+                preview.style.display = 'none';
+                placeholder.style.display = 'block';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                preview.src = event.target.result;
+                preview.style.display = 'block';
+                placeholder.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        });
+    }
 });
 
 function openProductModal() {
@@ -270,6 +365,41 @@ function openProductModal() {
 }
 function closeProductModal() {
     document.getElementById('productModal').classList.remove('active');
+}
+
+function openEditProductModal(button) {
+    const form = document.getElementById('editProductForm');
+    const modal = document.getElementById('editProductModal');
+    const productId = button.dataset.productId;
+    const editUrlTemplate = "{% url 'edit_product' 0 %}";
+
+    form.action = editUrlTemplate.replace("/0/", "/" + productId + "/");
+    document.getElementById('editProductName').value = button.dataset.name || '';
+    document.getElementById('editProductCategory').value = button.dataset.categoryId || '';
+    document.getElementById('editProductCostPrice').value = button.dataset.costPrice || '';
+    document.getElementById('editProductSellingPrice').value = button.dataset.sellingPrice || '';
+    document.getElementById('editProductStock').value = button.dataset.stock || '';
+    document.getElementById('editProductLowStockThreshold').value = button.dataset.lowStockThreshold || '';
+    document.getElementById('editProductVatStatus').value = button.dataset.vatStatus || 'standard';
+
+    const imageUrl = button.dataset.imageUrl || '';
+    const preview = document.getElementById('editProductImagePreview');
+    const placeholder = document.getElementById('editProductImagePlaceholder');
+    if (imageUrl) {
+        preview.src = imageUrl;
+        preview.style.display = 'block';
+        placeholder.style.display = 'none';
+    } else {
+        preview.src = '';
+        preview.style.display = 'none';
+        placeholder.style.display = 'block';
+    }
+
+    modal.classList.add('active');
+}
+
+function closeEditProductModal() {
+    document.getElementById('editProductModal').classList.remove('active');
 }
 
 function openCategoryModal() {
