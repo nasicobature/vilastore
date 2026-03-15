@@ -10,9 +10,9 @@
   --card: hsl(0, 0%, 100%);
   --card-foreground: hsl(220, 20%, 15%);
   
-  --primary: hsl(152, 55%, 40%);
+  --primary: hsl(32, 68%, 41%);
   --primary-foreground: hsl(0, 0%, 100%);
-  --primary-soft: hsl(152, 45%, 95%);
+  --primary-soft: hsl(34, 70%, 95%);
   
   --secondary: hsl(220, 15%, 94%);
   --secondary-foreground: hsl(220, 20%, 25%);
@@ -20,8 +20,8 @@
   --muted: hsl(220, 15%, 94%);
   --muted-foreground: hsl(220, 10%, 50%);
   
-  --accent: hsl(152, 45%, 92%);
-  --accent-foreground: hsl(152, 55%, 30%);
+  --accent: hsl(34, 55%, 90%);
+  --accent-foreground: hsl(30, 70%, 25%);
   
   --destructive: hsl(0, 72%, 55%);
   --destructive-foreground: hsl(0, 0%, 100%);
@@ -31,27 +31,27 @@
   --warning-foreground: hsl(38, 95%, 20%);
   --warning-soft: hsl(38, 80%, 92%);
   
-  --success: hsl(152, 55%, 40%);
+  --success: hsl(32, 68%, 41%);
   --success-foreground: hsl(0, 0%, 100%);
   
   --border: hsl(220, 15%, 90%);
   --input: hsl(220, 15%, 90%);
-  --ring: hsl(152, 55%, 40%);
+  --ring: hsl(32, 68%, 41%);
   
   --radius: 0.75rem;
   
   /* Sidebar */
   --sidebar-background: hsl(220, 20%, 12%);
   --sidebar-foreground: hsl(220, 10%, 80%);
-  --sidebar-primary: hsl(152, 55%, 45%);
+  --sidebar-primary: hsl(32, 70%, 45%);
   --sidebar-primary-foreground: hsl(0, 0%, 100%);
   --sidebar-accent: hsl(220, 15%, 18%);
   --sidebar-accent-foreground: hsl(0, 0%, 100%);
   --sidebar-border: hsl(220, 15%, 20%);
   
   /* Custom tokens */
-  --profit: hsl(152, 55%, 40%);
-  --profit-soft: hsl(152, 45%, 95%);
+  --profit: hsl(32, 68%, 41%);
+  --profit-soft: hsl(34, 70%, 95%);
   --loss: hsl(0, 72%, 55%);
   --loss-soft: hsl(0, 72%, 95%);
   --low-stock: hsl(38, 95%, 55%);
@@ -123,7 +123,7 @@ button {
 .sidebar-logo-icon {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, var(--sidebar-primary), hsl(152, 55%, 35%));
+  background: linear-gradient(135deg, var(--sidebar-primary), hsl(32, 70%, 35%));
   border-radius: 0.75rem;
   display: flex;
   align-items: center;
@@ -132,6 +132,24 @@ button {
 
 .sidebar-logo-icon svg {
   color: var(--sidebar-primary-foreground);
+}
+
+.sidebar-logo-icon,
+.auth-logo-icon,
+.nav-logo-icon {
+  background-image: url("/static/img/vilastore-logo.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.sidebar-logo-icon svg,
+.sidebar-logo-icon i,
+.auth-logo-icon svg,
+.auth-logo-icon i,
+.nav-logo-icon svg,
+.nav-logo-icon i {
+  display: none;
 }
 
 .sidebar-logo h1 {
@@ -421,7 +439,7 @@ button {
 }
 
 .btn-primary:hover {
-  background-color: hsl(152, 55%, 35%);
+  background-color: hsl(32, 70%, 35%);
 }
 
 .btn-secondary {
@@ -457,11 +475,11 @@ button {
   padding: 1rem 2rem;
   font-size: 1.125rem;
   font-weight: 600;
-  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.25);
+  box-shadow: 0 4px 14px rgba(176, 110, 33, 0.25);
 }
 
 .btn-lg:hover {
-  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.35);
+  box-shadow: 0 6px 20px rgba(176, 110, 33, 0.35);
   transform: scale(1.02);
 }
 
@@ -480,7 +498,7 @@ button {
 .input:focus {
   outline: none;
   border-color: var(--ring);
-  box-shadow: 0 0 0 2px hsla(152, 55%, 40%, 0.2);
+  box-shadow: 0 0 0 2px hsla(32, 68%, 41%, 0.2);
 }
 
 .input::placeholder {
@@ -1637,7 +1655,7 @@ button {
 
 /* Auth Pages */
 .auth-page {
-  background: linear-gradient(135deg, hsl(152, 45%, 95%), hsl(220, 20%, 96%));
+  background: linear-gradient(135deg, hsl(34, 70%, 95%), hsl(220, 20%, 96%));
 }
 
 .auth-container {
@@ -1685,7 +1703,10 @@ button {
 .auth-logo-icon {
   width: 56px;
   height: 56px;
-  background: linear-gradient(135deg, var(--primary), hsl(152, 55%, 30%));
+  background-color: var(--primary);
+  background-image: url("/static/img/vilastore-logo.png");
+  background-size: cover;
+  background-position: center;
   border-radius: 1rem;
   display: flex;
   align-items: center;
@@ -1798,7 +1819,7 @@ button {
 .step.active .step-number {
   background-color: var(--primary);
   color: white;
-  box-shadow: 0 4px 12px hsla(152, 55%, 40%, 0.3);
+  box-shadow: 0 4px 12px hsla(32, 68%, 41%, 0.3);
 }
 
 .step.completed .step-number {
@@ -2275,10 +2296,10 @@ button {
 .tax-filing-section {
   margin-top: 2.5rem;
   padding: 2rem;
-  background: linear-gradient(135deg, var(--card), hsl(152, 30%, 97%));
+  background: linear-gradient(135deg, var(--card), hsl(34, 30%, 97%));
   border-radius: var(--radius);
   border: 2px solid var(--primary);
-  box-shadow: 0 4px 20px hsla(152, 55%, 40%, 0.15);
+  box-shadow: 0 4px 20px hsla(32, 68%, 41%, 0.15);
 }
 
 .tax-filing-section.highlight-section {
@@ -2286,8 +2307,8 @@ button {
 }
 
 @keyframes highlightPulse {
-  0%, 100% { box-shadow: 0 4px 20px hsla(152, 55%, 40%, 0.15); }
-  50% { box-shadow: 0 4px 30px hsla(152, 55%, 40%, 0.4); }
+  0%, 100% { box-shadow: 0 4px 20px hsla(32, 68%, 41%, 0.15); }
+  50% { box-shadow: 0 4px 30px hsla(32, 68%, 41%, 0.4); }
 }
 
 .section-header-box {
@@ -2305,9 +2326,9 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--primary), hsl(152, 60%, 30%));
+  background: linear-gradient(135deg, var(--primary), hsl(32, 60%, 30%));
   border-radius: var(--radius);
-  box-shadow: 0 4px 12px hsla(152, 55%, 40%, 0.3);
+  box-shadow: 0 4px 12px hsla(32, 68%, 41%, 0.3);
   flex-shrink: 0;
 }
 
@@ -2854,7 +2875,7 @@ button {
   position: relative;
   height: 132px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(135deg, hsl(152, 35%, 88%), hsl(220, 20%, 94%));
+  background: linear-gradient(135deg, hsl(34, 35%, 88%), hsl(220, 20%, 94%));
 }
 
 .shop-card-media-frame {
@@ -2875,7 +2896,7 @@ button {
 .shop-card-image-fallback {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, hsl(152, 35%, 88%), hsl(220, 20%, 94%));
+  background: linear-gradient(135deg, hsl(34, 35%, 88%), hsl(220, 20%, 94%));
 }
 
 .shop-card-logo {
@@ -2897,7 +2918,7 @@ button {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #0ea5e9, #22c55e);
+  background: linear-gradient(135deg, #f1b04a, #b06e21);
   padding: 2px;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.25);
 }
@@ -3009,7 +3030,7 @@ button {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary), hsl(152, 55%, 30%));
+  background: linear-gradient(135deg, var(--primary), hsl(32, 70%, 30%));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3187,7 +3208,7 @@ button {
 
 .marketplace-shop-cover {
   height: 120px;
-  background: linear-gradient(135deg, hsl(152, 35%, 86%), hsl(152, 25%, 95%));
+  background: linear-gradient(135deg, hsl(34, 35%, 86%), hsl(34, 25%, 95%));
 }
 
 .marketplace-shop-cover img {
@@ -3199,7 +3220,7 @@ button {
 .marketplace-shop-cover-fallback {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, hsl(152, 35%, 86%), hsl(152, 25%, 95%));
+  background: linear-gradient(135deg, hsl(34, 35%, 86%), hsl(34, 25%, 95%));
 }
 
 .marketplace-shop-identity {
@@ -3214,7 +3235,7 @@ button {
   height: 64px;
   border-radius: 50%;
   padding: 3px;
-  background: linear-gradient(135deg, #38bdf8, #a78bfa);
+  background: linear-gradient(135deg, #f4c069, #b06e21);
   display: grid;
   place-items: center;
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.2);
@@ -3473,7 +3494,7 @@ button {
 
 .order-chat-note {
   border-color: var(--primary);
-  background: hsla(152, 55%, 40%, 0.05);
+  background: hsla(32, 68%, 41%, 0.05);
 }
 
 .order-chat-main {
@@ -3490,7 +3511,7 @@ button {
   flex: 1;
   overflow-y: auto;
   padding: 1rem;
-  background: linear-gradient(180deg, hsl(152, 28%, 97%), var(--background));
+  background: linear-gradient(180deg, hsl(34, 28%, 97%), var(--background));
 }
 
 .chat-bubble-row {
@@ -3604,7 +3625,7 @@ button {
 
 .forgot-password-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, hsl(152, 45%, 95%), var(--background));
+  background: linear-gradient(135deg, hsl(34, 70%, 95%), var(--background));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3686,7 +3707,7 @@ button {
 .otp-input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px hsla(152, 55%, 40%, 0.15);
+  box-shadow: 0 0 0 3px hsla(32, 68%, 41%, 0.15);
 }
 
 .check-icon-circle {

@@ -2,6 +2,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  {% include 'partials/branding-head.html' %}
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VilaStore - Smart Business Management</title>
@@ -15,11 +17,11 @@
       --border: #2e3345;
       --text: #e8eaf0;
       --text-muted: #8b92a8;
-      --primary: #6c5ce7;
-      --primary-light: #a29bfe;
-      --accent: #00cec9;
-      --accent-2: #fd79a8;
-      --gradient: linear-gradient(135deg, #6c5ce7, #a29bfe);
+      --primary: #b06e21;
+      --primary-light: #f1c273;
+      --accent: #f1b04a;
+      --accent-2: #d48d2b;
+      --gradient: linear-gradient(135deg, #f1b04a, #b06e21);
       --gradient-2: linear-gradient(135deg, #00cec9, #81ecec);
       --gradient-3: linear-gradient(135deg, #fd79a8, #e17055);
       --gradient-4: linear-gradient(135deg, #74b9ff, #0984e3);
@@ -35,8 +37,8 @@
     /* NAV */
     .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; background: rgba(15,17,23,0.85); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
     .nav-logo { display: flex; align-items: center; gap: 0.75rem; font-size: 1.5rem; font-weight: 800; }
-    .nav-logo-icon { width: 40px; height: 40px; background: var(--gradient); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; }
-    .nav-logo-icon svg { color: #fff; }
+    .nav-logo-icon { width: 40px; height: 40px; background: var(--gradient); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; background-image: url("{% static 'img/vilastore-logo.png' %}"); background-size: cover; background-position: center; }
+    .nav-logo-icon svg { display: none; }
     .nav-links { display: flex; gap: 0.5rem; }
     .nav-links a { padding: 0.6rem 1.25rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; }
     .nav-links .btn-outline { border: 1px solid var(--border); color: var(--text); }
