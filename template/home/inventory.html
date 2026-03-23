@@ -221,7 +221,10 @@
       {% csrf_token %}
 
       <input type="text" name="name" placeholder="Product Name" class="input" required>
-      <input type="text" name="code" placeholder="Product Code (Barcode/SKU)" class="input">
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        <input type="text" name="code" id="newProductCode" placeholder="Product Code (Barcode/SKU)" class="input" style="flex:1;">
+        <button type="button" class="btn btn-outline" id="generateNewProductCode">Generate</button>
+      </div>
 
       <select name="category" class="input">
         <option value="">No category</option>
@@ -269,7 +272,10 @@
       {% csrf_token %}
 
       <input type="text" name="name" id="editProductName" placeholder="Product Name" class="input" required>
-      <input type="text" name="code" id="editProductCode" placeholder="Product Code (Barcode/SKU)" class="input">
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        <input type="text" name="code" id="editProductCode" placeholder="Product Code (Barcode/SKU)" class="input" style="flex:1;">
+        <button type="button" class="btn btn-outline" id="generateEditProductCode">Generate</button>
+      </div>
 
       <select name="category" id="editProductCategory" class="input">
         <option value="">No category</option>
@@ -363,6 +369,49 @@ document.addEventListener('DOMContentLoaded', function () {
                 placeholder.style.display = 'none';
             };
             reader.readAsDataURL(file);
+        });
+    }
+
+    async function fetchGeneratedCode() {
+        const res = await fetch("{% url 'generate_product_code' %}");
+        const data = await res.json();
+        if (!data.success) {
+            throw new Error(data.message || "Failed to generate code.");
+        }
+        return data.code;
+    }
+
+    const newCodeBtn = document.getElementById('generateNewProductCode');
+    const newCodeInput = document.getElementById('newProductCode');
+    if (newCodeBtn && newCodeInput) {
+        newCodeBtn.addEventListener('click', async function () {
+            try {
+                newCodeBtn.disabled = true;
+                newCodeBtn.textContent = 'Generating...';
+                newCodeInput.value = await fetchGeneratedCode();
+            } catch (err) {
+                alert(err.message || 'Unable to generate code.');
+            } finally {
+                newCodeBtn.disabled = false;
+                newCodeBtn.textContent = 'Generate';
+            }
+        });
+    }
+
+    const editCodeBtn = document.getElementById('generateEditProductCode');
+    const editCodeInput = document.getElementById('editProductCode');
+    if (editCodeBtn && editCodeInput) {
+        editCodeBtn.addEventListener('click', async function () {
+            try {
+                editCodeBtn.disabled = true;
+                editCodeBtn.textContent = 'Generating...';
+                editCodeInput.value = await fetchGeneratedCode();
+            } catch (err) {
+                alert(err.message || 'Unable to generate code.');
+            } finally {
+                editCodeBtn.disabled = false;
+                editCodeBtn.textContent = 'Generate';
+            }
         });
     }
 });

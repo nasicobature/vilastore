@@ -58,6 +58,13 @@ VAT_RATE = Decimal("0.075")
 VAT_SMALL_TURNOVER_THRESHOLD = Decimal("50000000")
 VAT_SMALL_FIXED_ASSETS_THRESHOLD = Decimal("250000000")
 
+def _generate_product_code(user, length=12):
+    for _ in range(20):
+        code = "".join(random.choice(string.digits) for _ in range(length))
+        if not Product.objects.filter(user=user, code=code).exists():
+            return code
+    return ""
+
 def _check_migrations():
     try:
         # Touch a new column to confirm migrations are applied
@@ -332,6 +339,13 @@ def product_lookup_by_code(request):
         "stock": product.stock,
         "price": str(product.selling_price),
     })
+
+@login_required
+def generate_product_code(request):
+    code = _generate_product_code(request.user)
+    if not code:
+        return JsonResponse({"success": False, "message": "Unable to generate code."}, status=500)
+    return JsonResponse({"success": True, "code": code})
 
 @login_required
 @require_POST

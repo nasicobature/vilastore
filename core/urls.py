@@ -43,6 +43,7 @@ urlpatterns = [
     path('shopboy/logout/', views.shopboy_logout, name='shopboy_logout'),
     path('shopboy/profile/', views.shopboy_profile, name='shopboy_profile'),
     path('product-lookup-by-code/', views.product_lookup_by_code, name='product_lookup_by_code'),
+    path('generate-product-code/', views.generate_product_code, name='generate_product_code'),
     path('admin-portal/login/', views.admin_portal_login, name='admin_portal_login'),
     path('admin-portal/logout/', views.admin_portal_logout, name='admin_portal_logout'),
     path('admin-portal/', views.admin_portal, name='admin_portal'),
