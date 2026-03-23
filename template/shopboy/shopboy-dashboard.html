@@ -114,6 +114,14 @@
 
       <div class="cart-panel">
         <h3>Customer Cart</h3>
+        <form method="POST" action="{% url 'shopboy_add_to_cart_by_code' %}" style="margin-bottom:0.75rem;">
+          {% csrf_token %}
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <input type="text" name="code" placeholder="Scan or enter code" class="input" style="flex:1;min-width:180px;">
+            <input type="number" name="quantity" placeholder="Qty" class="input" style="width:80px;">
+            <button type="submit" class="btn btn-outline">Add by Code</button>
+          </div>
+        </form>
 
         {% if cart %}
           <ul>

@@ -118,6 +118,7 @@
         <thead>
           <tr>
             <th>Name</th>
+            <th>Code</th>
             <th>Category</th>
             <th>Cost</th>
             <th>Selling</th>
@@ -131,6 +132,7 @@
         {% for product in products %}
           <tr>
             <td data-label="Name">{{ product.name }}</td>
+            <td data-label="Code">{{ product.code|default:"-" }}</td>
             <td data-label="Category">{{ product.category.name|default:"-" }}</td>
             <td data-label="Cost">₦{{ product.cost_price }}</td>
             <td data-label="Selling">₦{{ product.selling_price }}</td>
@@ -152,6 +154,7 @@
                   onclick="openEditProductModal(this)"
                   data-product-id="{{ product.id }}"
                   data-name="{{ product.name }}"
+                  data-code="{{ product.code }}"
                   data-category-id="{{ product.category_id|default:'' }}"
                   data-cost-price="{{ product.cost_price }}"
                   data-selling-price="{{ product.selling_price }}"
@@ -181,7 +184,7 @@
           </tr>
         {% empty %}
           <tr data-pagination-ignore="true">
-            <td colspan="7">No products found</td>
+            <td colspan="8">No products found</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -218,6 +221,7 @@
       {% csrf_token %}
 
       <input type="text" name="name" placeholder="Product Name" class="input" required>
+      <input type="text" name="code" placeholder="Product Code (Barcode/SKU)" class="input">
 
       <select name="category" class="input">
         <option value="">No category</option>
@@ -265,6 +269,7 @@
       {% csrf_token %}
 
       <input type="text" name="name" id="editProductName" placeholder="Product Name" class="input" required>
+      <input type="text" name="code" id="editProductCode" placeholder="Product Code (Barcode/SKU)" class="input">
 
       <select name="category" id="editProductCategory" class="input">
         <option value="">No category</option>
@@ -377,6 +382,7 @@ function openEditProductModal(button) {
 
     form.action = editUrlTemplate.replace("/0/", "/" + productId + "/");
     document.getElementById('editProductName').value = button.dataset.name || '';
+    document.getElementById('editProductCode').value = button.dataset.code || '';
     document.getElementById('editProductCategory').value = button.dataset.categoryId || '';
     document.getElementById('editProductCostPrice').value = button.dataset.costPrice || '';
     document.getElementById('editProductSellingPrice').value = button.dataset.sellingPrice || '';
@@ -506,3 +512,10 @@ function setupTablePagination(tableId) {
 
 </body>
 </html>
+
+
+
+
+
+
+

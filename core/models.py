@@ -140,6 +140,7 @@ class Product(models.Model):
     category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True)
 
     name = models.CharField(max_length=255)
+    code = models.CharField(max_length=64, blank=True)
 
     image = models.ImageField(
         upload_to='products/',
@@ -164,6 +165,15 @@ class Product(models.Model):
     vat_status = models.CharField(max_length=10, choices=VAT_STATUS_CHOICES, default=VAT_STANDARD)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "code"],
+                condition=~models.Q(code=""),
+                name="unique_product_code_per_user",
+            ),
+        ]
 
     def __str__(self):
         return self.name

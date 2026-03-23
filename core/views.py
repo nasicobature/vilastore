@@ -260,6 +260,57 @@ def add_to_cart(request, product_id):
 
 @login_required
 @require_POST
+def add_to_cart_by_code(request):
+    code = (request.POST.get("code") or "").strip()
+    qty_raw = request.POST.get("quantity")
+
+    if not code:
+        messages.error(request, "Enter a product code.")
+        return redirect('product')
+
+    try:
+        qty = int(qty_raw) if qty_raw not in (None, "") else 1
+    except (TypeError, ValueError):
+        messages.error(request, "Please enter a valid quantity.")
+        return redirect('product')
+
+    if qty <= 0:
+        messages.error(request, "Quantity must be at least 1.")
+        return redirect('product')
+
+    product = Product.objects.filter(user=request.user, code__iexact=code).first()
+    if not product:
+        messages.error(request, f"No product found for code {code}.")
+        return redirect('product')
+
+    if product.stock <= 0:
+        messages.error(request, f"{product.name} is out of stock.")
+        return redirect('product')
+
+    cart = request.session.get('cart', {})
+    product_key = str(product.id)
+
+    current_qty = cart.get(product_key, {}).get('quantity', 0)
+    desired_qty = current_qty + qty
+    if desired_qty > product.stock:
+        desired_qty = product.stock
+        messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+
+    if product_key in cart:
+        cart[product_key]['quantity'] = desired_qty
+    else:
+        cart[product_key] = {
+            'name': product.name,
+            'price': float(product.selling_price),
+            'cost': float(product.cost_price),
+            'quantity': desired_qty
+        }
+
+    request.session['cart'] = cart
+    return redirect('product')
+
+@login_required
+@require_POST
 def update_cart(request, product_id):
     cart = request.session.get('cart', {})
     product_id = str(product_id)
@@ -427,6 +478,7 @@ def inventory(request):
 def add_product(request):
     name = (request.POST.get('name') or '').strip()
     category_id = request.POST.get('category') or None
+    code = (request.POST.get("code") or "").strip()
     vat_status = (request.POST.get("vat_status") or Product.VAT_STANDARD).strip()
 
     try:
@@ -441,6 +493,12 @@ def add_product(request):
     if not name:
         messages.error(request, "Product name is required.")
         return redirect('inventory')
+
+    if code:
+        existing_code = Product.objects.filter(user=request.user, code__iexact=code).exists()
+        if existing_code:
+            messages.error(request, f"A product with code {code} already exists.")
+            return redirect('inventory')
 
     if stock < 0 or low_stock_threshold < 0:
         messages.error(request, "Stock values cannot be negative.")
@@ -463,6 +521,7 @@ def add_product(request):
     Product.objects.create(
         user=request.user,
         name=name,
+        code=code,
         category_id=category_id,
         stock=stock,
         cost_price=cost_price,
@@ -520,6 +579,7 @@ def edit_product(request, pk):
 
     product.name = request.POST.get('name')
     product.category_id = request.POST.get('category') or None
+    code = (request.POST.get("code") or "").strip()
     product.stock = request.POST.get('stock')
     product.cost_price = request.POST.get('cost_price')
     product.selling_price = request.POST.get('selling_price')
@@ -532,6 +592,13 @@ def edit_product(request, pk):
 
     if request.FILES.get('image'):
         product.image = request.FILES.get('image')
+
+    if code:
+        existing_code = Product.objects.filter(user=request.user, code__iexact=code).exclude(id=product.id).exists()
+        if existing_code:
+            messages.error(request, f"A product with code {code} already exists.")
+            return redirect('inventory')
+    product.code = code
 
     product.save()
     messages.success(request, "Product updated.")
@@ -2416,6 +2483,60 @@ def shopboy_add_to_cart(request, product_id):
             "price": float(product.selling_price),
             "cost": float(product.cost_price),
             "quantity": 1,
+        }
+
+    request.session["shopboy_cart"] = cart
+    return redirect("shopboy_dashboard")
+
+@require_POST
+def shopboy_add_to_cart_by_code(request):
+    shopboy = _get_shopboy_session(request)
+    if not shopboy:
+        return redirect("shopboy_login")
+
+    code = (request.POST.get("code") or "").strip()
+    qty_raw = request.POST.get("quantity")
+
+    if not code:
+        messages.error(request, "Enter a product code.")
+        return redirect("shopboy_dashboard")
+
+    try:
+        qty = int(qty_raw) if qty_raw not in (None, "") else 1
+    except (TypeError, ValueError):
+        messages.error(request, "Please enter a valid quantity.")
+        return redirect("shopboy_dashboard")
+
+    if qty <= 0:
+        messages.error(request, "Quantity must be at least 1.")
+        return redirect("shopboy_dashboard")
+
+    product = Product.objects.filter(user=shopboy.user, code__iexact=code).first()
+    if not product:
+        messages.error(request, f"No product found for code {code}.")
+        return redirect("shopboy_dashboard")
+
+    if product.stock <= 0:
+        messages.error(request, f"{product.name} is out of stock.")
+        return redirect("shopboy_dashboard")
+
+    cart = request.session.get("shopboy_cart", {})
+    product_key = str(product.id)
+
+    current_qty = cart.get(product_key, {}).get("quantity", 0)
+    desired_qty = current_qty + qty
+    if desired_qty > product.stock:
+        desired_qty = product.stock
+        messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+
+    if product_key in cart:
+        cart[product_key]["quantity"] = desired_qty
+    else:
+        cart[product_key] = {
+            "name": product.name,
+            "price": float(product.selling_price),
+            "cost": float(product.cost_price),
+            "quantity": desired_qty,
         }
 
     request.session["shopboy_cart"] = cart
