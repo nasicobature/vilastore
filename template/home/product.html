@@ -142,7 +142,13 @@
                     <button type="submit">+</button>
                   </form>
 
-                  <form method="POST" action="{% url 'remove_from_cart' key %}" style="display:inline;">
+                  <form method="POST" action="{% url 'update_cart' key %}" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="set">
+                    <input type="number" name="quantity" value="{{ item.quantity }}" min="0" style="width:70px;">
+                    <button type="submit">Update</button>
+                  </form>
+<form method="POST" action="{% url 'remove_from_cart' key %}" style="display:inline;">
                     {% csrf_token %}
                     <button type="submit">Remove</button>
                   </form>
@@ -179,3 +185,4 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 </body>
 </html>
+

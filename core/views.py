@@ -264,6 +264,7 @@ def update_cart(request, product_id):
     cart = request.session.get('cart', {})
     product_id = str(product_id)
     action = request.POST.get('action')
+    quantity_raw = request.POST.get('quantity')
 
     if product_id in cart:
         product = get_object_or_404(Product, id=product_id, user=request.user)
@@ -277,6 +278,19 @@ def update_cart(request, product_id):
             cart[product_id]['quantity'] -= 1
             if cart[product_id]['quantity'] <= 0:
                 del cart[product_id]
+        elif action == "set":
+            try:
+                quantity = int(quantity_raw)
+            except (TypeError, ValueError):
+                messages.error(request, "Please enter a valid quantity.")
+            else:
+                if quantity <= 0:
+                    del cart[product_id]
+                elif quantity > product.stock:
+                    cart[product_id]['quantity'] = product.stock
+                    messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+                else:
+                    cart[product_id]['quantity'] = quantity
 
     request.session['cart'] = cart
     return redirect('product')
@@ -2417,6 +2431,7 @@ def shopboy_update_cart(request, product_id):
     cart = request.session.get("shopboy_cart", {})
     product_id = str(product_id)
     action = request.POST.get("action")
+    quantity_raw = request.POST.get("quantity")
 
     if product_id in cart:
         product = get_object_or_404(Product, id=product_id, user=shopboy.user)
@@ -2430,6 +2445,19 @@ def shopboy_update_cart(request, product_id):
             cart[product_id]["quantity"] -= 1
             if cart[product_id]["quantity"] <= 0:
                 del cart[product_id]
+        elif action == "set":
+            try:
+                quantity = int(quantity_raw)
+            except (TypeError, ValueError):
+                messages.error(request, "Please enter a valid quantity.")
+            else:
+                if quantity <= 0:
+                    del cart[product_id]
+                elif quantity > product.stock:
+                    cart[product_id]["quantity"] = product.stock
+                    messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+                else:
+                    cart[product_id]["quantity"] = quantity
 
     request.session["shopboy_cart"] = cart
     return redirect("shopboy_dashboard")
