@@ -309,6 +309,30 @@ def add_to_cart_by_code(request):
     request.session['cart'] = cart
     return redirect('product')
 
+def product_lookup_by_code(request):
+    code = (request.GET.get("code") or "").strip()
+    if not code:
+        return JsonResponse({"success": False, "message": "Code is required."}, status=400)
+
+    user = request.user if request.user.is_authenticated else None
+    if not user:
+        shopboy = _get_shopboy_session(request)
+        if shopboy:
+            user = shopboy.user
+    if not user:
+        return JsonResponse({"success": False, "message": "Unauthorized."}, status=403)
+
+    product = Product.objects.filter(user=user, code__iexact=code).first()
+    if not product:
+        return JsonResponse({"success": False, "message": "Product not found."}, status=404)
+
+    return JsonResponse({
+        "success": True,
+        "name": product.name,
+        "stock": product.stock,
+        "price": str(product.selling_price),
+    })
+
 @login_required
 @require_POST
 def update_cart(request, product_id):

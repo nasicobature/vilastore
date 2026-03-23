@@ -117,10 +117,11 @@
         <form method="POST" action="{% url 'shopboy_add_to_cart_by_code' %}" style="margin-bottom:0.75rem;">
           {% csrf_token %}
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-            <input type="text" name="code" placeholder="Scan or enter code" class="input" style="flex:1;min-width:180px;">
+            <input type="text" name="code" id="shopboyCodeInput" placeholder="Scan or enter code" class="input" style="flex:1;min-width:180px;">
             <input type="number" name="quantity" placeholder="Qty" class="input" style="width:80px;">
             <button type="submit" class="btn btn-outline">Add by Code</button>
           </div>
+          <div id="shopboyCodePreview" style="margin-top:0.35rem;font-size:0.85rem;color:var(--muted-foreground);"></div>
         </form>
 
         {% if cart %}
@@ -180,6 +181,49 @@
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       lucide.createIcons();
+
+      const codeInput = document.getElementById('shopboyCodeInput');
+      const preview = document.getElementById('shopboyCodePreview');
+      let lookupTimer;
+
+      function setPreview(text) {
+        if (!preview) return;
+        preview.textContent = text || '';
+      }
+
+      async function lookupByCode(code) {
+        if (!code) {
+          setPreview('');
+          return;
+        }
+        try {
+          const res = await fetch(`{% url 'product_lookup_by_code' %}?code=${encodeURIComponent(code)}`);
+          const data = await res.json();
+          if (!data.success) {
+            setPreview('No product found for this code.');
+            return;
+          }
+          setPreview(`Found: ${data.name} (Stock: ${data.stock})`);
+        } catch (err) {
+          setPreview('Unable to lookup code right now.');
+        }
+      }
+
+      if (codeInput) {
+        codeInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            // Prevent auto-submit on scanner enter; staff will choose qty and click Add.
+            e.preventDefault();
+          }
+        });
+        codeInput.addEventListener('input', function (e) {
+          const code = (e.target.value || '').trim();
+          clearTimeout(lookupTimer);
+          lookupTimer = setTimeout(function () {
+            lookupByCode(code);
+          }, 250);
+        });
+      }
     });
 
     function filterProducts() {
