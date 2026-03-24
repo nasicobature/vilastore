@@ -348,6 +348,21 @@ def generate_product_code(request):
     return JsonResponse({"success": True, "code": code})
 
 @login_required
+def product_labels(request):
+    products = Product.objects.filter(user=request.user).order_by("name")
+    updated = False
+    for product in products:
+        if not product.code:
+            product.code = _generate_product_code(request.user)
+            updated = True
+    if updated:
+        Product.objects.bulk_update(products, ["code"])
+
+    return render(request, "home/product-labels.html", {
+        "products": products,
+    })
+
+@login_required
 @require_POST
 def update_cart(request, product_id):
     cart = request.session.get('cart', {})

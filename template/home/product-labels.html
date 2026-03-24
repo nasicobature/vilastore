@@ -1,0 +1,106 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Product Labels</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <style>
+    .label-toolbar {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .labels-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .label-card {
+      border: 1px dashed #cfcfcf;
+      border-radius: 10px;
+      padding: 0.75rem;
+      background: #fff;
+      text-align: center;
+    }
+    .label-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 0.35rem;
+      color: #111;
+    }
+    .label-code {
+      font-size: 0.75rem;
+      color: #555;
+      margin-top: 0.35rem;
+    }
+    @media print {
+      body {
+        background: #fff;
+      }
+      .label-toolbar {
+        display: none !important;
+      }
+      .labels-grid {
+        gap: 0.5rem;
+      }
+      .label-card {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+</head>
+<body class="has-cart-panel">
+  <div class="app-container">
+    <main class="main-content" style="max-width:1100px;margin:0 auto;">
+      <div class="label-toolbar">
+        <div>
+          <h2 style="margin:0;">Product Labels</h2>
+          <small style="color:var(--muted-foreground);">Codes are auto-generated for products missing a code.</small>
+        </div>
+        <div style="display:flex;gap:0.5rem;">
+          <a href="{% url 'inventory' %}" class="btn btn-outline">Back to Inventory</a>
+          <button type="button" class="btn btn-primary" onclick="window.print()">Print</button>
+        </div>
+      </div>
+
+      <div class="labels-grid">
+        {% for product in products %}
+          <div class="label-card">
+            <div class="label-name">{{ product.name }}</div>
+            <svg class="barcode" data-code="{{ product.code }}" data-name="{{ product.name }}"></svg>
+            <div class="label-code">{{ product.code }}</div>
+          </div>
+        {% empty %}
+          <div class="card" style="padding:1rem;">No products found.</div>
+        {% endfor %}
+      </div>
+    </main>
+  </div>
+
+  <script>
+    document.querySelectorAll('.barcode').forEach(function (el) {
+      const code = el.getAttribute('data-code') || '';
+      if (!code) return;
+      try {
+        JsBarcode(el, code, {
+          format: 'CODE128',
+          lineColor: '#111',
+          width: 2,
+          height: 60,
+          displayValue: false,
+          margin: 0
+        });
+      } catch (err) {
+        // Ignore invalid codes for barcode rendering.
+      }
+    });
+  </script>
+</body>
+</html>
