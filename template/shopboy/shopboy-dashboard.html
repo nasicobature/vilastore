@@ -119,10 +119,23 @@
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             <input type="text" name="code" id="shopboyCodeInput" placeholder="Scan or enter code" class="input" style="flex:1;min-width:180px;">
             <input type="number" name="quantity" placeholder="Qty" class="input" style="width:80px;">
+            <button type="button" class="btn btn-outline" id="shopboyScanBtn">Scan with Camera</button>
             <button type="submit" class="btn btn-outline">Add by Code</button>
           </div>
           <div id="shopboyCodePreview" style="margin-top:0.35rem;font-size:0.85rem;color:var(--muted-foreground);"></div>
         </form>
+        <div id="shopboyScanModal" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:9999;">
+          <div style="background:#fff;border-radius:12px;padding:1rem;max-width:360px;width:90%;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+              <strong>Scan Barcode</strong>
+              <button type="button" class="btn btn-ghost" id="shopboyScanClose">Close</button>
+            </div>
+            <video id="shopboyScanVideo" style="width:100%;border-radius:8px;background:#000;" autoplay playsinline></video>
+            <div style="font-size:0.8rem;color:var(--muted-foreground);margin-top:0.5rem;">
+              Point the camera at the barcode.
+            </div>
+          </div>
+        </div>
 
         {% if cart %}
           <ul>
@@ -184,6 +197,12 @@
 
       const codeInput = document.getElementById('shopboyCodeInput');
       const preview = document.getElementById('shopboyCodePreview');
+      const scanBtn = document.getElementById('shopboyScanBtn');
+      const scanModal = document.getElementById('shopboyScanModal');
+      const scanClose = document.getElementById('shopboyScanClose');
+      const scanVideo = document.getElementById('shopboyScanVideo');
+      let scanStream = null;
+      let scanning = false;
       let lookupTimer;
 
       function setPreview(text) {
@@ -223,6 +242,66 @@
             lookupByCode(code);
           }, 250);
         });
+      }
+
+      async function stopScan() {
+        scanning = false;
+        if (scanStream) {
+          scanStream.getTracks().forEach((t) => t.stop());
+          scanStream = null;
+        }
+        if (scanModal) scanModal.style.display = 'none';
+      }
+
+      async function startScan() {
+        if (!codeInput || !scanVideo) return;
+        if (!('BarcodeDetector' in window)) {
+          alert('Camera barcode scanning is not supported on this device/browser.');
+          return;
+        }
+        try {
+          scanStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+            audio: false
+          });
+          scanVideo.srcObject = scanStream;
+          if (scanModal) scanModal.style.display = 'flex';
+          scanning = true;
+
+          const detector = new BarcodeDetector({
+            formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code']
+          });
+
+          const scanLoop = async () => {
+            if (!scanning) return;
+            try {
+              const barcodes = await detector.detect(scanVideo);
+              if (barcodes && barcodes.length > 0) {
+                const code = barcodes[0].rawValue || '';
+                if (code) {
+                  codeInput.value = code;
+                  codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                  await stopScan();
+                  return;
+                }
+              }
+            } catch (err) {
+              // Ignore detection errors and keep scanning.
+            }
+            requestAnimationFrame(scanLoop);
+          };
+          requestAnimationFrame(scanLoop);
+        } catch (err) {
+          alert('Unable to access camera. Please allow camera permission.');
+          await stopScan();
+        }
+      }
+
+      if (scanBtn) {
+        scanBtn.addEventListener('click', startScan);
+      }
+      if (scanClose) {
+        scanClose.addEventListener('click', stopScan);
       }
     });
 
