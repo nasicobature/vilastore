@@ -97,28 +97,6 @@ document.addEventListener('DOMContentLoaded', function () {
     selectedTotalEl.textContent = formatCurrency(total);
   }
 
-  document.querySelectorAll('.qty-btn').forEach((btn) => {
-    btn.addEventListener('click', function () {
-      const productId = btn.getAttribute('data-product-id');
-      const action = btn.getAttribute('data-action');
-      const input = document.getElementById(`qty_${productId}`);
-      if (!input || input.disabled) return;
-
-      const max = Number(input.max || 0);
-      let val = Number(input.value || 0);
-      if (Number.isNaN(val)) val = 0;
-
-      if (action === 'increase') {
-        val = Math.min(val + 1, max);
-      } else {
-        val = Math.max(val - 1, 0);
-      }
-
-      input.value = String(val);
-      updateSummary();
-    });
-  });
-
   document.querySelectorAll('.qty-input').forEach((input) => {
     input.addEventListener('input', updateSummary);
     input.addEventListener('change', updateSummary);
@@ -134,8 +112,10 @@ document.addEventListener('DOMContentLoaded', function () {
       let val = Number(input.value || 0);
       if (Number.isNaN(val)) val = 0;
 
-      // Only bump up from zero; don't wipe out a user-entered quantity.
-      if (val <= 0 && max > 0) {
+      // Toggle between 0 and 1 (quantity selection hidden from buyers).
+      if (val > 0) {
+        input.value = '0';
+      } else if (max > 0) {
         input.value = '1';
       }
 
