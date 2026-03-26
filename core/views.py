@@ -381,7 +381,7 @@ def product_labels(request):
 def update_cart(request, product_id):
     cart = request.session.get('cart', {})
     product_id = str(product_id)
-    action = request.POST.get('action')
+    action = request.POST.get('action') or ""
     quantity_raw = request.POST.get('quantity')
 
     if product_id in cart:
@@ -396,7 +396,7 @@ def update_cart(request, product_id):
             cart[product_id]['quantity'] -= 1
             if cart[product_id]['quantity'] <= 0:
                 del cart[product_id]
-        elif action == "set":
+        elif action == "set" or (action not in ("increase", "decrease") and quantity_raw not in (None, "")):
             try:
                 quantity = int(quantity_raw)
             except (TypeError, ValueError):
@@ -2632,7 +2632,7 @@ def shopboy_update_cart(request, product_id):
 
     cart = request.session.get("shopboy_cart", {})
     product_id = str(product_id)
-    action = request.POST.get("action")
+    action = request.POST.get("action") or ""
     quantity_raw = request.POST.get("quantity")
 
     if product_id in cart:
@@ -2647,7 +2647,7 @@ def shopboy_update_cart(request, product_id):
             cart[product_id]["quantity"] -= 1
             if cart[product_id]["quantity"] <= 0:
                 del cart[product_id]
-        elif action == "set":
+        elif action == "set" or (action not in ("increase", "decrease") and quantity_raw not in (None, "")):
             try:
                 quantity = int(quantity_raw)
             except (TypeError, ValueError):
