@@ -103,9 +103,12 @@
                   <small>{{ product.stock }} in stock</small>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-full">
-                  Add to Cart
-                </button>
+                <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;">
+                  <input type="number" name="quantity" min="1" max="{{ product.stock }}" value="1" class="input" style="width:80px;" {% if product.stock <= 0 %}disabled{% endif %}>
+                  <button type="submit" class="btn btn-primary btn-full" {% if product.stock <= 0 %}disabled{% endif %}>
+                    Add to Cart
+                  </button>
+                </div>
               </form>
 
             </div>

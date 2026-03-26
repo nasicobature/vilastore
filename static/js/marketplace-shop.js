@@ -134,9 +134,8 @@ document.addEventListener('DOMContentLoaded', function () {
       let val = Number(input.value || 0);
       if (Number.isNaN(val)) val = 0;
 
-      if (val > 0) {
-        input.value = '0';
-      } else if (max > 0) {
+      // Only bump up from zero; don't wipe out a user-entered quantity.
+      if (val <= 0 && max > 0) {
         input.value = '1';
       }
 

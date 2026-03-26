@@ -241,6 +241,7 @@ def product(request):
 @require_POST
 def add_to_cart(request, product_id):
     product = get_object_or_404(Product, id=product_id, user=request.user)
+    qty_raw = request.POST.get("quantity")
 
     cart = request.session.get('cart', {})
     product_key = str(product_id)
@@ -249,17 +250,30 @@ def add_to_cart(request, product_id):
         messages.error(request, f"{product.name} is out of stock.")
         return redirect('product')
 
+    try:
+        qty = int(qty_raw) if qty_raw not in (None, "") else 1
+    except (TypeError, ValueError):
+        messages.error(request, "Please enter a valid quantity.")
+        return redirect('product')
+
+    if qty <= 0:
+        messages.error(request, "Quantity must be at least 1.")
+        return redirect('product')
+
+    current_qty = cart.get(product_key, {}).get('quantity', 0)
+    desired_qty = current_qty + qty
+    if desired_qty > product.stock:
+        desired_qty = product.stock
+        messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+
     if product_key in cart:
-        if cart[product_key]['quantity'] < product.stock:
-            cart[product_key]['quantity'] += 1
-        else:
-            messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+        cart[product_key]['quantity'] = desired_qty
     else:
         cart[product_key] = {
             'name': product.name,
             'price': float(product.selling_price),
             'cost': float(product.cost_price),
-            'quantity': 1
+            'quantity': desired_qty
         }
 
     request.session['cart'] = cart
@@ -2518,6 +2532,7 @@ def shopboy_add_to_cart(request, product_id):
         return redirect("shopboy_login")
 
     product = get_object_or_404(Product, id=product_id, user=shopboy.user)
+    qty_raw = request.POST.get("quantity")
     cart = request.session.get("shopboy_cart", {})
     product_key = str(product_id)
 
@@ -2525,17 +2540,30 @@ def shopboy_add_to_cart(request, product_id):
         messages.error(request, f"{product.name} is out of stock.")
         return redirect("shopboy_dashboard")
 
+    try:
+        qty = int(qty_raw) if qty_raw not in (None, "") else 1
+    except (TypeError, ValueError):
+        messages.error(request, "Please enter a valid quantity.")
+        return redirect("shopboy_dashboard")
+
+    if qty <= 0:
+        messages.error(request, "Quantity must be at least 1.")
+        return redirect("shopboy_dashboard")
+
+    current_qty = cart.get(product_key, {}).get("quantity", 0)
+    desired_qty = current_qty + qty
+    if desired_qty > product.stock:
+        desired_qty = product.stock
+        messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+
     if product_key in cart:
-        if cart[product_key]["quantity"] < product.stock:
-            cart[product_key]["quantity"] += 1
-        else:
-            messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+        cart[product_key]["quantity"] = desired_qty
     else:
         cart[product_key] = {
             "name": product.name,
             "price": float(product.selling_price),
             "cost": float(product.cost_price),
-            "quantity": 1,
+            "quantity": desired_qty,
         }
 
     request.session["shopboy_cart"] = cart
