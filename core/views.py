@@ -3385,7 +3385,7 @@ def marketplace(request):
             Q(user__business_name__icontains=q) |
             Q(user__username__icontains=username_q) |
             Q(description__icontains=q) |
-            Q(user__product__name__icontains=q)
+            Q(user__product_set__name__icontains=q)
         ).distinct()
     if category:
         profiles = profiles.filter(category__iexact=category)
