@@ -151,7 +151,7 @@ class Product(models.Model):
     cost_price = models.DecimalField(max_digits=12, decimal_places=2)
     selling_price = models.DecimalField(max_digits=12, decimal_places=2)
 
-    stock = models.PositiveIntegerField(default=0)
+    stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     low_stock_threshold = models.PositiveIntegerField(default=5)
 
     VAT_STANDARD = "standard"
@@ -264,7 +264,7 @@ class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
 
-    quantity = models.IntegerField()
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     profit = models.DecimalField(max_digits=10, decimal_places=2)
     vat_status = models.CharField(max_length=10, choices=Product.VAT_STATUS_CHOICES, default=Product.VAT_STANDARD)

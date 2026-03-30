@@ -57,6 +57,57 @@ logger = logging.getLogger(__name__)
 VAT_RATE = Decimal("0.075")
 VAT_SMALL_TURNOVER_THRESHOLD = Decimal("50000000")
 VAT_SMALL_FIXED_ASSETS_THRESHOLD = Decimal("250000000")
+QUANTITY_STEP = Decimal("0.01")
+
+
+def _normalize_decimal(value, *, max_decimal_places=2):
+    qty = Decimal(str(value))
+    if qty.as_tuple().exponent < -max_decimal_places:
+        raise ValueError("Too many decimal places.")
+    return qty.quantize(Decimal("0.01"))
+
+
+def _parse_quantity(raw, default=None):
+    if raw in (None, ""):
+        if default is None:
+            raise ValueError("Quantity is required.")
+        raw = default
+    qty = _normalize_decimal(raw)
+    if qty <= 0:
+        raise ValueError("Quantity must be greater than zero.")
+    return qty
+
+
+def _parse_quantity_allow_zero(raw):
+    if raw in (None, ""):
+        raise ValueError("Quantity is required.")
+    return _normalize_decimal(raw)
+
+
+def _parse_stock(raw, default=None):
+    if raw in (None, ""):
+        if default is None:
+            raise ValueError("Stock is required.")
+        raw = default
+    qty = _normalize_decimal(raw)
+    if qty < 0:
+        raise ValueError("Stock cannot be negative.")
+    return qty
+
+
+def _format_quantity(qty):
+    qty = _normalize_decimal(qty)
+    text = format(qty.normalize(), "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _cart_quantity(item):
+    try:
+        return _normalize_decimal(item.get("quantity", "0"))
+    except Exception:
+        return Decimal("0.00")
 
 def _generate_product_code(user, length=12):
     for _ in range(20):
@@ -223,7 +274,7 @@ def product(request):
             request.session.pop('last_sale_id', None)
 
     total = sum(
-        (Decimal(str(item['price'])) * item['quantity'] for item in cart.values()),
+        (Decimal(str(item['price'])) * _cart_quantity(item) for item in cart.values()),
         Decimal("0.00"),
     )
 
@@ -251,29 +302,25 @@ def add_to_cart(request, product_id):
         return redirect('product')
 
     try:
-        qty = int(qty_raw) if qty_raw not in (None, "") else 1
+        qty = _parse_quantity(qty_raw, default=Decimal("1"))
     except (TypeError, ValueError):
-        messages.error(request, "Please enter a valid quantity.")
+        messages.error(request, "Please enter a valid quantity (e.g., 1 or 1.5).")
         return redirect('product')
 
-    if qty <= 0:
-        messages.error(request, "Quantity must be at least 1.")
-        return redirect('product')
-
-    current_qty = cart.get(product_key, {}).get('quantity', 0)
+    current_qty = _cart_quantity(cart.get(product_key, {}))
     desired_qty = current_qty + qty
     if desired_qty > product.stock:
         desired_qty = product.stock
         messages.warning(request, f"Only {product.stock} units available for {product.name}.")
 
     if product_key in cart:
-        cart[product_key]['quantity'] = desired_qty
+        cart[product_key]['quantity'] = _format_quantity(desired_qty)
     else:
         cart[product_key] = {
             'name': product.name,
             'price': float(product.selling_price),
             'cost': float(product.cost_price),
-            'quantity': desired_qty
+            'quantity': _format_quantity(desired_qty)
         }
 
     request.session['cart'] = cart
@@ -290,13 +337,9 @@ def add_to_cart_by_code(request):
         return redirect('product')
 
     try:
-        qty = int(qty_raw) if qty_raw not in (None, "") else 1
+        qty = _parse_quantity(qty_raw, default=Decimal("1"))
     except (TypeError, ValueError):
-        messages.error(request, "Please enter a valid quantity.")
-        return redirect('product')
-
-    if qty <= 0:
-        messages.error(request, "Quantity must be at least 1.")
+        messages.error(request, "Please enter a valid quantity (e.g., 1 or 1.5).")
         return redirect('product')
 
     product = Product.objects.filter(user=request.user, code__iexact=code).first()
@@ -311,20 +354,20 @@ def add_to_cart_by_code(request):
     cart = request.session.get('cart', {})
     product_key = str(product.id)
 
-    current_qty = cart.get(product_key, {}).get('quantity', 0)
+    current_qty = _cart_quantity(cart.get(product_key, {}))
     desired_qty = current_qty + qty
     if desired_qty > product.stock:
         desired_qty = product.stock
         messages.warning(request, f"Only {product.stock} units available for {product.name}.")
 
     if product_key in cart:
-        cart[product_key]['quantity'] = desired_qty
+        cart[product_key]['quantity'] = _format_quantity(desired_qty)
     else:
         cart[product_key] = {
             'name': product.name,
             'price': float(product.selling_price),
             'cost': float(product.cost_price),
-            'quantity': desired_qty
+            'quantity': _format_quantity(desired_qty)
         }
 
     request.session['cart'] = cart
@@ -388,27 +431,32 @@ def update_cart(request, product_id):
         product = get_object_or_404(Product, id=product_id, user=request.user)
 
         if action == "increase":
-            if cart[product_id]['quantity'] < product.stock:
-                cart[product_id]['quantity'] += 1
+            current_qty = _cart_quantity(cart[product_id])
+            desired_qty = current_qty + Decimal("1")
+            if desired_qty <= product.stock:
+                cart[product_id]["quantity"] = _format_quantity(desired_qty)
             else:
                 messages.warning(request, f"Cannot add more than available stock ({product.stock}).")
         elif action == "decrease":
-            cart[product_id]['quantity'] -= 1
-            if cart[product_id]['quantity'] <= 0:
+            current_qty = _cart_quantity(cart[product_id])
+            desired_qty = current_qty - Decimal("1")
+            if desired_qty <= 0:
                 del cart[product_id]
+            else:
+                cart[product_id]["quantity"] = _format_quantity(desired_qty)
         elif action == "set" or (action not in ("increase", "decrease") and quantity_raw not in (None, "")):
             try:
-                quantity = int(quantity_raw)
+                quantity = _parse_quantity_allow_zero(quantity_raw)
             except (TypeError, ValueError):
-                messages.error(request, "Please enter a valid quantity.")
+                messages.error(request, "Please enter a valid quantity (e.g., 1 or 1.5).")
             else:
                 if quantity <= 0:
                     del cart[product_id]
                 elif quantity > product.stock:
-                    cart[product_id]['quantity'] = product.stock
+                    cart[product_id]["quantity"] = _format_quantity(product.stock)
                     messages.warning(request, f"Only {product.stock} units available for {product.name}.")
                 else:
-                    cart[product_id]['quantity'] = quantity
+                    cart[product_id]["quantity"] = _format_quantity(quantity)
 
     request.session['cart'] = cart
     return redirect('product')
@@ -446,7 +494,7 @@ def checkout(request):
                 messages.error(request, "A cart item no longer exists.")
                 return redirect('product')
 
-            quantity = int(item['quantity'])
+            quantity = _cart_quantity(item)
             if quantity <= 0:
                 continue
 
@@ -549,7 +597,7 @@ def add_product(request):
     vat_status = (request.POST.get("vat_status") or Product.VAT_STANDARD).strip()
 
     try:
-        stock = int(request.POST.get('stock', 0))
+        stock = _parse_stock(request.POST.get('stock', 0))
         low_stock_threshold = int(request.POST.get('low_stock_threshold', 5))
         cost_price = Decimal(request.POST.get('cost_price'))
         selling_price = Decimal(request.POST.get('selling_price'))
@@ -625,8 +673,8 @@ def add_category(request):
 def adjust_stock(request, pk):
     product = get_object_or_404(Product, pk=pk, user=request.user)
 
-    adjustment = int(request.POST.get('adjustment', 0))
-    product.stock = max(0, product.stock + adjustment)
+    adjustment = Decimal(str(request.POST.get('adjustment', 0)))
+    product.stock = max(Decimal("0.00"), product.stock + adjustment)
     product.save(update_fields=['stock'])
 
     return redirect('inventory')
@@ -647,10 +695,14 @@ def edit_product(request, pk):
     product.name = request.POST.get('name')
     product.category_id = request.POST.get('category') or None
     code = (request.POST.get("code") or "").strip()
-    product.stock = request.POST.get('stock')
-    product.cost_price = request.POST.get('cost_price')
-    product.selling_price = request.POST.get('selling_price')
-    product.low_stock_threshold = request.POST.get('low_stock_threshold')
+    try:
+        product.stock = _parse_stock(request.POST.get('stock'))
+        product.cost_price = Decimal(request.POST.get('cost_price'))
+        product.selling_price = Decimal(request.POST.get('selling_price'))
+        product.low_stock_threshold = int(request.POST.get('low_stock_threshold') or 0)
+    except Exception:
+        messages.error(request, "Invalid product values.")
+        return redirect('inventory')
     vat_status = (request.POST.get("vat_status") or "").strip()
     if vat_status:
         valid_vat_status = {choice[0] for choice in Product.VAT_STATUS_CHOICES}
@@ -2502,7 +2554,7 @@ def shopboy_dashboard(request):
     categories = Category.objects.filter(user=shopboy.user).order_by("name")
     cart = request.session.get("shopboy_cart", {})
     total = sum(
-        (Decimal(str(item["price"])) * item["quantity"] for item in cart.values()),
+        (Decimal(str(item["price"])) * _cart_quantity(item) for item in cart.values()),
         Decimal("0.00"),
     )
 
@@ -2541,29 +2593,25 @@ def shopboy_add_to_cart(request, product_id):
         return redirect("shopboy_dashboard")
 
     try:
-        qty = int(qty_raw) if qty_raw not in (None, "") else 1
+        qty = _parse_quantity(qty_raw, default=Decimal("1"))
     except (TypeError, ValueError):
-        messages.error(request, "Please enter a valid quantity.")
+        messages.error(request, "Please enter a valid quantity (e.g., 1 or 1.5).")
         return redirect("shopboy_dashboard")
 
-    if qty <= 0:
-        messages.error(request, "Quantity must be at least 1.")
-        return redirect("shopboy_dashboard")
-
-    current_qty = cart.get(product_key, {}).get("quantity", 0)
+    current_qty = _cart_quantity(cart.get(product_key, {}))
     desired_qty = current_qty + qty
     if desired_qty > product.stock:
         desired_qty = product.stock
         messages.warning(request, f"Only {product.stock} units available for {product.name}.")
 
     if product_key in cart:
-        cart[product_key]["quantity"] = desired_qty
+        cart[product_key]["quantity"] = _format_quantity(desired_qty)
     else:
         cart[product_key] = {
             "name": product.name,
             "price": float(product.selling_price),
             "cost": float(product.cost_price),
-            "quantity": desired_qty,
+            "quantity": _format_quantity(desired_qty),
         }
 
     request.session["shopboy_cart"] = cart
@@ -2583,13 +2631,9 @@ def shopboy_add_to_cart_by_code(request):
         return redirect("shopboy_dashboard")
 
     try:
-        qty = int(qty_raw) if qty_raw not in (None, "") else 1
+        qty = _parse_quantity(qty_raw, default=Decimal("1"))
     except (TypeError, ValueError):
-        messages.error(request, "Please enter a valid quantity.")
-        return redirect("shopboy_dashboard")
-
-    if qty <= 0:
-        messages.error(request, "Quantity must be at least 1.")
+        messages.error(request, "Please enter a valid quantity (e.g., 1 or 1.5).")
         return redirect("shopboy_dashboard")
 
     product = Product.objects.filter(user=shopboy.user, code__iexact=code).first()
@@ -2604,20 +2648,20 @@ def shopboy_add_to_cart_by_code(request):
     cart = request.session.get("shopboy_cart", {})
     product_key = str(product.id)
 
-    current_qty = cart.get(product_key, {}).get("quantity", 0)
+    current_qty = _cart_quantity(cart.get(product_key, {}))
     desired_qty = current_qty + qty
     if desired_qty > product.stock:
         desired_qty = product.stock
         messages.warning(request, f"Only {product.stock} units available for {product.name}.")
 
     if product_key in cart:
-        cart[product_key]["quantity"] = desired_qty
+        cart[product_key]["quantity"] = _format_quantity(desired_qty)
     else:
         cart[product_key] = {
             "name": product.name,
             "price": float(product.selling_price),
             "cost": float(product.cost_price),
-            "quantity": desired_qty,
+            "quantity": _format_quantity(desired_qty),
         }
 
     request.session["shopboy_cart"] = cart
@@ -2639,27 +2683,32 @@ def shopboy_update_cart(request, product_id):
         product = get_object_or_404(Product, id=product_id, user=shopboy.user)
 
         if action == "increase":
-            if cart[product_id]["quantity"] < product.stock:
-                cart[product_id]["quantity"] += 1
+            current_qty = _cart_quantity(cart[product_id])
+            desired_qty = current_qty + Decimal("1")
+            if desired_qty <= product.stock:
+                cart[product_id]["quantity"] = _format_quantity(desired_qty)
             else:
                 messages.warning(request, f"Cannot add more than available stock ({product.stock}).")
         elif action == "decrease":
-            cart[product_id]["quantity"] -= 1
-            if cart[product_id]["quantity"] <= 0:
+            current_qty = _cart_quantity(cart[product_id])
+            desired_qty = current_qty - Decimal("1")
+            if desired_qty <= 0:
                 del cart[product_id]
+            else:
+                cart[product_id]["quantity"] = _format_quantity(desired_qty)
         elif action == "set" or (action not in ("increase", "decrease") and quantity_raw not in (None, "")):
             try:
-                quantity = int(quantity_raw)
+                quantity = _parse_quantity_allow_zero(quantity_raw)
             except (TypeError, ValueError):
-                messages.error(request, "Please enter a valid quantity.")
+                messages.error(request, "Please enter a valid quantity (e.g., 1 or 1.5).")
             else:
                 if quantity <= 0:
                     del cart[product_id]
                 elif quantity > product.stock:
-                    cart[product_id]["quantity"] = product.stock
+                    cart[product_id]["quantity"] = _format_quantity(product.stock)
                     messages.warning(request, f"Only {product.stock} units available for {product.name}.")
                 else:
-                    cart[product_id]["quantity"] = quantity
+                    cart[product_id]["quantity"] = _format_quantity(quantity)
 
     request.session["shopboy_cart"] = cart
     return redirect("shopboy_dashboard")
@@ -2704,7 +2753,7 @@ def shopboy_checkout(request):
                 messages.error(request, "A cart item no longer exists.")
                 return redirect("shopboy_dashboard")
 
-            quantity = int(item["quantity"])
+            quantity = _cart_quantity(item)
             if quantity <= 0:
                 continue
 
@@ -2764,13 +2813,9 @@ def shopboy_sell_product(request, product_id):
     shopboy = get_object_or_404(ShopBoy.objects.select_related("user"), id=shopboy_id, is_active=True)
 
     try:
-        qty = int(request.POST.get("quantity", 1))
-    except ValueError:
+        qty = _parse_quantity(request.POST.get("quantity", 1), default=Decimal("1"))
+    except (TypeError, ValueError):
         messages.error(request, "Invalid quantity.")
-        return redirect("shopboy_dashboard")
-
-    if qty <= 0:
-        messages.error(request, "Quantity must be at least 1.")
         return redirect("shopboy_dashboard")
 
     with transaction.atomic():
@@ -2814,7 +2859,7 @@ def shopboy_sell_product(request, product_id):
         product.save(update_fields=["stock"])
 
     request.session["shopboy_last_sale_id"] = sale.id
-    messages.success(request, f"Sold {qty} x {product.name}.")
+    messages.success(request, f"Sold {_format_quantity(qty)} x {product.name}.")
     return redirect("shopboy_dashboard")
 
 

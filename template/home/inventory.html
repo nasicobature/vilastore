@@ -245,7 +245,7 @@
         <option value="exempt">VAT: Exempt</option>
       </select>
       <small style="color:var(--muted-foreground);">Use VAT schedules for exempt or zero-rated goods.</small>
-      <input type="number" name="stock" placeholder="Stock" class="input" required>
+      <input type="number" name="stock" min="0" step="0.01" placeholder="Stock" class="input" required>
       <input type="number" name="low_stock_threshold" value="5" class="input">
 
       <input type="file" name="image" class="input">
@@ -296,7 +296,7 @@
         <option value="exempt">VAT: Exempt</option>
       </select>
       <small style="color:var(--muted-foreground);">Use VAT schedules for exempt or zero-rated goods.</small>
-      <input type="number" name="stock" id="editProductStock" placeholder="Stock" class="input" required>
+      <input type="number" name="stock" id="editProductStock" min="0" step="0.01" placeholder="Stock" class="input" required>
       <input type="number" name="low_stock_threshold" id="editProductLowStockThreshold" class="input">
 
       <div style="display:flex; gap:12px; align-items:center;">

@@ -171,7 +171,7 @@ def _serialize_shop_profile(request, profile):
         "location": profile.location,
         "is_verified": profile.is_verified,
         "rating": float(profile.rating) if profile.rating is not None else 0,
-        "sales_count": int(sales_count or 0),
+        "sales_count": float(sales_count or 0),
         "logo_url": logo_url,
         "cover_url": cover_url,
         "products_preview": products_preview,
