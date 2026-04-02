@@ -165,6 +165,8 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 WHITENOISE_USE_FINDERS = True
 AUTH_USER_MODEL = 'core.User'
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/index/"
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.getenv("MEDIA_ROOT", os.path.join(BASE_DIR, 'media'))
 SERVE_MEDIA = env_bool("SERVE_MEDIA", default=True)
