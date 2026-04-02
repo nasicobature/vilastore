@@ -1389,9 +1389,9 @@ def _username_is_valid(username):
     return bool(re.fullmatch(r"[A-Za-z0-9._-]{3,30}", username or ""))
 
 
-TRIAL_DAYS = 30
+TRIAL_DAYS = 14
 BASE_FEE = 6000
-MONTHLY_SUBSCRIPTION_FEE = 1000
+MONTHLY_SUBSCRIPTION_FEE = 2000
 
 
 def _plan_pricing():
