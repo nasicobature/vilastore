@@ -84,6 +84,16 @@
         </button>
       </div>
     </header>
+
+    <form method="GET" action="{% url 'inventory' %}" style="margin-bottom:1rem;">
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+        <input type="text" name="q" class="input" placeholder="Search products by name, code, or category" value="{{ search_query }}" style="flex:1;min-width:220px;">
+        <button type="submit" class="btn btn-outline">Search</button>
+        {% if search_query %}
+          <a href="{% url 'inventory' %}" class="btn btn-ghost">Clear</a>
+        {% endif %}
+      </div>
+    </form>
     {% if messages %}
     <section style="margin-bottom: 1rem;">
       {% for message in messages %}

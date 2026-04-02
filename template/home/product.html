@@ -67,11 +67,24 @@
       <!-- PRODUCTS SECTION -->
       <div class="products-section">
 
+        <form method="GET" action="{% url 'product' %}" style="margin-bottom:1rem;">
+          {% if selected_category %}
+            <input type="hidden" name="category" value="{{ selected_category }}">
+          {% endif %}
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <input type="text" name="q" class="input" placeholder="Search products by name, code, or category" value="{{ search_query }}" style="flex:1;min-width:220px;">
+            <button type="submit" class="btn btn-outline">Search</button>
+            {% if search_query %}
+              <a href="{% url 'product' %}{% if selected_category %}?category={{ selected_category }}{% endif %}" class="btn btn-ghost">Clear</a>
+            {% endif %}
+          </div>
+        </form>
+
         <div class="filters-section" style="margin-bottom:1rem;">
           <div class="filter-list">
             <a href="{% url 'product' %}" class="filter-btn {% if not selected_category %}active{% endif %}">All</a>
             {% for category in categories %}
-              <a href="{% url 'product' %}?category={{ category.id }}" class="filter-btn {% if selected_category == category.id|stringformat:'s' %}active{% endif %}">
+              <a href="{% url 'product' %}?category={{ category.id }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="filter-btn {% if selected_category == category.id|stringformat:'s' %}active{% endif %}">
                 {{ category.name }}
               </a>
             {% endfor %}

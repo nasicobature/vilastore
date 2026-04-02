@@ -260,9 +260,16 @@ def index(request):
 @login_required
 def product(request):
     category_id = (request.GET.get("category") or "").strip()
+    search_query = (request.GET.get("q") or "").strip()
     products = Product.objects.filter(user=request.user)
     if category_id:
         products = products.filter(category_id=category_id)
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(code__icontains=search_query) |
+            Q(category__name__icontains=search_query)
+        )
 
     categories = Category.objects.filter(user=request.user).order_by("name")
     cart = request.session.get('cart', {})
@@ -284,6 +291,7 @@ def product(request):
         'cart_total': total.quantize(Decimal("0.01")),
         'categories': categories,
         'selected_category': category_id,
+        'search_query': search_query,
         'last_sale': last_sale,
         'can_edit_price': _can_edit_cart_price(request.user),
     })
@@ -590,8 +598,15 @@ def checkout(request):
 
 @login_required
 def inventory(request):
+    search_query = (request.GET.get("q") or "").strip()
     products = Product.objects.filter(user=request.user)
     categories = Category.objects.filter(user=request.user)
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(code__icontains=search_query) |
+            Q(category__name__icontains=search_query)
+        )
 
     total_products = products.count()
     total_value = sum(p.selling_price * p.stock for p in products)
@@ -605,6 +620,7 @@ def inventory(request):
         'total_value': total_value,
         'low_stock': low_stock,
         'out_of_stock': out_of_stock,
+        'search_query': search_query,
     }
 
     return render(request, 'home/inventory.html', context)
