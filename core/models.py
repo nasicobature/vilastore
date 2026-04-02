@@ -115,7 +115,7 @@ class User(AbstractUser):
     
     
     subscription_active_until = models.DateField(null=True, blank=True)
-    monthly_fee = models.DecimalField(default=2000, max_digits=10, decimal_places=2)
+    monthly_fee = models.DecimalField(default=1000, max_digits=10, decimal_places=2)
 
     def __str__(self):
         return self.username
