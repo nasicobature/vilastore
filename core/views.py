@@ -285,7 +285,13 @@ def product(request):
         'categories': categories,
         'selected_category': category_id,
         'last_sale': last_sale,
+        'can_edit_price': _can_edit_cart_price(request.user),
     })
+
+
+def _can_edit_cart_price(user):
+    # Only allow price overrides for admin/owner users (not shopboy sessions).
+    return user.is_authenticated
 
 
 @login_required
@@ -426,11 +432,26 @@ def update_cart(request, product_id):
     product_id = str(product_id)
     action = request.POST.get('action') or ""
     quantity_raw = request.POST.get('quantity')
+    price_raw = request.POST.get("price")
 
     if product_id in cart:
         product = get_object_or_404(Product, id=product_id, user=request.user)
 
-        if action == "increase":
+        if action == "price":
+            if not _can_edit_cart_price(request.user):
+                messages.error(request, "You do not have permission to edit prices.")
+            else:
+                try:
+                    price = Decimal(price_raw)
+                except (TypeError, ValueError):
+                    messages.error(request, "Please enter a valid price.")
+                else:
+                    if price < 0:
+                        messages.error(request, "Price cannot be negative.")
+                    else:
+                        cart[product_id]["price"] = float(price.quantize(Decimal("0.01")))
+                        messages.success(request, f"Updated price for {product.name}.")
+        elif action == "increase":
             current_qty = _cart_quantity(cart[product_id])
             desired_qty = current_qty + Decimal("1")
             if desired_qty <= product.stock:
