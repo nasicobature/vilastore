@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from datetime import timedelta
-from django.http import JsonResponse, HttpResponseForbidden
+from django.http import JsonResponse, HttpResponseForbidden, HttpResponse
 from .models import (
     User,
     Sale,
@@ -179,6 +179,10 @@ def _get_agent_by_code(raw_code):
 
 def home(request):
     return render(request, 'home/home.html')
+
+
+def healthz(request):
+    return HttpResponse("ok")
 
 
 def not_found(request, exception):
