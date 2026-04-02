@@ -2,6 +2,7 @@
 set -o errexit
 
 mkdir -p "${MEDIA_ROOT:-media}"
+mkdir -p "${STATIC_ROOT:-staticfiles}"
 pip install -r requirements.txt
 python manage.py collectstatic --no-input
 python manage.py check_static_assets
