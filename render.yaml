@@ -3,25 +3,26 @@ services:
     name: vilastore
     runtime: python
     buildCommand: bash build.sh
-    startCommand: python -m gunicorn VilaStore.wsgi:application
+    startCommand: gunicorn VilaStore.wsgi:application --bind 0.0.0.0:$PORT
+    healthCheckPath: /login/
     envVars:
-    disk:
-      name: vilastore-media
-      mountPath: /var/data
-      sizeGB: 1
       - key: PYTHON_VERSION
         value: 3.13.2
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
-        value: false
+        value: "false"
       - key: DATABASE_URL
         fromDatabase:
           name: vilastore-db
           property: connectionString
       - key: ALLOWED_HOSTS
-        value: vilastore.onrender.com
+        value: vilastore.onrender.com,vilastore.store,www.vilastore.store
       - key: MEDIA_ROOT
         value: /var/data/media
+    disk:
+      name: vilastore-media
+      mountPath: /var/data
+      sizeGB: 1
 databases:
   - name: vilastore-db
