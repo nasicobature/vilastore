@@ -172,9 +172,23 @@ MEDIA_ROOT = os.getenv("MEDIA_ROOT", os.path.join(BASE_DIR, 'media'))
 SERVE_MEDIA = env_bool("SERVE_MEDIA", default=True)
 
 # CORS (for Expo web / mobile dev)
-if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
-    CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", default=DEBUG)
+CORS_ALLOW_CREDENTIALS = env_bool("CORS_ALLOW_CREDENTIALS", default=DEBUG)
+
+if not CORS_ALLOW_ALL_ORIGINS:
+    CORS_ALLOWED_ORIGINS = [
+        "https://vilastore.store",
+        "https://www.vilastore.store",
+        "https://vilastore.onrender.com",
+        "http://localhost:19006",
+        "http://127.0.0.1:19006",
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
+    ]
+    env_origins = [origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
+    for origin in env_origins:
+        if origin not in CORS_ALLOWED_ORIGINS:
+            CORS_ALLOWED_ORIGINS.append(origin)
 
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
 default_csrf_origins = [
