@@ -428,6 +428,16 @@ class ShopboyCart(models.Model):
         return f"ShopboyCart ({self.token_id})"
 
 
+class OwnerCart(models.Model):
+    token = models.OneToOneField(AuthToken, on_delete=models.CASCADE, related_name="owner_cart")
+    data = models.JSONField(default=dict, blank=True)
+    last_sale_id = models.IntegerField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"OwnerCart ({self.token_id})"
+
+
 class MarketplaceOrder(models.Model):
     STATUS_PENDING = "pending"
     STATUS_CONFIRMED = "confirmed"

@@ -28,6 +28,7 @@ from .models import (
     SaleItem,
     ShopBoy,
     ShopboyCart,
+    OwnerCart,
     User,
 )
 from .views import (
@@ -269,6 +270,44 @@ def _get_shopboy_cart(token_obj):
     if not isinstance(cart.data, dict):
         cart.data = {}
     return cart
+
+
+def _get_owner_cart(token_obj):
+    cart, _ = OwnerCart.objects.get_or_create(token=token_obj)
+    if not isinstance(cart.data, dict):
+        cart.data = {}
+    return cart
+
+
+def _serialize_owner_cart(request, cart, owner):
+    items = []
+    total = Decimal("0.00")
+    product_ids = [int(pid) for pid in cart.data.keys() if str(pid).isdigit()]
+    products = Product.objects.filter(user=owner, id__in=product_ids)
+    product_map = {str(p.id): p for p in products}
+
+    for pid, row in cart.data.items():
+        product = product_map.get(str(pid))
+        if not product:
+            continue
+        qty = _cart_quantity_value(row.get("quantity"))
+        if qty <= 0:
+            continue
+        price = Decimal(str(row.get("price", product.selling_price)))
+        line_total = price * qty
+        total += line_total
+        items.append({
+            "product_id": product.id,
+            "name": product.name,
+            "price": _money(price),
+            "quantity": _format_quantity(qty),
+            "stock": str(product.stock),
+        })
+
+    return {
+        "items": items,
+        "total": _money(total),
+    }
 
 
 def _serialize_shopboy_cart(request, cart, shopboy):
@@ -1233,6 +1272,376 @@ def api_owner_product_detail(request, pk):
 
     product.save()
     return _json_success({"product": _serialize_owner_product(request, product)})
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_dashboard(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    today = timezone.localdate()
+    today_sales = Sale.objects.filter(user=owner, created_at__date=today).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+    today_profit = Sale.objects.filter(user=owner, created_at__date=today).aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
+    total_products = Product.objects.filter(user=owner).count()
+    low_stock_count = Product.objects.filter(user=owner, stock__lte=F("low_stock_threshold"), stock__gt=0).count()
+
+    today_transactions = (
+        Sale.objects.filter(user=owner, created_at__date=today)
+        .annotate(items_count=Sum("items__quantity"))
+        .order_by("-created_at")[:5]
+    )
+
+    top_products = (
+        Product.objects.filter(user=owner)
+        .annotate(total_sold=Sum("saleitem__quantity"))
+        .order_by("-total_sold", "-created_at")[:6]
+    )
+
+    return _json_success({
+        "today_date": today.isoformat(),
+        "today_sales": _money(today_sales),
+        "today_profit": _money(today_profit),
+        "total_products": total_products,
+        "low_stock_count": low_stock_count,
+        "today_transactions": [
+            {
+                "id": sale.id,
+                "items_count": float(sale.items_count or 0),
+                "total_amount": _money(sale.total_amount),
+                "total_profit": _money(sale.total_profit),
+                "created_at": sale.created_at.isoformat(),
+            }
+            for sale in today_transactions
+        ],
+        "top_products": [
+            {
+                "id": product.id,
+                "name": product.name,
+                "selling_price": _money(product.selling_price),
+                "stock": str(product.stock),
+                "total_sold": float(product.total_sold or 0),
+                "image_url": _abs_media_url(request, product.image),
+            }
+            for product in top_products
+        ],
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_pos(request):
+    token_obj, _ = _get_auth_from_request(request)
+    owner = _require_owner(request)
+    if not owner or not token_obj:
+        return _json_error("Unauthorized.", status=401)
+
+    category_id = (request.GET.get("category") or "").strip()
+    q = (request.GET.get("q") or "").strip()
+
+    products = Product.objects.filter(user=owner)
+    if category_id:
+        products = products.filter(category_id=category_id)
+    if q:
+        products = products.filter(
+            Q(name__icontains=q) |
+            Q(code__icontains=q) |
+            Q(category__name__icontains=q)
+        )
+
+    categories = Category.objects.filter(user=owner).order_by("name")
+    cart = _get_owner_cart(token_obj)
+    cart_payload = _serialize_owner_cart(request, cart, owner)
+
+    last_sale = None
+    if cart.last_sale_id:
+        sale = Sale.objects.filter(user=owner, id=cart.last_sale_id).first()
+        if sale:
+            last_sale = {
+                "id": sale.id,
+                "total_amount": _money(sale.total_amount),
+                "created_at": sale.created_at.isoformat(),
+            }
+
+    return _json_success({
+        "products": [_serialize_owner_product(request, product) for product in products.select_related("category")],
+        "categories": [_serialize_category(cat) for cat in categories],
+        "cart": cart_payload,
+        "last_sale": last_sale,
+        "can_edit_price": True,
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_cart_add(request):
+    token_obj, _ = _get_auth_from_request(request)
+    owner = _require_owner(request)
+    if not owner or not token_obj:
+        return _json_error("Unauthorized.", status=401)
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    try:
+        product_id = int(data.get("product_id"))
+        quantity = _parse_stock(data.get("quantity", 1))
+    except Exception:
+        return _json_error("Invalid product or quantity.")
+
+    product = get_object_or_404(Product, id=product_id, user=owner)
+    if product.stock <= 0:
+        return _json_error(f"{product.name} is out of stock.", status=409)
+
+    cart = _get_owner_cart(token_obj)
+    product_key = str(product.id)
+    current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
+    desired_qty = current_qty + quantity
+    if desired_qty > product.stock:
+        desired_qty = product.stock
+
+    cart.data[product_key] = {
+        "name": product.name,
+        "price": float(product.selling_price),
+        "cost": float(product.cost_price),
+        "quantity": _format_quantity(desired_qty),
+    }
+    cart.save(update_fields=["data", "updated_at"])
+
+    return _json_success({"cart": _serialize_owner_cart(request, cart, owner)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_cart_add_by_code(request):
+    token_obj, _ = _get_auth_from_request(request)
+    owner = _require_owner(request)
+    if not owner or not token_obj:
+        return _json_error("Unauthorized.", status=401)
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    code = (data.get("code") or "").strip()
+    if not code:
+        return _json_error("Product code is required.")
+
+    try:
+        quantity = _parse_stock(data.get("quantity", 1))
+    except Exception:
+        return _json_error("Invalid quantity.")
+
+    product = Product.objects.filter(user=owner, code__iexact=code).first()
+    if not product:
+        return _json_error(f"No product found for code {code}.", status=404)
+    if product.stock <= 0:
+        return _json_error(f"{product.name} is out of stock.", status=409)
+
+    cart = _get_owner_cart(token_obj)
+    product_key = str(product.id)
+    current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
+    desired_qty = current_qty + quantity
+    if desired_qty > product.stock:
+        desired_qty = product.stock
+
+    cart.data[product_key] = {
+        "name": product.name,
+        "price": float(product.selling_price),
+        "cost": float(product.cost_price),
+        "quantity": _format_quantity(desired_qty),
+    }
+    cart.save(update_fields=["data", "updated_at"])
+
+    return _json_success({"cart": _serialize_owner_cart(request, cart, owner)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_cart_update(request):
+    token_obj, _ = _get_auth_from_request(request)
+    owner = _require_owner(request)
+    if not owner or not token_obj:
+        return _json_error("Unauthorized.", status=401)
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    try:
+        product_id = int(data.get("product_id"))
+    except Exception:
+        return _json_error("Invalid product.")
+
+    action = (data.get("action") or "").strip()
+    quantity_raw = data.get("quantity")
+    price_raw = data.get("price")
+
+    cart = _get_owner_cart(token_obj)
+    product_key = str(product_id)
+    if product_key not in cart.data:
+        return _json_error("Item not in cart.", status=404)
+
+    product = get_object_or_404(Product, id=product_id, user=owner)
+    current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
+
+    if action == "price":
+        try:
+            price = Decimal(str(price_raw))
+        except Exception:
+            return _json_error("Invalid price.")
+        if price < 0:
+            return _json_error("Price cannot be negative.")
+        cart.data[product_key]["price"] = float(price.quantize(Decimal("0.01")))
+    elif action == "increase":
+        desired_qty = current_qty + Decimal("1")
+        if desired_qty > product.stock:
+            desired_qty = product.stock
+        cart.data[product_key]["quantity"] = _format_quantity(desired_qty)
+    elif action == "decrease":
+        desired_qty = current_qty - Decimal("1")
+        if desired_qty <= 0:
+            cart.data.pop(product_key, None)
+        else:
+            cart.data[product_key]["quantity"] = _format_quantity(desired_qty)
+    else:
+        quantity = _cart_quantity_value(quantity_raw)
+        if quantity <= 0:
+            cart.data.pop(product_key, None)
+        elif quantity > product.stock:
+            cart.data[product_key]["quantity"] = _format_quantity(product.stock)
+        else:
+            cart.data[product_key]["quantity"] = _format_quantity(quantity)
+
+    cart.save(update_fields=["data", "updated_at"])
+    return _json_success({"cart": _serialize_owner_cart(request, cart, owner)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_cart_remove(request):
+    token_obj, _ = _get_auth_from_request(request)
+    owner = _require_owner(request)
+    if not owner or not token_obj:
+        return _json_error("Unauthorized.", status=401)
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    try:
+        product_id = int(data.get("product_id"))
+    except Exception:
+        return _json_error("Invalid product.")
+
+    cart = _get_owner_cart(token_obj)
+    cart.data.pop(str(product_id), None)
+    cart.save(update_fields=["data", "updated_at"])
+    return _json_success({"cart": _serialize_owner_cart(request, cart, owner)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_cart_checkout(request):
+    token_obj, _ = _get_auth_from_request(request)
+    owner = _require_owner(request)
+    if not owner or not token_obj:
+        return _json_error("Unauthorized.", status=401)
+
+    cart = _get_owner_cart(token_obj)
+    if not cart.data:
+        return _json_error("Cart is empty.", status=400)
+
+    product_ids = [int(pid) for pid in cart.data.keys() if str(pid).isdigit()]
+    total_amount = Decimal("0.00")
+    total_profit = Decimal("0.00")
+    line_items = []
+
+    with transaction.atomic():
+        products = Product.objects.select_for_update().filter(user=owner, id__in=product_ids)
+        product_map = {str(p.id): p for p in products}
+
+        for pid, item in cart.data.items():
+            product = product_map.get(str(pid))
+            if not product:
+                return _json_error("A cart item no longer exists.", status=409)
+
+            quantity = _cart_quantity_value(item.get("quantity"))
+            if quantity <= 0:
+                continue
+
+            if product.stock < quantity:
+                return _json_error(f"Not enough stock for {product.name}. Available: {product.stock}.", status=409)
+
+            price = Decimal(str(item.get("price", product.selling_price)))
+            cost = Decimal(str(item.get("cost", product.cost_price)))
+            line_total = price * quantity
+            line_profit = (price - cost) * quantity
+            total_amount += line_total
+            total_profit += line_profit
+
+            line_items.append({
+                "product": product,
+                "quantity": quantity,
+                "price": price,
+                "profit": line_profit,
+                "line_total": line_total,
+            })
+
+        if not line_items:
+            return _json_error("Cart is empty.", status=400)
+
+        vat_registered = _vat_registered_for_sale(owner, timezone.now(), total_amount)
+        vat_total = Decimal("0.00")
+        for row in line_items:
+            vat_status, vat_applicable, vat_rate, vat_amount = _calculate_item_vat(
+                row["product"],
+                row["line_total"],
+                vat_registered,
+            )
+            row["vat_status"] = vat_status
+            row["vat_applicable"] = vat_applicable
+            row["vat_rate"] = vat_rate
+            row["vat_amount"] = vat_amount
+            vat_total += vat_amount
+
+        sale = Sale.objects.create(
+            user=owner,
+            sales_channel=Sale.CHANNEL_OWNER_POS,
+            total_amount=total_amount.quantize(Decimal("0.01")),
+            total_profit=total_profit.quantize(Decimal("0.01")),
+            vat_total=vat_total.quantize(Decimal("0.01")),
+        )
+
+        for row in line_items:
+            SaleItem.objects.create(
+                sale=sale,
+                product=row["product"],
+                quantity=row["quantity"],
+                price=row["price"].quantize(Decimal("0.01")),
+                profit=row["profit"].quantize(Decimal("0.01")),
+                vat_status=row["vat_status"],
+                vat_rate=row["vat_rate"],
+                vat_amount=row["vat_amount"],
+                vat_applicable=row["vat_applicable"],
+            )
+            row["product"].stock -= row["quantity"]
+            row["product"].save(update_fields=["stock"])
+
+    cart.data = {}
+    cart.last_sale_id = sale.id
+    cart.save(update_fields=["data", "last_sale_id", "updated_at"])
+
+    return _json_success({
+        "sale": {
+            "id": sale.id,
+            "total_amount": _money(sale.total_amount),
+            "created_at": sale.created_at.isoformat(),
+        },
+        "cart": _serialize_owner_cart(request, cart, owner),
+    })
 
 
 @csrf_exempt
