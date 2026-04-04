@@ -70,6 +70,14 @@ def _json_success(data=None, status=200):
     return JsonResponse(payload, status=status)
 
 
+@require_http_methods(["GET"])
+def api_health(request):
+    return _json_success({
+        "status": "ok",
+        "time": timezone.now().isoformat(),
+    })
+
+
 def _parse_json(request):
     try:
         if not request.body:

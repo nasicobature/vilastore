@@ -7,6 +7,7 @@ from . import api
 
 urlpatterns = [
     path("healthz/", views.healthz, name="healthz"),
+    path("api/health/", api.api_health, name="api_health"),
     path('api/marketplace/auth/signup/', api.api_marketplace_signup, name='api_marketplace_signup'),
     path('api/marketplace/auth/login/', api.api_marketplace_login, name='api_marketplace_login'),
     path('api/marketplace/auth/verify/', api.api_marketplace_verify, name='api_marketplace_verify'),
