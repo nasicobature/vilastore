@@ -1,6 +1,6 @@
 import json
 import secrets
-from datetime import timedelta
+from datetime import timedelta, datetime
 from decimal import Decimal
 
 from django.contrib.auth.hashers import check_password, make_password
@@ -17,6 +17,7 @@ from .models import (
     Agent,
     AuthToken,
     Category,
+    Expense,
     MarketplaceBuyer,
     MarketplaceBuyerToken,
     MarketplaceChatMessage,
@@ -39,6 +40,10 @@ from .views import (
     _get_assigned_shopboy,
     _password_meets_rules,
     _vat_registered_for_sale,
+    _year_turnover,
+    _is_vat_registered,
+    _vat_registration_note,
+    VAT_RATE,
     _send_marketplace_reset_code,
     _send_marketplace_verification_code,
 )
@@ -1913,6 +1918,205 @@ def api_owner_expense_detail(request, expense_id):
 
     expense.save()
     return _json_success({"expense": _serialize_expense(expense)})
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_reports(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    now = timezone.now()
+    period = request.GET.get("period", "month")
+    start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
+    end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
+    custom_range = bool(start_date or end_date)
+    if period == "custom" and not custom_range:
+        period = "month"
+    if start_date and end_date and start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    if custom_range:
+        period = "custom"
+        start = None
+    else:
+        if period == "today":
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif period == "week":
+            start = now - timedelta(days=7)
+        elif period == "year":
+            start = now.replace(month=1, day=1)
+        elif period == "all":
+            start = None
+        else:
+            start = now.replace(day=1)
+
+    sales = Sale.objects.filter(user=owner)
+    expenses = Expense.objects.filter(user=owner)
+
+    if start is not None:
+        sales = sales.filter(created_at__gte=start)
+        expenses = expenses.filter(date__gte=start.date())
+    if start_date:
+        sales = sales.filter(created_at__date__gte=start_date)
+        expenses = expenses.filter(date__gte=start_date)
+    if end_date:
+        sales = sales.filter(created_at__date__lte=end_date)
+        expenses = expenses.filter(date__lte=end_date)
+
+    total_revenue = sales.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+    total_profit = sales.aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
+    total_expenses = expenses.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+    net_profit = total_profit - total_expenses
+    total_transactions = sales.count()
+    avg_transaction = (total_revenue / total_transactions) if total_transactions else Decimal("0.00")
+    avg_profit_per_sale = (total_profit / total_transactions) if total_transactions else Decimal("0.00")
+    items_sold = SaleItem.objects.filter(sale__in=sales).aggregate(total=Sum("quantity"))["total"] or Decimal("0.00")
+
+    profit_margin = Decimal("0.00")
+    if total_revenue:
+        profit_margin = (total_profit / total_revenue * Decimal("100")).quantize(Decimal("0.01"))
+
+    top_products = (
+        SaleItem.objects.filter(sale__in=sales)
+        .values("product__name")
+        .annotate(total=Sum("quantity"))
+        .order_by("-total")[:5]
+    )
+
+    expense_breakdown = (
+        expenses.values("category")
+        .annotate(total=Sum("amount"))
+        .order_by("-total")
+    )
+
+    try:
+        cit_year = int(request.GET.get("cit_year", now.year))
+    except (TypeError, ValueError):
+        cit_year = now.year
+
+    year_sales = Sale.objects.filter(created_at__year=cit_year, user=owner)
+    year_expenses = Expense.objects.filter(created_at__year=cit_year, user=owner)
+
+    cit_revenue = year_sales.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+    cit_profit = year_sales.aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
+    cit_cost = cit_revenue - cit_profit
+    cit_gross_profit = cit_profit
+    cit_operating_expenses = year_expenses.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    cit_assessable_profit = cit_gross_profit - cit_operating_expenses
+    cit_taxable_profit = max(Decimal("0.00"), cit_assessable_profit)
+    cit_small_turnover_threshold = Decimal("50000000")
+    cit_small_fixed_assets_threshold = Decimal("250000000")
+    cit_rate = Decimal("0.30")
+    cit_rate_label = "Standard rate (30%)"
+    cit_rate_note = ""
+    fixed_assets_value = owner.fixed_assets
+    is_professional_services = bool(owner.is_professional_services)
+    missing_assets = fixed_assets_value is None
+    qualifies_small_by_assets = (fixed_assets_value is not None and fixed_assets_value <= cit_small_fixed_assets_threshold)
+
+    if cit_revenue <= cit_small_turnover_threshold and qualifies_small_by_assets and not is_professional_services:
+        cit_rate = Decimal("0.00")
+        cit_rate_label = "Small company rate (0%)"
+    elif cit_revenue <= cit_small_turnover_threshold and missing_assets:
+        cit_rate_note = "Fixed assets are missing; small-company test cannot be fully applied."
+    elif is_professional_services and cit_revenue <= cit_small_turnover_threshold:
+        cit_rate_note = "Professional services companies do not qualify for small-company CIT relief."
+
+    cit_tax_due = (cit_taxable_profit * cit_rate)
+    cit_rate_percent = (cit_rate * Decimal("100")).quantize(Decimal("0.01"))
+
+    try:
+        vat_month = int(request.GET.get("vat_month", now.month))
+    except (TypeError, ValueError):
+        vat_month = now.month
+    try:
+        vat_year = int(request.GET.get("vat_year", now.year))
+    except (TypeError, ValueError):
+        vat_year = now.year
+    if vat_month < 1 or vat_month > 12:
+        vat_month = now.month
+
+    month_start = datetime(vat_year, vat_month, 1)
+    month_end = datetime(vat_year + 1, 1, 1) if vat_month == 12 else datetime(vat_year, vat_month + 1, 1)
+
+    vat_sales = Sale.objects.filter(created_at__range=(month_start, month_end), user=owner)
+    vat_year_turnover = _year_turnover(owner, vat_year)
+    vat_registered = _is_vat_registered(owner, vat_year_turnover)
+    vat_registration_note = _vat_registration_note(owner, vat_year_turnover)
+
+    vat_taxable_sales = Decimal("0.00")
+    vat_output_vat = Decimal("0.00")
+    if vat_registered:
+        vat_items = SaleItem.objects.filter(sale__in=vat_sales).select_related("product")
+        for item in vat_items:
+            line_total = (item.price or Decimal("0.00")) * item.quantity
+            use_existing = (item.vat_rate != Decimal("0.00") or item.vat_amount != Decimal("0.00") or item.vat_applicable)
+            if use_existing:
+                if item.vat_applicable:
+                    vat_taxable_sales += line_total
+                    vat_output_vat += item.vat_amount
+                continue
+            vat_status = getattr(item.product, "vat_status", "standard")
+            if vat_status == Product.VAT_STANDARD:
+                vat_taxable_sales += line_total
+                vat_output_vat += (line_total * VAT_RATE).quantize(Decimal("0.01"))
+
+    return _json_success({
+        "period": period,
+        "start_date": start_date.isoformat() if start_date else "",
+        "end_date": end_date.isoformat() if end_date else "",
+        "totals": {
+            "total_revenue": _money(total_revenue),
+            "total_profit": _money(total_profit),
+            "total_expenses": _money(total_expenses),
+            "net_profit": _money(net_profit),
+            "total_transactions": total_transactions,
+        },
+        "summary": {
+            "avg_transaction": _money(avg_transaction),
+            "items_sold": str(items_sold),
+            "avg_profit_per_sale": _money(avg_profit_per_sale),
+            "total_cost": _money(total_revenue),
+            "profit_margin": str(profit_margin),
+        },
+        "top_products": [
+            { "name": row["product__name"], "total": float(row["total"] or 0) }
+            for row in top_products
+        ],
+        "expense_breakdown": [
+            { "category": row["category"], "total": _money(row["total"]) }
+            for row in expense_breakdown
+        ],
+        "cit": {
+            "cit_year": cit_year,
+            "cit_revenue": _money(cit_revenue),
+            "cit_cost": _money(cit_cost),
+            "cit_gross_profit": _money(cit_gross_profit),
+            "cit_operating_expenses": _money(cit_operating_expenses),
+            "cit_assessable_profit": _money(cit_assessable_profit),
+            "cit_taxable_profit": _money(cit_taxable_profit),
+            "cit_tax_due": _money(cit_tax_due),
+            "cit_rate_percent": str(cit_rate_percent),
+            "cit_rate_label": cit_rate_label,
+            "cit_rate_note": cit_rate_note,
+            "cit_small_turnover_threshold": _money(cit_small_turnover_threshold),
+            "cit_small_fixed_assets_threshold": _money(cit_small_fixed_assets_threshold),
+            "fixed_assets": _money(owner.fixed_assets) if owner.fixed_assets is not None else "",
+            "is_professional_services": bool(owner.is_professional_services),
+        },
+        "vat": {
+            "vat_year": vat_year,
+            "vat_month": vat_month,
+            "vat_taxable_sales": _money(vat_taxable_sales),
+            "vat_output_vat": _money(vat_output_vat),
+            "vat_registered": vat_registered,
+            "vat_registration_note": vat_registration_note,
+        },
+        "is_nigeria": (owner.country or "").strip().lower() == "nigeria",
+    })
 
 
 @csrf_exempt

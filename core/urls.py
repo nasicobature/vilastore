@@ -42,6 +42,7 @@ urlpatterns = [
     path('api/mobile/owner/sales/<int:sale_id>/', api.api_owner_sale_detail, name='api_owner_sale_detail'),
     path('api/mobile/owner/expenses/', api.api_owner_expenses, name='api_owner_expenses'),
     path('api/mobile/owner/expenses/<int:expense_id>/', api.api_owner_expense_detail, name='api_owner_expense_detail'),
+    path('api/mobile/owner/reports/', api.api_owner_reports, name='api_owner_reports'),
     path('api/mobile/shopboy/dashboard/', api.api_shopboy_dashboard, name='api_shopboy_dashboard'),
     path('api/mobile/shopboy/cart/add/', api.api_shopboy_cart_add, name='api_shopboy_cart_add'),
     path('api/mobile/shopboy/cart/add-by-code/', api.api_shopboy_cart_add_by_code, name='api_shopboy_cart_add_by_code'),
