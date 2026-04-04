@@ -31,6 +31,7 @@ from .models import (
     ShopboyCart,
     OwnerCart,
     User,
+    Customer,
 )
 from .views import (
     _authenticate_with_identifier,
@@ -38,7 +39,9 @@ from .views import (
     _parse_stock,
     _ensure_marketplace_profiles,
     _get_assigned_shopboy,
+    _get_marketplace_settings,
     _password_meets_rules,
+    _ensure_shop_code,
     _vat_registered_for_sale,
     _year_turnover,
     _is_vat_registered,
@@ -185,6 +188,7 @@ def _serialize_shopboy(shopboy):
         "username": shopboy.username,
         "full_name": shopboy.full_name,
         "can_use_marketplace": shopboy.can_use_marketplace,
+        "is_active": shopboy.is_active,
         "owner": {
             "id": shopboy.user_id,
             "business_name": shopboy.user.business_name,
@@ -2116,6 +2120,345 @@ def api_owner_reports(request):
             "vat_registration_note": vat_registration_note,
         },
         "is_nigeria": (owner.country or "").strip().lower() == "nigeria",
+    })
+
+
+def _serialize_customer(customer):
+    return {
+        "id": customer.id,
+        "first_name": customer.first_name,
+        "last_name": customer.last_name,
+        "phone": customer.phone,
+        "email": customer.email or "",
+        "birthday": customer.birthday.isoformat() if customer.birthday else "",
+        "religion": customer.religion or "",
+        "tribe": customer.tribe or "",
+        "notes": customer.notes or "",
+        "created_at": customer.created_at.isoformat(),
+    }
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def api_owner_customers(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    if request.method == "GET":
+        q = (request.GET.get("q") or "").strip()
+        customers = Customer.objects.filter(user=owner)
+        if q:
+            customers = customers.filter(
+                Q(first_name__icontains=q) |
+                Q(last_name__icontains=q) |
+                Q(phone__icontains=q) |
+                Q(email__icontains=q) |
+                Q(religion__icontains=q) |
+                Q(tribe__icontains=q)
+            )
+        customers = customers.order_by("first_name", "last_name")
+        return _json_success({
+            "customers": [_serialize_customer(c) for c in customers],
+            "religions": [choice[0] for choice in Customer.RELIGION_CHOICES],
+        })
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    first_name = (data.get("first_name") or "").strip()
+    last_name = (data.get("last_name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    email = (data.get("email") or "").strip() or None
+    birthday = (data.get("birthday") or "").strip() or None
+    religion = (data.get("religion") or "").strip()
+    tribe = (data.get("tribe") or "").strip()
+    notes = (data.get("notes") or "").strip()
+
+    if not first_name or not last_name or not phone:
+        return _json_error("First name, last name, and phone are required.")
+
+    valid_religions = {choice[0] for choice in Customer.RELIGION_CHOICES}
+    if religion not in valid_religions:
+        religion = ""
+
+    customer = Customer.objects.create(
+        user=owner,
+        first_name=first_name,
+        last_name=last_name,
+        phone=phone,
+        email=email,
+        birthday=birthday or None,
+        religion=religion,
+        tribe=tribe,
+        notes=notes,
+    )
+    return _json_success({ "customer": _serialize_customer(customer) }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "DELETE"])
+def api_owner_customer_detail(request, customer_id):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    customer = get_object_or_404(Customer, id=customer_id, user=owner)
+
+    if request.method == "GET":
+        return _json_success({ "customer": _serialize_customer(customer) })
+
+    if request.method == "DELETE":
+        customer.delete()
+        return _json_success({ "deleted": True })
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    if "first_name" in data:
+        customer.first_name = (data.get("first_name") or "").strip()
+    if "last_name" in data:
+        customer.last_name = (data.get("last_name") or "").strip()
+    if "phone" in data:
+        customer.phone = (data.get("phone") or "").strip()
+    if "email" in data:
+        email = (data.get("email") or "").strip()
+        customer.email = email or None
+    if "birthday" in data:
+        birthday = (data.get("birthday") or "").strip()
+        customer.birthday = birthday or None
+    if "religion" in data:
+        religion = (data.get("religion") or "").strip()
+        valid_religions = {choice[0] for choice in Customer.RELIGION_CHOICES}
+        customer.religion = religion if religion in valid_religions else ""
+    if "tribe" in data:
+        customer.tribe = (data.get("tribe") or "").strip()
+    if "notes" in data:
+        customer.notes = (data.get("notes") or "").strip()
+
+    if not customer.first_name or not customer.last_name or not customer.phone:
+        return _json_error("First name, last name, and phone are required.")
+
+    customer.save()
+    return _json_success({ "customer": _serialize_customer(customer) })
+
+
+def _serialize_shopboy_settings(shopboy):
+    return {
+        "id": shopboy.id,
+        "full_name": shopboy.full_name,
+        "username": shopboy.username,
+        "can_use_marketplace": shopboy.can_use_marketplace,
+        "is_active": shopboy.is_active,
+    }
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_settings(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    _ensure_shop_code(owner)
+    marketplace_settings = _get_marketplace_settings(owner)
+    marketplace_profile, _ = MarketplaceShopProfile.objects.get_or_create(user=owner)
+    shopboys = ShopBoy.objects.filter(user=owner).order_by("-id")
+
+    return _json_success({
+        "shop_code": owner.shop_code or "",
+        "profile": {
+            "business_name": owner.business_name or "",
+            "country": owner.country or "",
+            "address": owner.address or "",
+            "phone": owner.phone or "",
+            "fixed_assets": _money(owner.fixed_assets) if owner.fixed_assets is not None else "",
+            "is_professional_services": bool(owner.is_professional_services),
+            "profile_image_url": _abs_media_url(request, owner.profile_image),
+        },
+        "marketplace_profile": {
+            "logo_url": _abs_media_url(request, marketplace_profile.logo),
+            "cover_url": _abs_media_url(request, marketplace_profile.cover_image),
+        },
+        "shopboys": [_serialize_shopboy_settings(sb) for sb in shopboys],
+        "marketplace_assignment": {
+            "assigned_shopboy_id": marketplace_settings.assigned_shopboy_id,
+        },
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_settings_profile(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    business_name = (request.POST.get("business_name") or "").strip()
+    country = (request.POST.get("country") or "").strip()
+    address = (request.POST.get("address") or "").strip()
+    phone = (request.POST.get("phone") or "").strip()
+    fixed_assets_raw = (request.POST.get("fixed_assets") or "").strip()
+    is_professional_services_raw = (request.POST.get("is_professional_services") or "").strip().lower()
+    is_professional_services = is_professional_services_raw in {"true", "1", "on", "yes"}
+
+    if not business_name or not country or not address or not phone:
+        return _json_error("Business name, country, address, and phone are required.")
+
+    if fixed_assets_raw:
+        try:
+            fixed_assets_value = Decimal(fixed_assets_raw)
+            if fixed_assets_value < 0:
+                raise ValueError
+            owner.fixed_assets = fixed_assets_value
+        except Exception:
+            return _json_error("Fixed assets must be a valid non-negative amount.")
+    else:
+        owner.fixed_assets = None
+
+    owner.business_name = business_name
+    owner.country = country
+    owner.address = address
+    owner.phone = phone
+    owner.is_professional_services = is_professional_services
+
+    profile_image = request.FILES.get("profile_image")
+    if profile_image:
+        owner.profile_image = profile_image
+
+    owner.save(update_fields=[
+        "business_name",
+        "country",
+        "address",
+        "phone",
+        "profile_image",
+        "fixed_assets",
+        "is_professional_services",
+    ])
+
+    marketplace_profile, _ = MarketplaceShopProfile.objects.get_or_create(user=owner)
+    marketplace_logo = request.FILES.get("marketplace_logo")
+    if marketplace_logo:
+        marketplace_profile.logo = marketplace_logo
+    marketplace_cover = request.FILES.get("marketplace_cover_image")
+    if marketplace_cover:
+        marketplace_profile.cover_image = marketplace_cover
+    if marketplace_logo or marketplace_cover:
+        marketplace_profile.save(update_fields=["logo", "cover_image"])
+
+    return _json_success({
+        "profile": {
+            "business_name": owner.business_name or "",
+            "country": owner.country or "",
+            "address": owner.address or "",
+            "phone": owner.phone or "",
+            "fixed_assets": _money(owner.fixed_assets) if owner.fixed_assets is not None else "",
+            "is_professional_services": bool(owner.is_professional_services),
+            "profile_image_url": _abs_media_url(request, owner.profile_image),
+        },
+        "marketplace_profile": {
+            "logo_url": _abs_media_url(request, marketplace_profile.logo),
+            "cover_url": _abs_media_url(request, marketplace_profile.cover_image),
+        },
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def api_owner_settings_shopboys(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    if request.method == "GET":
+        shopboys = ShopBoy.objects.filter(user=owner).order_by("-id")
+        return _json_success({ "shopboys": [_serialize_shopboy_settings(sb) for sb in shopboys] })
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    full_name = (data.get("full_name") or "").strip()
+    username = (data.get("username") or "").strip()
+    password = (data.get("password") or "").strip()
+    can_use_marketplace_raw = data.get("can_use_marketplace")
+    if isinstance(can_use_marketplace_raw, str):
+        can_use_marketplace = can_use_marketplace_raw.strip().lower() in {"true", "1", "yes", "on"}
+    else:
+        can_use_marketplace = bool(can_use_marketplace_raw)
+
+    if not full_name or not username or not password:
+        return _json_error("Full name, username, and password are required.")
+
+    if ShopBoy.objects.filter(user=owner, username__iexact=username).exists():
+        return _json_error("Shop boy username already exists.")
+
+    shopboy = ShopBoy.objects.create(
+        user=owner,
+        full_name=full_name,
+        username=username,
+        password=make_password(password),
+        can_use_marketplace=can_use_marketplace,
+        is_active=True,
+    )
+    return _json_success({ "shopboy": _serialize_shopboy_settings(shopboy) }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_settings_shopboy_toggle(request, shopboy_id):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    shopboy = get_object_or_404(ShopBoy, id=shopboy_id, user=owner)
+    shopboy.is_active = not shopboy.is_active
+    shopboy.save(update_fields=["is_active"])
+    return _json_success({ "shopboy": _serialize_shopboy_settings(shopboy) })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_settings_shopboy_delete(request, shopboy_id):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    shopboy = get_object_or_404(ShopBoy, id=shopboy_id, user=owner)
+    shopboy.delete()
+    return _json_success({ "deleted": True })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_settings_marketplace_assign(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    shopboy_id = data.get("assigned_shopboy") or None
+    assigned = None
+    if shopboy_id:
+        assigned = ShopBoy.objects.filter(
+            id=shopboy_id,
+            user=owner,
+            is_active=True,
+            can_use_marketplace=True,
+        ).first()
+        if not assigned:
+            return _json_error("Invalid shop boy selection.")
+
+    settings_obj = _get_marketplace_settings(owner)
+    settings_obj.assigned_shopboy = assigned
+    settings_obj.save(update_fields=["assigned_shopboy", "updated_at"])
+    return _json_success({
+        "assigned_shopboy_id": settings_obj.assigned_shopboy_id,
     })
 
 
