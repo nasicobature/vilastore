@@ -393,6 +393,41 @@ class MarketplaceBuyerToken(models.Model):
         return f"{self.buyer.email} ({self.token[:6]}...)"
 
 
+class AuthToken(models.Model):
+    ROLE_OWNER = "owner"
+    ROLE_SHOPBOY = "shopboy"
+    ROLE_AGENT = "agent"
+
+    ROLE_CHOICES = [
+        (ROLE_OWNER, "Shop Owner"),
+        (ROLE_SHOPBOY, "Shop Boy"),
+        (ROLE_AGENT, "Agent"),
+    ]
+
+    token = models.CharField(max_length=80, unique=True)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="auth_tokens")
+    shopboy = models.ForeignKey(ShopBoy, on_delete=models.CASCADE, null=True, blank=True, related_name="auth_tokens")
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, null=True, blank=True, related_name="auth_tokens")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    is_revoked = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.role} ({self.token[:6]}...)"
+
+
+class ShopboyCart(models.Model):
+    token = models.OneToOneField(AuthToken, on_delete=models.CASCADE, related_name="shopboy_cart")
+    data = models.JSONField(default=dict, blank=True)
+    last_sale_id = models.IntegerField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"ShopboyCart ({self.token_id})"
+
+
 class MarketplaceOrder(models.Model):
     STATUS_PENDING = "pending"
     STATUS_CONFIRMED = "confirmed"
