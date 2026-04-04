@@ -1721,6 +1721,82 @@ def api_owner_product_labels(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def api_owner_sales_history(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
+    end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
+    q = (request.GET.get("q") or "").strip()
+    if start_date and end_date and start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    sales = (
+        Sale.objects.filter(user=owner)
+        .select_related("handled_by_shopboy")
+        .prefetch_related("items__product")
+        .order_by("-created_at")
+    )
+    if start_date:
+        sales = sales.filter(created_at__date__gte=start_date)
+    if end_date:
+        sales = sales.filter(created_at__date__lte=end_date)
+    if q:
+        sales = sales.filter(
+            Q(items__product__name__icontains=q) |
+            Q(handled_by_shopboy__full_name__icontains=q) |
+            Q(handled_by_shopboy__username__icontains=q) |
+            Q(sales_channel__icontains=q) |
+            Q(id__iexact=q)
+        ).distinct()
+
+    total_sales = sales.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+    total_profit = sales.aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
+    total_transactions = sales.count()
+
+    return _json_success({
+        "summary": {
+            "total_sales": _money(total_sales),
+            "total_profit": _money(total_profit),
+            "total_transactions": total_transactions,
+        },
+        "sales": [
+            {
+                "id": sale.id,
+                "items_count": float(sale.items.aggregate(total=Sum("quantity"))["total"] or 0),
+                "total_amount": _money(sale.total_amount),
+                "total_profit": _money(sale.total_profit),
+                "created_at": sale.created_at.isoformat(),
+                "sales_channel": sale.sales_channel,
+                "handled_by": sale.handled_by_shopboy.full_name if sale.handled_by_shopboy else "",
+            }
+            for sale in sales
+        ],
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_sale_detail(request, sale_id):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    sale = get_object_or_404(
+        Sale.objects.select_related("handled_by_shopboy").prefetch_related("items__product"),
+        id=sale_id,
+        user=owner,
+    )
+
+    return _json_success({
+        "sale": _serialize_sale(sale),
+        "items": [_serialize_sale_item(item) for item in sale.items.all()],
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def api_shopboy_dashboard(request):
     shopboy, token_obj = _get_shopboy_from_request(request)
     if not shopboy:
