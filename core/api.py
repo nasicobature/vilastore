@@ -1646,6 +1646,81 @@ def api_owner_cart_checkout(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def api_owner_inventory(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    q = (request.GET.get("q") or "").strip()
+    products = Product.objects.filter(user=owner)
+    if q:
+        products = products.filter(
+            Q(name__icontains=q) |
+            Q(code__icontains=q) |
+            Q(category__name__icontains=q)
+        )
+
+    products = products.select_related("category")
+
+    total_products = products.count()
+    total_value = sum((p.selling_price * p.stock for p in products), Decimal("0.00"))
+    low_stock = products.filter(stock__lte=F("low_stock_threshold"), stock__gt=0).count()
+    out_of_stock = products.filter(stock=0).count()
+
+    return _json_success({
+        "summary": {
+            "total_products": total_products,
+            "total_value": _money(total_value),
+            "low_stock": low_stock,
+            "out_of_stock": out_of_stock,
+        },
+        "products": [_serialize_owner_product(request, product) for product in products.order_by("name")],
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_generate_product_code(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    code = _generate_product_code(owner)
+    if not code:
+        return _json_error("Unable to generate code.", status=500)
+    return _json_success({ "code": code })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_product_labels(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    products = Product.objects.filter(user=owner).order_by("name")
+    updated = False
+    for product in products:
+        if not product.code:
+            product.code = _generate_product_code(owner)
+            updated = True
+    if updated:
+        Product.objects.bulk_update(products, ["code"])
+
+    return _json_success({
+        "products": [
+            {
+                "id": product.id,
+                "name": product.name,
+                "code": product.code,
+            }
+            for product in products
+        ],
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def api_shopboy_dashboard(request):
     shopboy, token_obj = _get_shopboy_from_request(request)
     if not shopboy:
