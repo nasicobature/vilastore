@@ -1794,24 +1794,62 @@ def api_owner_sales_history(request):
     total_profit = sales.aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
     total_transactions = sales.count()
 
+    years = {sale.created_at.year for sale in sales}
+    vat_registered_by_year = {
+        year: _is_vat_registered(owner, _year_turnover(owner, year))
+        for year in years
+    }
+
+    sales_payload = []
+    for sale in sales:
+        vat_registered = vat_registered_by_year.get(sale.created_at.year, False)
+        items_payload = []
+        for item in sale.items.all():
+            line_total = (item.price or Decimal("0.00")) * item.quantity
+            use_existing = (
+                item.vat_rate != Decimal("0.00")
+                or item.vat_amount != Decimal("0.00")
+                or item.vat_applicable
+            )
+            if use_existing:
+                vat_display = f"₦{item.vat_amount:.2f}" if item.vat_applicable else "Not eligible"
+            else:
+                vat_status = getattr(item.product, "vat_status", "standard")
+                vat_applicable = bool(vat_registered and vat_status == Product.VAT_STANDARD)
+                if vat_applicable:
+                    vat_display = f"₦{(line_total * VAT_RATE).quantize(Decimal('0.01')):.2f}"
+                else:
+                    vat_display = "Not eligible"
+
+            items_payload.append({
+                "product_name": item.product.name,
+                "quantity": _format_quantity(item.quantity),
+                "vat_display": vat_display,
+            })
+
+        sales_payload.append({
+            "id": sale.id,
+            "items_count": float(sale.items.aggregate(total=Sum("quantity"))["total"] or 0),
+            "total_amount": _money(sale.total_amount),
+            "total_profit": _money(sale.total_profit),
+            "created_at": sale.created_at.isoformat(),
+            "sales_channel": sale.sales_channel,
+            "sales_channel_display": sale.get_sales_channel_display(),
+            "handled_by": {
+                "name": sale.handled_by_shopboy.full_name if sale.handled_by_shopboy else "Shop Owner",
+                "username": sale.handled_by_shopboy.username if sale.handled_by_shopboy else "",
+            },
+            "items": items_payload,
+            "receipt_url": f"/sales/{sale.id}/receipt/",
+        })
+
     return _json_success({
         "summary": {
             "total_sales": _money(total_sales),
             "total_profit": _money(total_profit),
             "total_transactions": total_transactions,
         },
-        "sales": [
-            {
-                "id": sale.id,
-                "items_count": float(sale.items.aggregate(total=Sum("quantity"))["total"] or 0),
-                "total_amount": _money(sale.total_amount),
-                "total_profit": _money(sale.total_profit),
-                "created_at": sale.created_at.isoformat(),
-                "sales_channel": sale.sales_channel,
-                "handled_by": sale.handled_by_shopboy.full_name if sale.handled_by_shopboy else "",
-            }
-            for sale in sales
-        ],
+        "sales": sales_payload,
     })
 
 
