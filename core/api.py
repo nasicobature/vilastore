@@ -1795,6 +1795,126 @@ def api_owner_sale_detail(request, sale_id):
     })
 
 
+def _serialize_expense(expense):
+    return {
+        "id": expense.id,
+        "category": expense.category,
+        "title": expense.title,
+        "amount": _money(expense.amount),
+        "date": expense.date.isoformat(),
+        "created_at": expense.created_at.isoformat(),
+    }
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def api_owner_expenses(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    if request.method == "GET":
+        q = (request.GET.get("q") or "").strip()
+        expenses = Expense.objects.filter(user=owner).order_by("-date", "-created_at")
+        if q:
+            expenses = expenses.filter(
+                Q(title__icontains=q) |
+                Q(category__icontains=q)
+            )
+
+        total_amount = expenses.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        return _json_success({
+            "total_amount": _money(total_amount),
+            "expenses": [_serialize_expense(exp) for exp in expenses],
+            "categories": [choice[0] for choice in Expense.CATEGORY_CHOICES],
+        })
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    category = (data.get("category") or "").strip()
+    title = (data.get("title") or "").strip()
+    amount_raw = data.get("amount")
+    date_raw = (data.get("date") or "").strip()
+
+    valid_categories = {choice[0] for choice in Expense.CATEGORY_CHOICES}
+    if category not in valid_categories:
+        category = "Other"
+
+    if not title:
+        return _json_error("Title is required.")
+
+    try:
+        amount = Decimal(str(amount_raw))
+        if amount < 0:
+            raise ValueError
+    except Exception:
+        return _json_error("Amount must be a valid non-negative number.")
+
+    date = parse_date(date_raw)
+    if not date:
+        return _json_error("Date is required.")
+
+    expense = Expense.objects.create(
+        user=owner,
+        category=category,
+        title=title,
+        amount=amount,
+        date=date,
+    )
+    return _json_success({"expense": _serialize_expense(expense)}, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "DELETE"])
+def api_owner_expense_detail(request, expense_id):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    expense = get_object_or_404(Expense, id=expense_id, user=owner)
+
+    if request.method == "GET":
+        return _json_success({"expense": _serialize_expense(expense)})
+
+    if request.method == "DELETE":
+        expense.delete()
+        return _json_success({"deleted": True})
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    if "category" in data:
+        category = (data.get("category") or "").strip()
+        valid_categories = {choice[0] for choice in Expense.CATEGORY_CHOICES}
+        if category in valid_categories:
+            expense.category = category
+
+    if "title" in data:
+        title = (data.get("title") or "").strip()
+        if title:
+            expense.title = title
+
+    if "amount" in data:
+        try:
+            amount = Decimal(str(data.get("amount")))
+            if amount < 0:
+                raise ValueError
+            expense.amount = amount
+        except Exception:
+            return _json_error("Amount must be a valid non-negative number.")
+
+    if "date" in data:
+        date = parse_date((data.get("date") or "").strip())
+        if date:
+            expense.date = date
+
+    expense.save()
+    return _json_success({"expense": _serialize_expense(expense)})
+
+
 @csrf_exempt
 @require_http_methods(["GET"])
 def api_shopboy_dashboard(request):
