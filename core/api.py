@@ -1292,6 +1292,28 @@ def api_owner_product_detail(request, pk):
 
 
 @csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_adjust_stock(request, pk):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    product = get_object_or_404(Product, pk=pk, user=owner)
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    try:
+        adjustment = _parse_stock(data.get("adjustment", 0))
+    except Exception:
+        return _json_error("Invalid adjustment amount.")
+
+    product.stock = max(Decimal("0.00"), product.stock + adjustment)
+    product.save(update_fields=["stock"])
+    return _json_success({ "product": _serialize_owner_product(request, product) })
+
+
+@csrf_exempt
 @require_http_methods(["GET"])
 def api_owner_dashboard(request):
     owner = _require_owner(request)

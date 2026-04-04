@@ -29,6 +29,7 @@ urlpatterns = [
     path('api/mobile/owner/categories/', api.api_owner_categories, name='api_owner_categories'),
     path('api/mobile/owner/products/', api.api_owner_products, name='api_owner_products'),
     path('api/mobile/owner/products/<int:pk>/', api.api_owner_product_detail, name='api_owner_product_detail'),
+    path('api/mobile/owner/products/<int:pk>/adjust/', api.api_owner_adjust_stock, name='api_owner_adjust_stock'),
     path('api/mobile/owner/dashboard/', api.api_owner_dashboard, name='api_owner_dashboard'),
     path('api/mobile/owner/pos/', api.api_owner_pos, name='api_owner_pos'),
     path('api/mobile/owner/cart/add/', api.api_owner_cart_add, name='api_owner_cart_add'),
