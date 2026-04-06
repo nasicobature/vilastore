@@ -1706,6 +1706,7 @@ def api_owner_inventory(request):
     low_stock = products.filter(stock__lte=F("low_stock_threshold"), stock__gt=0).count()
     out_of_stock = products.filter(stock=0).count()
 
+    sample_products = list(products.order_by("name").values_list("name", flat=True)[:3])
     return _json_success({
         "summary": {
             "total_products": total_products,
@@ -1714,6 +1715,13 @@ def api_owner_inventory(request):
             "out_of_stock": out_of_stock,
         },
         "products": [_serialize_owner_product(request, product) for product in products.order_by("name")],
+        "inventory_debug": {
+            "owner_id": owner.id,
+            "owner_username": owner.username,
+            "owner_business_name": owner.business_name or "",
+            "product_count": total_products,
+            "sample_products": sample_products,
+        },
     })
 
 
