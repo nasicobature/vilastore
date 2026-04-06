@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, F
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
