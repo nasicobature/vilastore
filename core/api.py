@@ -46,6 +46,7 @@ from .views import (
     _year_turnover,
     _is_vat_registered,
     _vat_registration_note,
+    _generate_product_code,
     VAT_RATE,
     _send_marketplace_reset_code,
     _send_marketplace_verification_code,
