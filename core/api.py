@@ -1382,45 +1382,48 @@ def api_owner_dashboard(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 def api_owner_pos(request):
-    token_obj, _ = _get_auth_from_request(request)
-    owner = _require_owner(request)
-    if not owner or not token_obj:
-        return _json_error("Unauthorized.", status=401)
+    try:
+        token_obj, _ = _get_auth_from_request(request)
+        owner = _require_owner(request)
+        if not owner or not token_obj:
+            return _json_error("Unauthorized.", status=401)
 
-    category_id = (request.GET.get("category") or "").strip()
-    q = (request.GET.get("q") or "").strip()
+        category_id = (request.GET.get("category") or "").strip()
+        q = (request.GET.get("q") or "").strip()
 
-    products = Product.objects.filter(user=owner)
-    if category_id:
-        products = products.filter(category_id=category_id)
-    if q:
-        products = products.filter(
-            Q(name__icontains=q) |
-            Q(code__icontains=q) |
-            Q(category__name__icontains=q)
-        )
+        products = Product.objects.filter(user=owner)
+        if category_id:
+            products = products.filter(category_id=category_id)
+        if q:
+            products = products.filter(
+                Q(name__icontains=q) |
+                Q(code__icontains=q) |
+                Q(category__name__icontains=q)
+            )
 
-    categories = Category.objects.filter(user=owner).order_by("name")
-    cart = _get_owner_cart(token_obj)
-    cart_payload = _serialize_owner_cart(request, cart, owner)
+        categories = Category.objects.filter(user=owner).order_by("name")
+        cart = _get_owner_cart(token_obj)
+        cart_payload = _serialize_owner_cart(request, cart, owner)
 
-    last_sale = None
-    if cart.last_sale_id:
-        sale = Sale.objects.filter(user=owner, id=cart.last_sale_id).first()
-        if sale:
-            last_sale = {
-                "id": sale.id,
-                "total_amount": _money(sale.total_amount),
-                "created_at": sale.created_at.isoformat(),
-            }
+        last_sale = None
+        if cart.last_sale_id:
+            sale = Sale.objects.filter(user=owner, id=cart.last_sale_id).first()
+            if sale:
+                last_sale = {
+                    "id": sale.id,
+                    "total_amount": _money(sale.total_amount),
+                    "created_at": sale.created_at.isoformat(),
+                }
 
-    return _json_success({
-        "products": [_serialize_owner_product(request, product) for product in products.select_related("category")],
-        "categories": [_serialize_category(cat) for cat in categories],
-        "cart": cart_payload,
-        "last_sale": last_sale,
-        "can_edit_price": True,
-    })
+        return _json_success({
+            "products": [_serialize_owner_product(request, product) for product in products.select_related("category")],
+            "categories": [_serialize_category(cat) for cat in categories],
+            "cart": cart_payload,
+            "last_sale": last_sale,
+            "can_edit_price": True,
+        })
+    except Exception as exc:
+        return _json_error(f"POS failed: {exc}", status=500)
 
 
 @csrf_exempt
