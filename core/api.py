@@ -1781,6 +1781,35 @@ def api_owner_debug_data(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def api_owner_debug_products(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    products = Product.objects.filter(user=owner).select_related("category").order_by("name")
+    return _json_success({
+        "products": [
+            {
+                "id": product.id,
+                "name": product.name,
+                "code": product.code or "",
+                "category": {
+                    "id": product.category_id,
+                    "name": product.category.name if product.category_id else "",
+                },
+                "cost_price": _money(product.cost_price),
+                "selling_price": _money(product.selling_price),
+                "stock": _format_quantity(product.stock),
+                "low_stock_threshold": product.low_stock_threshold,
+                "image_url": _abs_media_url(request, product.image),
+            }
+            for product in products
+        ]
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def api_owner_generate_product_code(request):
     owner = _require_owner(request)
     if not owner:

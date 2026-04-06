@@ -39,6 +39,7 @@ urlpatterns = [
     path('api/mobile/owner/cart/checkout/', api.api_owner_cart_checkout, name='api_owner_cart_checkout'),
     path('api/mobile/owner/inventory/', api.api_owner_inventory, name='api_owner_inventory'),
     path('api/mobile/owner/debug-data/', api.api_owner_debug_data, name='api_owner_debug_data'),
+    path('api/mobile/owner/debug-products/', api.api_owner_debug_products, name='api_owner_debug_products'),
     path('api/mobile/owner/product-code/', api.api_owner_generate_product_code, name='api_owner_generate_product_code'),
     path('api/mobile/owner/product-labels/', api.api_owner_product_labels, name='api_owner_product_labels'),
     path('api/mobile/owner/sales-history/', api.api_owner_sales_history, name='api_owner_sales_history'),
