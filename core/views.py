@@ -1425,6 +1425,15 @@ def _authenticate_with_identifier(request, identifier, password):
     identity = (identifier or "").strip()
     if not identity or not password:
         return None
+    # Prefer exact match when possible to avoid case-insensitive ambiguity.
+    account_exact = (
+        User.objects.filter(Q(email=identity) | Q(username=identity))
+        .order_by("-is_active", "-id")
+        .first()
+    )
+    if account_exact:
+        auth_username = account_exact.username
+        return authenticate(request, username=auth_username, password=password)
 
     account = (
         User.objects.filter(Q(email__iexact=identity) | Q(username__iexact=identity))

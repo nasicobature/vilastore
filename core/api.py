@@ -70,6 +70,17 @@ def _json_success(data=None, status=200):
     return JsonResponse(payload, status=status)
 
 
+def _mask_email(email):
+    if not email or "@" not in email:
+        return email or ""
+    name, domain = email.split("@", 1)
+    if len(name) <= 2:
+        masked = name[:1] + "***"
+    else:
+        masked = name[:2] + "***"
+    return f"{masked}@{domain}"
+
+
 @require_http_methods(["GET"])
 def api_health(request):
     return _json_success({
@@ -1722,6 +1733,49 @@ def api_owner_inventory(request):
             "product_count": total_products,
             "sample_products": sample_products,
         },
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_debug_data(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    same_business = User.objects.filter(business_name__iexact=owner.business_name).exclude(id=owner.id)
+    same_username = User.objects.filter(username__iexact=owner.username).exclude(id=owner.id)
+    same_email = User.objects.filter(email__iexact=owner.email).exclude(id=owner.id)
+    matches = {user.id: user for user in same_business | same_username | same_email}
+
+    other_accounts = []
+    for user in matches.values():
+        other_accounts.append({
+            "id": user.id,
+            "username": user.username,
+            "email": _mask_email(user.email),
+            "business_name": user.business_name or "",
+            "product_count": Product.objects.filter(user=user).count(),
+            "category_count": Category.objects.filter(user=user).count(),
+            "expense_count": Expense.objects.filter(user=user).count(),
+            "customer_count": Customer.objects.filter(user=user).count(),
+        })
+
+    return _json_success({
+        "owner": {
+            "id": owner.id,
+            "username": owner.username,
+            "email": _mask_email(owner.email),
+            "business_name": owner.business_name or "",
+        },
+        "counts": {
+            "products": Product.objects.filter(user=owner).count(),
+            "categories": Category.objects.filter(user=owner).count(),
+            "expenses": Expense.objects.filter(user=owner).count(),
+            "customers": Customer.objects.filter(user=owner).count(),
+            "sales": Sale.objects.filter(user=owner).count(),
+        },
+        "other_accounts": other_accounts,
     })
 
 
