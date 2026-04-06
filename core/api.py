@@ -2346,6 +2346,8 @@ def api_owner_settings(request):
     return _json_success({
         "shop_code": owner.shop_code or "",
         "profile": {
+            "username": owner.username or "",
+            "email": owner.email or "",
             "business_name": owner.business_name or "",
             "country": owner.country or "",
             "address": owner.address or "",
