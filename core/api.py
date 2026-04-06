@@ -1327,56 +1327,59 @@ def api_owner_adjust_stock(request, pk):
 @csrf_exempt
 @require_http_methods(["GET"])
 def api_owner_dashboard(request):
-    owner = _require_owner(request)
-    if not owner:
-        return _json_error("Unauthorized.", status=401)
+    try:
+        owner = _require_owner(request)
+        if not owner:
+            return _json_error("Unauthorized.", status=401)
 
-    today = timezone.localdate()
-    today_sales = Sale.objects.filter(user=owner, created_at__date=today).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
-    today_profit = Sale.objects.filter(user=owner, created_at__date=today).aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
-    total_products = Product.objects.filter(user=owner).count()
-    low_stock_count = Product.objects.filter(user=owner, stock__lte=F("low_stock_threshold"), stock__gt=0).count()
+        today = timezone.localdate()
+        today_sales = Sale.objects.filter(user=owner, created_at__date=today).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+        today_profit = Sale.objects.filter(user=owner, created_at__date=today).aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
+        total_products = Product.objects.filter(user=owner).count()
+        low_stock_count = Product.objects.filter(user=owner, stock__lte=F("low_stock_threshold"), stock__gt=0).count()
 
-    today_transactions = (
-        Sale.objects.filter(user=owner, created_at__date=today)
-        .annotate(items_count=Sum("items__quantity"))
-        .order_by("-created_at")[:5]
-    )
+        today_transactions = (
+            Sale.objects.filter(user=owner, created_at__date=today)
+            .annotate(items_count=Sum("items__quantity"))
+            .order_by("-created_at")[:5]
+        )
 
-    top_products = (
-        Product.objects.filter(user=owner)
-        .annotate(total_sold=Sum("saleitem__quantity"))
-        .order_by("-total_sold", "-created_at")[:6]
-    )
+        top_products = (
+            Product.objects.filter(user=owner)
+            .annotate(total_sold=Sum("saleitem__quantity"))
+            .order_by("-total_sold", "-created_at")[:6]
+        )
 
-    return _json_success({
-        "today_date": today.isoformat(),
-        "today_sales": _money(today_sales),
-        "today_profit": _money(today_profit),
-        "total_products": total_products,
-        "low_stock_count": low_stock_count,
-        "today_transactions": [
-            {
-                "id": sale.id,
-                "items_count": float(sale.items_count or 0),
-                "total_amount": _money(sale.total_amount),
-                "total_profit": _money(sale.total_profit),
-                "created_at": sale.created_at.isoformat(),
-            }
-            for sale in today_transactions
-        ],
-        "top_products": [
-            {
-                "id": product.id,
-                "name": product.name,
-                "selling_price": _money(product.selling_price),
-                "stock": str(product.stock),
-                "total_sold": float(product.total_sold or 0),
-                "image_url": _abs_media_url(request, product.image),
-            }
-            for product in top_products
-        ],
-    })
+        return _json_success({
+            "today_date": today.isoformat(),
+            "today_sales": _money(today_sales),
+            "today_profit": _money(today_profit),
+            "total_products": total_products,
+            "low_stock_count": low_stock_count,
+            "today_transactions": [
+                {
+                    "id": sale.id,
+                    "items_count": float(sale.items_count or 0),
+                    "total_amount": _money(sale.total_amount),
+                    "total_profit": _money(sale.total_profit),
+                    "created_at": sale.created_at.isoformat(),
+                }
+                for sale in today_transactions
+            ],
+            "top_products": [
+                {
+                    "id": product.id,
+                    "name": product.name,
+                    "selling_price": _money(product.selling_price),
+                    "stock": str(product.stock),
+                    "total_sold": float(product.total_sold or 0),
+                    "image_url": _abs_media_url(request, product.image),
+                }
+                for product in top_products
+            ],
+        })
+    except Exception as exc:
+        return _json_error(f"Dashboard failed: {exc}", status=500)
 
 
 @csrf_exempt
