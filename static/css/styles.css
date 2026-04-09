@@ -921,6 +921,53 @@ button {
 }
 
 @media (max-width: 640px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 0.5rem;
+  }
+
+  .sidebar-logo {
+    margin-bottom: 0;
+    padding: 0;
+  }
+
+  .sidebar-logo h1 {
+    display: none;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding-left: 0.25rem;
+  }
+
+  .nav-link {
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.5rem;
+    flex: 0 0 auto;
+  }
+
+  .main-content {
+    margin-left: 0;
+    padding: 1rem;
+  }
+
+  .sidebar-footer {
+    display: none;
+  }
+
   .products-grid {
     grid-template-columns: 1fr;
   }
