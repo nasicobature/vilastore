@@ -263,6 +263,7 @@ def _serialize_sale(sale):
         "amount_paid": _money(getattr(sale, "amount_paid", Decimal("0.00"))),
         "payment_status": getattr(sale, "payment_status", "paid"),
         "remaining_balance": _money(remaining),
+        "customer_name": getattr(sale, "customer_name", ""),
         "created_at": sale.created_at.isoformat(),
         "sales_channel": sale.sales_channel,
     }

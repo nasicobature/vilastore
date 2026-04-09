@@ -260,6 +260,7 @@ class Sale(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
+    customer_name = models.CharField(max_length=200, blank=True, default="")
     sales_channel = models.CharField(max_length=30, choices=CHANNEL_CHOICES, default=CHANNEL_OWNER_POS)
     handled_by_shopboy = models.ForeignKey("ShopBoy", on_delete=models.SET_NULL, null=True, blank=True, related_name="handled_sales")
 
@@ -280,6 +281,12 @@ class Sale(models.Model):
         if balance < 0:
             return Decimal("0.00")
         return balance
+
+    @property
+    def display_customer_name(self):
+        if self.customer:
+            return f"{self.customer.first_name} {self.customer.last_name}".strip()
+        return (self.customer_name or "").strip()
     
 
 class SaleItem(models.Model):

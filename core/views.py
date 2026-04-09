@@ -121,6 +121,7 @@ def _check_migrations():
         # Touch a new column to confirm migrations are applied
         list(Sale.objects.values_list("vat_total", flat=True)[:1])
         list(Sale.objects.values_list("amount_paid", flat=True)[:1])
+        list(Sale.objects.values_list("customer_name", flat=True)[:1])
         list(User.objects.values_list("fixed_assets", flat=True)[:1])
         return ""
     except (OperationalError, ProgrammingError):
@@ -285,7 +286,6 @@ def product(request):
         )
 
     categories = Category.objects.filter(user=request.user).order_by("name")
-    customers = Customer.objects.filter(user=request.user).order_by("first_name", "last_name")
     cart = request.session.get('cart', {})
     last_sale = None
     last_sale_id = request.session.get('last_sale_id')
@@ -308,7 +308,6 @@ def product(request):
         'search_query': search_query,
         'last_sale': last_sale,
         'can_edit_price': _can_edit_cart_price(request.user),
-        'customers': customers,
     })
 
 
@@ -527,10 +526,15 @@ def checkout(request):
     if payment_status not in valid_statuses:
         payment_status = Sale.PAYMENT_PAID
 
-    customer_id = request.POST.get("customer_id") or None
-    customer = None
-    if customer_id:
-        customer = Customer.objects.filter(user=request.user, id=customer_id).first()
+    customer_name = (request.POST.get("customer_name") or "").strip()
+    initial_payment_raw = request.POST.get("initial_payment") or "0"
+    try:
+        initial_payment = Decimal(initial_payment_raw)
+        if initial_payment < 0:
+            raise ValueError
+    except Exception:
+        messages.error(request, "Initial payment must be 0 or more.")
+        return redirect('product')
 
     product_ids = [int(pid) for pid in cart.keys()]
 
@@ -591,7 +595,7 @@ def checkout(request):
 
         sale = Sale.objects.create(
             user=request.user,
-            customer=customer,
+            customer_name=customer_name,
             sales_channel=Sale.CHANNEL_OWNER_POS,
             total_amount=total_amount.quantize(Decimal("0.01")),
             total_profit=total_profit.quantize(Decimal("0.01")),
@@ -599,12 +603,12 @@ def checkout(request):
             amount_paid=(
                 total_amount.quantize(Decimal("0.01"))
                 if payment_status == Sale.PAYMENT_PAID
-                else Decimal("0.00")
+                else min(initial_payment, total_amount).quantize(Decimal("0.01"))
             ),
             payment_status=(
                 Sale.PAYMENT_PAID
                 if payment_status == Sale.PAYMENT_PAID
-                else Sale.PAYMENT_LOAN
+                else _derive_payment_status(total_amount, min(initial_payment, total_amount))
             ),
         )
 

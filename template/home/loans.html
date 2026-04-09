@@ -73,8 +73,8 @@
                 <small>{{ sale.created_at|time:"H:i" }}</small>
               </td>
               <td data-label="Customer">
-                {% if sale.customer %}
-                  {{ sale.customer.first_name }} {{ sale.customer.last_name }}
+                {% if sale.display_customer_name %}
+                  {{ sale.display_customer_name }}
                 {% else %}
                   <span class="badge">Walk-in</span>
                 {% endif %}

@@ -179,6 +179,12 @@
         {{ sale.customer.first_name }} {{ sale.customer.last_name }}
       </div>
       {% endif %}
+      {% if sale.customer_name and not sale.customer %}
+      <div>
+        <span>Customer</span>
+        {{ sale.customer_name }}
+      </div>
+      {% endif %}
     </div>
 
     <table class="items-table">

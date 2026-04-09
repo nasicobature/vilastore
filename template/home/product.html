@@ -212,17 +212,16 @@
             {% csrf_token %}
             <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem;">
               <label style="font-size:0.85rem;color:var(--muted-foreground);">Payment Status</label>
-              <select name="payment_status" class="input">
+              <select name="payment_status" class="input" id="paymentStatusSelect">
                 <option value="paid">Paid</option>
                 <option value="loan">Loan (credit)</option>
               </select>
-              <label style="font-size:0.85rem;color:var(--muted-foreground);">Customer (optional)</label>
-              <select name="customer_id" class="input">
-                <option value="">Walk-in customer</option>
-                {% for customer in customers %}
-                  <option value="{{ customer.id }}">{{ customer.first_name }} {{ customer.last_name }}</option>
-                {% endfor %}
-              </select>
+              <label style="font-size:0.85rem;color:var(--muted-foreground);">Customer Full Name (optional)</label>
+              <input type="text" name="customer_name" class="input" placeholder="e.g. John Doe">
+              <div id="loanPaymentBlock" style="display:none;">
+                <label style="font-size:0.85rem;color:var(--muted-foreground);">Initial Payment (optional)</label>
+                <input type="number" name="initial_payment" min="0" step="0.01" class="input" placeholder="0.00">
+              </div>
             </div>
             <button type="submit" class="btn btn-primary">
               Complete Sale
@@ -252,6 +251,17 @@ document.addEventListener('DOMContentLoaded', function () {
     let scanStream = null;
     let scanning = false;
     let lookupTimer;
+
+    const paymentSelect = document.getElementById('paymentStatusSelect');
+    const loanBlock = document.getElementById('loanPaymentBlock');
+    function syncLoanBlock() {
+      if (!paymentSelect || !loanBlock) return;
+      loanBlock.style.display = paymentSelect.value === 'loan' ? 'block' : 'none';
+    }
+    if (paymentSelect) {
+      paymentSelect.addEventListener('change', syncLoanBlock);
+      syncLoanBlock();
+    }
 
     function setPreview(text) {
       if (!preview) return;
