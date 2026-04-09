@@ -297,6 +297,14 @@ def _format_quantity(qty):
     return text or "0"
 
 
+def _derive_payment_status(total_amount, amount_paid):
+    if amount_paid >= total_amount:
+        return Sale.PAYMENT_PAID
+    if amount_paid > 0:
+        return Sale.PAYMENT_PARTIAL
+    return Sale.PAYMENT_LOAN
+
+
 def _get_shopboy_from_request(request):
     token_obj, _ = _get_auth_from_request(request)
     if not token_obj or token_obj.role != AuthToken.ROLE_SHOPBOY or not token_obj.shopboy:
@@ -1617,6 +1625,20 @@ def api_owner_cart_checkout(request):
     if not owner or not token_obj:
         return _json_error("Unauthorized.", status=401)
 
+    data = _get_body_data(request) or {}
+    payment_status = (data.get("payment_status") or Sale.PAYMENT_PAID).strip().lower()
+    valid_statuses = {Sale.PAYMENT_PAID, Sale.PAYMENT_LOAN}
+    if payment_status not in valid_statuses:
+        payment_status = Sale.PAYMENT_PAID
+
+    customer_name = (data.get("customer_name") or "").strip()
+    try:
+        initial_payment = Decimal(str(data.get("initial_payment") or "0"))
+        if initial_payment < 0:
+            raise ValueError
+    except Exception:
+        return _json_error("Initial payment must be 0 or more.")
+
     cart = _get_owner_cart(token_obj)
     if not cart.data:
         return _json_error("Cart is empty.", status=400)
@@ -1674,14 +1696,25 @@ def api_owner_cart_checkout(request):
             row["vat_amount"] = vat_amount
             vat_total += vat_amount
 
+        amount_paid = (
+            total_amount.quantize(Decimal("0.01"))
+            if payment_status == Sale.PAYMENT_PAID
+            else min(initial_payment, total_amount).quantize(Decimal("0.01"))
+        )
+
         sale = Sale.objects.create(
             user=owner,
             sales_channel=Sale.CHANNEL_OWNER_POS,
+            customer_name=customer_name,
             total_amount=total_amount.quantize(Decimal("0.01")),
             total_profit=total_profit.quantize(Decimal("0.01")),
             vat_total=vat_total.quantize(Decimal("0.01")),
-            amount_paid=total_amount.quantize(Decimal("0.01")),
-            payment_status=Sale.PAYMENT_PAID,
+            amount_paid=amount_paid,
+            payment_status=(
+                Sale.PAYMENT_PAID
+                if payment_status == Sale.PAYMENT_PAID
+                else _derive_payment_status(total_amount, amount_paid)
+            ),
         )
 
         for row in line_items:
@@ -1942,6 +1975,10 @@ def api_owner_sales_history(request):
             "items_count": float(sale.items.aggregate(total=Sum("quantity"))["total"] or 0),
             "total_amount": _money(sale.total_amount),
             "total_profit": _money(sale.total_profit),
+            "amount_paid": _money(getattr(sale, "amount_paid", Decimal("0.00"))),
+            "remaining_balance": _money(sale.remaining_balance),
+            "payment_status": getattr(sale, "payment_status", Sale.PAYMENT_PAID),
+            "customer_name": sale.display_customer_name if hasattr(sale, "display_customer_name") else "",
             "created_at": sale.created_at.isoformat(),
             "sales_channel": sale.sales_channel,
             "sales_channel_display": sale.get_sales_channel_display(),
@@ -1979,6 +2016,71 @@ def api_owner_sale_detail(request, sale_id):
     return _json_success({
         "sale": _serialize_sale(sale),
         "items": [_serialize_sale_item(item) for item in sale.items.all()],
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_loans(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    loans = (
+        Sale.objects.filter(user=owner, payment_status__in=[Sale.PAYMENT_LOAN, Sale.PAYMENT_PARTIAL])
+        .select_related("customer")
+        .order_by("-created_at")
+    )
+
+    payload = []
+    for sale in loans:
+        payload.append({
+            "id": sale.id,
+            "customer_name": sale.display_customer_name,
+            "total_amount": _money(sale.total_amount),
+            "amount_paid": _money(sale.amount_paid),
+            "remaining_balance": _money(sale.remaining_balance),
+            "payment_status": sale.payment_status,
+            "created_at": sale.created_at.isoformat(),
+        })
+
+    return _json_success({ "loans": payload })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_loan_update(request, sale_id):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    try:
+        payment_amount = Decimal(str(data.get("payment_amount")))
+        if payment_amount <= 0:
+            raise ValueError
+    except Exception:
+        return _json_error("Payment amount must be greater than 0.")
+
+    sale = get_object_or_404(Sale, id=sale_id, user=owner)
+    new_amount_paid = (sale.amount_paid or Decimal("0.00")) + payment_amount
+    if new_amount_paid > sale.total_amount:
+        new_amount_paid = sale.total_amount
+
+    sale.amount_paid = new_amount_paid.quantize(Decimal("0.01"))
+    sale.payment_status = _derive_payment_status(sale.total_amount, sale.amount_paid)
+    sale.save(update_fields=["amount_paid", "payment_status"])
+
+    return _json_success({
+        "sale": {
+            "id": sale.id,
+            "amount_paid": _money(sale.amount_paid),
+            "remaining_balance": _money(sale.remaining_balance),
+            "payment_status": sale.payment_status,
+        }
     })
 
 
