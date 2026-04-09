@@ -248,6 +248,16 @@ class Sale(models.Model):
         (CHANNEL_SHOPBOY_PORTAL, "Shop Boy Portal"),
     ]
 
+    PAYMENT_PAID = "paid"
+    PAYMENT_LOAN = "loan"
+    PAYMENT_PARTIAL = "partial"
+
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_PAID, "Paid"),
+        (PAYMENT_LOAN, "Loan (Unpaid)"),
+        (PAYMENT_PARTIAL, "Partially Paid"),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
     sales_channel = models.CharField(max_length=30, choices=CHANNEL_CHOICES, default=CHANNEL_OWNER_POS)
@@ -256,8 +266,20 @@ class Sale(models.Model):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     total_profit = models.DecimalField(max_digits=10, decimal_places=2)
     vat_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default=PAYMENT_PAID)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def remaining_balance(self):
+        try:
+            balance = Decimal(self.total_amount) - Decimal(self.amount_paid or Decimal("0.00"))
+        except Exception:
+            return Decimal("0.00")
+        if balance < 0:
+            return Decimal("0.00")
+        return balance
     
 
 class SaleItem(models.Model):

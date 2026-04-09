@@ -120,6 +120,7 @@ def _check_migrations():
     try:
         # Touch a new column to confirm migrations are applied
         list(Sale.objects.values_list("vat_total", flat=True)[:1])
+        list(Sale.objects.values_list("amount_paid", flat=True)[:1])
         list(User.objects.values_list("fixed_assets", flat=True)[:1])
         return ""
     except (OperationalError, ProgrammingError):
@@ -168,6 +169,14 @@ def _calculate_item_vat(product, line_total, vat_registered):
     vat_rate = VAT_RATE if vat_applicable else Decimal("0.00")
     vat_amount = (line_total * vat_rate).quantize(Decimal("0.01"))
     return vat_status, vat_applicable, vat_rate, vat_amount
+
+
+def _derive_payment_status(total_amount, amount_paid):
+    if amount_paid >= total_amount:
+        return Sale.PAYMENT_PAID
+    if amount_paid > 0:
+        return Sale.PAYMENT_PARTIAL
+    return Sale.PAYMENT_LOAN
 
 
 def _get_agent_by_code(raw_code):
@@ -276,6 +285,7 @@ def product(request):
         )
 
     categories = Category.objects.filter(user=request.user).order_by("name")
+    customers = Customer.objects.filter(user=request.user).order_by("first_name", "last_name")
     cart = request.session.get('cart', {})
     last_sale = None
     last_sale_id = request.session.get('last_sale_id')
@@ -298,6 +308,7 @@ def product(request):
         'search_query': search_query,
         'last_sale': last_sale,
         'can_edit_price': _can_edit_cart_price(request.user),
+        'customers': customers,
     })
 
 
@@ -511,6 +522,16 @@ def checkout(request):
         messages.warning(request, "Cart is empty.")
         return redirect('product')
 
+    payment_status = (request.POST.get("payment_status") or Sale.PAYMENT_PAID).strip().lower()
+    valid_statuses = {Sale.PAYMENT_PAID, Sale.PAYMENT_LOAN}
+    if payment_status not in valid_statuses:
+        payment_status = Sale.PAYMENT_PAID
+
+    customer_id = request.POST.get("customer_id") or None
+    customer = None
+    if customer_id:
+        customer = Customer.objects.filter(user=request.user, id=customer_id).first()
+
     product_ids = [int(pid) for pid in cart.keys()]
 
     total_amount = Decimal("0.00")
@@ -570,10 +591,21 @@ def checkout(request):
 
         sale = Sale.objects.create(
             user=request.user,
+            customer=customer,
             sales_channel=Sale.CHANNEL_OWNER_POS,
             total_amount=total_amount.quantize(Decimal("0.01")),
             total_profit=total_profit.quantize(Decimal("0.01")),
             vat_total=vat_total.quantize(Decimal("0.01")),
+            amount_paid=(
+                total_amount.quantize(Decimal("0.01"))
+                if payment_status == Sale.PAYMENT_PAID
+                else Decimal("0.00")
+            ),
+            payment_status=(
+                Sale.PAYMENT_PAID
+                if payment_status == Sale.PAYMENT_PAID
+                else Sale.PAYMENT_LOAN
+            ),
         )
 
         for row in line_items:
@@ -593,7 +625,10 @@ def checkout(request):
 
     request.session['last_sale_id'] = sale.id
     request.session['cart'] = {}
-    messages.success(request, "Sale completed successfully.")
+    if payment_status == Sale.PAYMENT_LOAN:
+        messages.success(request, "Sale recorded as loan.")
+    else:
+        messages.success(request, "Sale completed successfully.")
     return redirect('product')
     
 
@@ -781,7 +816,7 @@ def sales_history(request):
 
     sales = (
         Sale.objects.filter(user=request.user)
-        .select_related("handled_by_shopboy")
+        .select_related("handled_by_shopboy", "customer")
         .prefetch_related('items__product')
         .order_by('-created_at')
     )
@@ -843,6 +878,51 @@ def sales_history(request):
     }
 
     return render(request, 'home/sales-history.html', context)
+
+
+@login_required
+def loans(request):
+    loans_qs = (
+        Sale.objects.filter(user=request.user)
+        .select_related("customer", "handled_by_shopboy")
+        .order_by("-created_at")
+    ).filter(payment_status__in=[Sale.PAYMENT_LOAN, Sale.PAYMENT_PARTIAL])
+
+    return render(request, "home/loans.html", {
+        "loans": loans_qs,
+    })
+
+
+@login_required
+@require_POST
+def update_loan_payment(request, sale_id):
+    sale = get_object_or_404(Sale, id=sale_id, user=request.user)
+    if sale.remaining_balance <= 0:
+        messages.info(request, "This loan is already fully paid.")
+        return redirect("loans")
+
+    payment_raw = request.POST.get("payment_amount")
+    try:
+        payment_amount = Decimal(payment_raw)
+        if payment_amount <= 0:
+            raise ValueError
+    except Exception:
+        messages.error(request, "Enter a valid payment amount greater than 0.")
+        return redirect("loans")
+
+    new_amount_paid = (sale.amount_paid or Decimal("0.00")) + payment_amount
+    if new_amount_paid > sale.total_amount:
+        new_amount_paid = sale.total_amount
+
+    sale.amount_paid = new_amount_paid.quantize(Decimal("0.01"))
+    sale.payment_status = _derive_payment_status(sale.total_amount, sale.amount_paid)
+    sale.save(update_fields=["amount_paid", "payment_status"])
+
+    if sale.payment_status == Sale.PAYMENT_PAID:
+        messages.success(request, "Loan fully paid and marked as Paid.")
+    else:
+        messages.success(request, "Partial payment recorded.")
+    return redirect("loans")
 
 
 @login_required
@@ -2835,6 +2915,8 @@ def shopboy_checkout(request):
             handled_by_shopboy=shopboy,
             total_amount=total_amount.quantize(Decimal("0.01")),
             total_profit=total_profit.quantize(Decimal("0.01")),
+            amount_paid=total_amount.quantize(Decimal("0.01")),
+            payment_status=Sale.PAYMENT_PAID,
         )
 
         for row in line_items:
@@ -2891,6 +2973,8 @@ def shopboy_sell_product(request, product_id):
             total_amount=total_amount.quantize(Decimal("0.01")),
             total_profit=total_profit.quantize(Decimal("0.01")),
             vat_total=vat_amount.quantize(Decimal("0.01")),
+            amount_paid=total_amount.quantize(Decimal("0.01")),
+            payment_status=Sale.PAYMENT_PAID,
         )
 
         SaleItem.objects.create(
@@ -3733,6 +3817,8 @@ def marketplace_update_status(request, public_id):
                     total_amount=total_amount.quantize(Decimal("0.01")),
                     total_profit=total_profit.quantize(Decimal("0.01")),
                     vat_total=Decimal("0.00"),
+                    amount_paid=total_amount.quantize(Decimal("0.01")),
+                    payment_status=Sale.PAYMENT_PAID,
                 )
                 for item in items:
                     product = item.product

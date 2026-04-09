@@ -1,0 +1,123 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <title>VilaStore - Loans</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+<div class="app-container">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <i data-lucide="store"></i>
+      </div>
+      <h1>VilaStore</h1>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="{% url 'index' %}" class="nav-link"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+      <a href="{% url 'product' %}" class="nav-link"><i data-lucide="package"></i><span>Products</span></a>
+      <a href="{% url 'inventory' %}" class="nav-link"><i data-lucide="boxes"></i><span>Inventory</span></a>
+      <a href="{% url 'sales-history' %}" class="nav-link"><i data-lucide="receipt"></i><span>Sales History</span></a>
+      <a href="{% url 'loans' %}" class="nav-link active"><i data-lucide="credit-card"></i><span>Loans</span></a>
+      <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
+      <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
+      <a href="{% url 'customer' %}" class="nav-link"><i data-lucide="users"></i><span>Customers</span></a>
+      <a href="{% url 'settings' %}" class="nav-link"><i data-lucide="settings"></i><span>Settings</span></a>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-content">
+    <header class="page-header">
+      <div class="page-header-content">
+        <h1>Loans</h1>
+        <p>Manage credit sales and repayments</p>
+      </div>
+    </header>
+
+    {% if messages %}
+      <section style="margin-bottom: 1rem;">
+        {% for message in messages %}
+          <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
+        {% endfor %}
+      </section>
+    {% endif %}
+
+    <div class="table-container">
+      <div class="table-scroll">
+        <table class="table table--responsive">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Customer</th>
+              <th>Total</th>
+              <th>Paid</th>
+              <th>Balance</th>
+              <th>Status</th>
+              <th>Update Payment</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for sale in loans %}
+            <tr>
+              <td data-label="Date">
+                {{ sale.created_at|date:"M d, Y" }} <br>
+                <small>{{ sale.created_at|time:"H:i" }}</small>
+              </td>
+              <td data-label="Customer">
+                {% if sale.customer %}
+                  {{ sale.customer.first_name }} {{ sale.customer.last_name }}
+                {% else %}
+                  <span class="badge">Walk-in</span>
+                {% endif %}
+              </td>
+              <td data-label="Total">₦{{ sale.total_amount|floatformat:2 }}</td>
+              <td data-label="Paid">₦{{ sale.amount_paid|floatformat:2 }}</td>
+              <td data-label="Balance">₦{{ sale.remaining_balance|floatformat:2 }}</td>
+              <td data-label="Status">
+                {% if sale.payment_status == "paid" %}
+                  <span class="badge badge-success">Paid</span>
+                {% elif sale.payment_status == "partial" %}
+                  <span class="badge badge-warning">Partially Paid</span>
+                {% else %}
+                  <span class="badge badge-danger">Loan (Unpaid)</span>
+                {% endif %}
+              </td>
+              <td data-label="Update Payment">
+                <form method="POST" action="{% url 'update_loan_payment' sale.id %}" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                  {% csrf_token %}
+                  <input type="number" name="payment_amount" min="0.01" step="0.01" class="input" style="width:120px;" placeholder="Amount">
+                  <button type="submit" class="btn btn-outline btn-sm">Update</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="empty-state">
+                <i data-lucide="credit-card"></i>
+                <p>No loan sales found</p>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  lucide.createIcons();
+});
+</script>
+</body>
+</html>

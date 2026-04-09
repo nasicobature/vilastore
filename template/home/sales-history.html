@@ -57,6 +57,10 @@
         <i data-lucide="receipt"></i>
         <span>Sales History</span>
       </a>
+      <a href="{% url 'loans' %}" class="nav-link">
+        <i data-lucide="credit-card"></i>
+        <span>Loans</span>
+      </a>
       <a href="{% url 'expenses' %}" class="nav-link">
         <i data-lucide="wallet"></i>
         <span>Expenses</span>
@@ -147,6 +151,9 @@
             <th>Handled By</th>
             <th>Products</th>
             <th>Total Amount</th>
+            <th>Status</th>
+            <th>Paid</th>
+            <th>Balance</th>
             <th>Total Profit</th>
             <th>VAT</th>
             <th>Receipt</th>
@@ -179,6 +186,17 @@
             </td>
 
             <td data-label="Total Amount">₦{{ sale.total_amount|floatformat:2 }}</td>
+            <td data-label="Status">
+              {% if sale.payment_status == "paid" %}
+                <span class="badge badge-success">Paid</span>
+              {% elif sale.payment_status == "partial" %}
+                <span class="badge badge-warning">Partially Paid</span>
+              {% else %}
+                <span class="badge badge-danger">Loan (Unpaid)</span>
+              {% endif %}
+            </td>
+            <td data-label="Paid">₦{{ sale.amount_paid|floatformat:2 }}</td>
+            <td data-label="Balance">₦{{ sale.remaining_balance|floatformat:2 }}</td>
             <td data-label="Total Profit" class="text-profit">₦{{ sale.total_profit|floatformat:2 }}</td>
             <td data-label="VAT">
               {% for item in sale.items.all %}
@@ -193,7 +211,7 @@
           </tr>
         {% empty %}
           <tr data-pagination-ignore="true">
-            <td colspan="8" class="empty-state">
+            <td colspan="11" class="empty-state">
               <i data-lucide="receipt"></i>
               <p>No sales found</p>
             </td>

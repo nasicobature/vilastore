@@ -154,12 +154,24 @@
         {{ sale.get_sales_channel_display }}
       </div>
       <div>
+        <span>Status</span>
+        {{ sale.get_payment_status_display }}
+      </div>
+      <div>
         <span>Handled By</span>
         {% if sale.handled_by_shopboy %}
           {{ sale.handled_by_shopboy.full_name }}
         {% else %}
           Owner
         {% endif %}
+      </div>
+      <div>
+        <span>Amount Paid</span>
+        &#8358;{{ sale.amount_paid|floatformat:2 }}
+      </div>
+      <div>
+        <span>Balance</span>
+        &#8358;{{ sale.remaining_balance|floatformat:2 }}
       </div>
       {% if sale.customer %}
       <div>

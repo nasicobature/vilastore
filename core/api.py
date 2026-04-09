@@ -249,11 +249,20 @@ def _serialize_owner_product(request, product):
 
 
 def _serialize_sale(sale):
+    try:
+        remaining = Decimal(sale.total_amount or "0.00") - Decimal(sale.amount_paid or "0.00")
+    except Exception:
+        remaining = Decimal("0.00")
+    if remaining < 0:
+        remaining = Decimal("0.00")
     return {
         "id": sale.id,
         "total_amount": _money(sale.total_amount),
         "total_profit": _money(sale.total_profit),
         "vat_total": _money(sale.vat_total),
+        "amount_paid": _money(getattr(sale, "amount_paid", Decimal("0.00"))),
+        "payment_status": getattr(sale, "payment_status", "paid"),
+        "remaining_balance": _money(remaining),
         "created_at": sale.created_at.isoformat(),
         "sales_channel": sale.sales_channel,
     }
@@ -1670,6 +1679,8 @@ def api_owner_cart_checkout(request):
             total_amount=total_amount.quantize(Decimal("0.01")),
             total_profit=total_profit.quantize(Decimal("0.01")),
             vat_total=vat_total.quantize(Decimal("0.01")),
+            amount_paid=total_amount.quantize(Decimal("0.01")),
+            payment_status=Sale.PAYMENT_PAID,
         )
 
         for row in line_items:
@@ -2887,6 +2898,8 @@ def api_shopboy_cart_checkout(request):
             handled_by_shopboy=shopboy,
             total_amount=total_amount.quantize(Decimal("0.01")),
             total_profit=total_profit.quantize(Decimal("0.01")),
+            amount_paid=total_amount.quantize(Decimal("0.01")),
+            payment_status=Sale.PAYMENT_PAID,
         )
 
         for row in line_items:
@@ -3121,6 +3134,8 @@ def api_shopboy_marketplace_order_status(request, public_id):
                     total_amount=total_amount.quantize(Decimal("0.01")),
                     total_profit=total_profit.quantize(Decimal("0.01")),
                     vat_total=Decimal("0.00"),
+                    amount_paid=total_amount.quantize(Decimal("0.01")),
+                    payment_status=Sale.PAYMENT_PAID,
                 )
                 for item in items:
                     product = item.product
