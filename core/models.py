@@ -422,6 +422,132 @@ class MarketplaceBuyerToken(models.Model):
         return f"{self.buyer.email} ({self.token[:6]}...)"
 
 
+class DeliveryRider(models.Model):
+    ID_TYPE_NIN = "nin"
+    ID_TYPE_VOTER = "voter"
+    ID_TYPE_DRIVER = "driver"
+    ID_TYPE_CHOICES = [
+        (ID_TYPE_NIN, "National ID (NIN)"),
+        (ID_TYPE_VOTER, "Voter's Card"),
+        (ID_TYPE_DRIVER, "Driver's License"),
+    ]
+
+    VEHICLE_BIKE = "bike"
+    VEHICLE_CAR = "car"
+    VEHICLE_TRICYCLE = "tricycle"
+    VEHICLE_CHOICES = [
+        (VEHICLE_BIKE, "Bike"),
+        (VEHICLE_CAR, "Car"),
+        (VEHICLE_TRICYCLE, "Tricycle"),
+    ]
+
+    RIDER_PERSONAL = "personal"
+    RIDER_COMPANY = "company"
+    RIDER_TYPE_CHOICES = [
+        (RIDER_PERSONAL, "Personal Rider"),
+        (RIDER_COMPANY, "Company Rider"),
+    ]
+
+    buyer = models.OneToOneField(
+        MarketplaceBuyer, on_delete=models.CASCADE, related_name="delivery_rider"
+    )
+    company = models.ForeignKey("DeliveryCompany", on_delete=models.SET_NULL, null=True, blank=True, related_name="riders")
+    rider_type = models.CharField(max_length=20, choices=RIDER_TYPE_CHOICES, default=RIDER_PERSONAL)
+    full_name = models.CharField(max_length=150, blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
+    home_address = models.CharField(max_length=255, blank=True)
+    id_type = models.CharField(max_length=20, choices=ID_TYPE_CHOICES, blank=True)
+    id_number = models.CharField(max_length=100, blank=True)
+    id_document = models.ImageField(upload_to="delivery/ids/", null=True, blank=True)
+    vehicle_type = models.CharField(max_length=20, choices=VEHICLE_CHOICES, blank=True)
+    plate_number = models.CharField(max_length=30, blank=True)
+    vehicle_color = models.CharField(max_length=50, blank=True)
+    vehicle_model = models.CharField(max_length=80, blank=True)
+    profile_photo = models.ImageField(upload_to="delivery/profile/", null=True, blank=True)
+    vehicle_photo = models.ImageField(upload_to="delivery/vehicle/", null=True, blank=True)
+    plate_photo = models.ImageField(upload_to="delivery/plate/", null=True, blank=True)
+    city = models.CharField(max_length=80, blank=True)
+    operating_areas = models.TextField(blank=True)
+    bank_name = models.CharField(max_length=100, blank=True)
+    account_number = models.CharField(max_length=30, blank=True)
+    account_name = models.CharField(max_length=120, blank=True)
+    allow_direct_call = models.BooleanField(default=True)
+    terms_accepted = models.BooleanField(default=False)
+    is_approved = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    is_available = models.BooleanField(default=True)
+    current_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    current_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.full_name or self.buyer.email
+
+
+class DeliveryCompany(models.Model):
+    owner = models.OneToOneField(MarketplaceBuyer, on_delete=models.CASCADE, related_name="delivery_company")
+    company_name = models.CharField(max_length=200)
+    phone = models.CharField(max_length=30)
+    email = models.EmailField(blank=True)
+    address = models.CharField(max_length=255)
+    city = models.CharField(max_length=80)
+    operating_areas = models.TextField(blank=True)
+    bank_name = models.CharField(max_length=100)
+    account_number = models.CharField(max_length=30)
+    account_name = models.CharField(max_length=120)
+    terms_accepted = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.company_name
+
+
+class DeliveryRequest(models.Model):
+    STATUS_REQUESTED = "requested"
+    STATUS_RIDER_SELECTED = "rider_selected"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_PICKED_UP = "picked_up"
+    STATUS_DELIVERED = "delivered"
+    STATUS_CANCELLED = "cancelled"
+
+    STATUS_CHOICES = [
+        (STATUS_REQUESTED, "Requested"),
+        (STATUS_RIDER_SELECTED, "Rider Selected"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_PICKED_UP, "Picked Up"),
+        (STATUS_DELIVERED, "Delivered"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    buyer = models.ForeignKey(MarketplaceBuyer, on_delete=models.CASCADE, related_name="delivery_requests")
+    rider = models.ForeignKey(
+        DeliveryRider, on_delete=models.SET_NULL, null=True, blank=True, related_name="delivery_requests"
+    )
+    pickup_address = models.CharField(max_length=255)
+    dropoff_address = models.CharField(max_length=255)
+    pickup_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    pickup_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    dropoff_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    dropoff_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    distance_km = models.DecimalField(max_digits=7, decimal_places=2, default=0)
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    customer_name = models.CharField(max_length=150, blank=True)
+    customer_phone = models.CharField(max_length=30, blank=True)
+    notes = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_REQUESTED)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Delivery {self.public_id}"
+
+
 class AuthToken(models.Model):
     ROLE_OWNER = "owner"
     ROLE_SHOPBOY = "shopboy"

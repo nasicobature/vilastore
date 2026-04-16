@@ -3544,6 +3544,69 @@ def marketplace_account(request):
     return render(request, "shopboy/marketplace-account.html", {
         "buyer": buyer,
         "orders": orders,
+        "marketplace_active_tab": "marketplace",
+    })
+
+
+def marketplace_home(request):
+    buyer = _get_marketplace_buyer(request)
+    if not buyer:
+        pending = _get_pending_marketplace_buyer(request)
+        if pending and not pending.is_email_verified:
+            return redirect("marketplace_verify")
+        return redirect("marketplace_login")
+
+    orders = (
+        MarketplaceOrder.objects.filter(buyer=buyer)
+        .select_related("shop_owner")
+        .order_by("-created_at")
+    )
+    delivery_requests = (
+        DeliveryRequest.objects.filter(buyer=buyer)
+        .select_related("rider", "rider__buyer")
+        .order_by("-created_at")
+    )
+    active_delivery = (
+        delivery_requests.exclude(
+            status__in=[DeliveryRequest.STATUS_DELIVERED, DeliveryRequest.STATUS_CANCELLED]
+        ).first()
+    )
+
+    return render(request, "shopboy/marketplace-home.html", {
+        "buyer": buyer,
+        "recent_orders": orders[:5],
+        "active_delivery": active_delivery,
+        "stats": {
+            "orders_count": orders.count(),
+            "active_deliveries": delivery_requests.exclude(
+                status__in=[DeliveryRequest.STATUS_DELIVERED, DeliveryRequest.STATUS_CANCELLED]
+            ).count(),
+            "completed_deliveries": delivery_requests.filter(
+                status=DeliveryRequest.STATUS_DELIVERED
+            ).count(),
+        },
+        "marketplace_active_tab": "home",
+    })
+
+
+def marketplace_settings(request):
+    buyer = _get_marketplace_buyer(request)
+    if not buyer:
+        pending = _get_pending_marketplace_buyer(request)
+        if pending and not pending.is_email_verified:
+            return redirect("marketplace_verify")
+        return redirect("marketplace_login")
+
+    recent_delivery_requests = (
+        DeliveryRequest.objects.filter(buyer=buyer)
+        .select_related("rider", "rider__buyer")
+        .order_by("-created_at")[:5]
+    )
+
+    return render(request, "shopboy/marketplace-settings.html", {
+        "buyer": buyer,
+        "recent_delivery_requests": recent_delivery_requests,
+        "marketplace_active_tab": "settings",
     })
 
 
@@ -3616,6 +3679,7 @@ def marketplace(request):
             "verified": verified,
             "sort": sort,
         },
+        "marketplace_active_tab": "marketplace",
     })
 
 
@@ -3629,6 +3693,7 @@ def marketplace_shop(request, username):
         "shop_owner": shop_owner,
         "profile": profile,
         "products": products,
+        "marketplace_active_tab": "marketplace",
     })
 
 

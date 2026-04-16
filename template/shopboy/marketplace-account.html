@@ -12,15 +12,18 @@
 </head>
 <body>
   <header class="marketplace-header">
-    <div class="marketplace-header-inner">
-      <a href="{% url 'marketplace' %}" class="marketplace-logo">
-        <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
-        <span>Marketplace</span>
-      </a>
-      <div class="marketplace-actions">
-        <a href="{% url 'marketplace' %}" class="btn btn-ghost"><i data-lucide="arrow-left"></i> Back</a>
-        <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
+    <div class="marketplace-header-inner marketplace-header-inner-stacked">
+      <div class="marketplace-header-top">
+        <a href="{% url 'marketplace_home' %}" class="marketplace-logo">
+          <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+          <span>VilaStore</span>
+        </a>
+        <div class="marketplace-actions">
+          <a href="{% url 'marketplace' %}" class="btn btn-ghost"><i data-lucide="shopping-bag"></i> Browse</a>
+          <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
+        </div>
       </div>
+      {% include 'partials/marketplace-buyer-nav.html' %}
     </div>
   </header>
 

@@ -1,0 +1,16 @@
+{% if buyer %}
+<nav class="marketplace-top-nav" aria-label="Marketplace buyer navigation">
+  <a href="{% url 'marketplace_home' %}" class="marketplace-top-nav-link {% if marketplace_active_tab == 'home' %}active{% endif %}">
+    <i data-lucide="home"></i>
+    <span>Home</span>
+  </a>
+  <a href="{% url 'marketplace' %}" class="marketplace-top-nav-link {% if marketplace_active_tab == 'marketplace' %}active{% endif %}">
+    <i data-lucide="shopping-bag"></i>
+    <span>Marketplace</span>
+  </a>
+  <a href="{% url 'marketplace_settings' %}" class="marketplace-top-nav-link {% if marketplace_active_tab == 'settings' %}active{% endif %}">
+    <i data-lucide="settings"></i>
+    <span>Settings</span>
+  </a>
+</nav>
+{% endif %}

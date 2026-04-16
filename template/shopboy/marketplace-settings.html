@@ -1,0 +1,117 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketplace - Settings</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <header class="marketplace-header">
+    <div class="marketplace-header-inner marketplace-header-inner-stacked">
+      <div class="marketplace-header-top">
+        <a href="{% url 'marketplace_home' %}" class="marketplace-logo">
+          <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+          <span>VilaStore</span>
+        </a>
+        <div class="marketplace-actions">
+          <a href="{% url 'marketplace_account' %}" class="btn btn-ghost">My Orders</a>
+          <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
+        </div>
+      </div>
+      {% include 'partials/marketplace-buyer-nav.html' %}
+    </div>
+  </header>
+
+  <div class="marketplace-container">
+    <aside class="marketplace-sidebar">
+      <div class="filter-section">
+        <h4>Buyer Profile</h4>
+        <p style="margin:0 0 0.35rem;font-weight:600;">{{ buyer.email }}</p>
+        <p style="margin:0;color:var(--muted-foreground);">Manage your marketplace account and review delivery activity.</p>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <div class="filter-section">
+        <h4>Actions</h4>
+        <div class="filter-list">
+          <a href="{% url 'marketplace_home' %}" class="filter-btn">
+            <span>Go to Home</span>
+            <i data-lucide="arrow-right"></i>
+          </a>
+          <a href="{% url 'marketplace' %}" class="filter-btn">
+            <span>Open Marketplace</span>
+            <i data-lucide="arrow-right"></i>
+          </a>
+          <a href="{% url 'marketplace_account' %}" class="filter-btn">
+            <span>View Orders</span>
+            <i data-lucide="arrow-right"></i>
+          </a>
+        </div>
+      </div>
+    </aside>
+
+    <main class="marketplace-main">
+      <div class="marketplace-results-header">
+        <div>
+          <h2>Settings</h2>
+          <p style="color:var(--muted-foreground);margin-top:0.35rem;">This page gives the web app the same top-level destination as the mobile Settings tab.</p>
+        </div>
+      </div>
+
+      <div class="card" style="padding:1rem;margin-bottom:1.5rem;">
+        <h3 style="margin:0 0 0.75rem;">Account</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+          <div>
+            <p style="margin:0;color:var(--muted-foreground);font-size:0.85rem;">Email</p>
+            <p style="margin:0.35rem 0 0;font-weight:600;">{{ buyer.email }}</p>
+          </div>
+          <div>
+            <p style="margin:0;color:var(--muted-foreground);font-size:0.85rem;">Verification</p>
+            <p style="margin:0.35rem 0 0;font-weight:600;">Verified</p>
+          </div>
+          <div>
+            <p style="margin:0;color:var(--muted-foreground);font-size:0.85rem;">Joined</p>
+            <p style="margin:0.35rem 0 0;font-weight:600;">{{ buyer.created_at|date:"M d, Y" }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:1rem;">
+        <h3 style="margin:0 0 1rem;">Recent Delivery Requests</h3>
+        <div class="shop-list">
+          {% for request in recent_delivery_requests %}
+          <div class="card" style="padding:1rem;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+              <div>
+                <strong>{{ request.pickup_address }}</strong>
+                <p style="margin:0.25rem 0;color:var(--muted-foreground);">To {{ request.dropoff_address }}</p>
+                <p style="margin:0;color:var(--muted-foreground);">Status: {{ request.get_status_display }}</p>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-weight:600;">&#8358;{{ request.price|floatformat:2 }}</div>
+                <p style="margin:0.35rem 0 0;color:var(--muted-foreground);font-size:0.85rem;">{{ request.created_at|date:"M d, Y" }}</p>
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <div class="card" style="padding:2rem;text-align:center;">
+            <i data-lucide="truck" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
+            <p style="color:var(--muted-foreground);">No delivery requests yet.</p>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    if (window.lucide && typeof window.lucide.createIcons === "function") {
+      window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>
