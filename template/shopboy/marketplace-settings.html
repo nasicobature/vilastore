@@ -27,27 +27,31 @@
     </div>
   </header>
 
-  <div class="marketplace-container">
+  <div
+    id="riderWorkspaceApp"
+    class="marketplace-container"
+    data-token="{{ buyer_api_token }}"
+  >
     <aside class="marketplace-sidebar">
       <div class="filter-section">
         <h4>Buyer Profile</h4>
         <p style="margin:0 0 0.35rem;font-weight:600;">{{ buyer.email }}</p>
-        <p style="margin:0;color:var(--muted-foreground);">Manage your marketplace account and review delivery activity.</p>
+        <p style="margin:0;color:var(--muted-foreground);">This web settings tab now hosts the rider workspace, company management, and delivery history that existed mainly in mobile.</p>
       </div>
       <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
       <div class="filter-section">
-        <h4>Actions</h4>
+        <h4>Workspace Snapshot</h4>
         <div class="filter-list">
+          <div class="filter-btn">
+            <span>Personal rider</span>
+            <strong>{% if rider_profile %}Ready{% else %}Not set{% endif %}</strong>
+          </div>
+          <div class="filter-btn">
+            <span>Company profile</span>
+            <strong>{% if delivery_company %}Ready{% else %}Not set{% endif %}</strong>
+          </div>
           <a href="{% url 'marketplace_home' %}" class="filter-btn">
-            <span>Go to Home</span>
-            <i data-lucide="arrow-right"></i>
-          </a>
-          <a href="{% url 'marketplace' %}" class="filter-btn">
-            <span>Open Marketplace</span>
-            <i data-lucide="arrow-right"></i>
-          </a>
-          <a href="{% url 'marketplace_account' %}" class="filter-btn">
-            <span>View Orders</span>
+            <span>Back to Delivery Home</span>
             <i data-lucide="arrow-right"></i>
           </a>
         </div>
@@ -58,60 +62,219 @@
       <div class="marketplace-results-header">
         <div>
           <h2>Settings</h2>
-          <p style="color:var(--muted-foreground);margin-top:0.35rem;">This page gives the web app the same top-level destination as the mobile Settings tab.</p>
+          <p style="color:var(--muted-foreground);margin-top:0.35rem;">Manage your account, rider registration, company fleet, and incoming delivery requests from one consistent web workspace.</p>
         </div>
       </div>
 
-      <div class="card" style="padding:1rem;margin-bottom:1.5rem;">
-        <h3 style="margin:0 0 0.75rem;">Account</h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+      <section class="card delivery-card" style="margin-bottom:1.5rem;">
+        <div class="delivery-card-header">
           <div>
-            <p style="margin:0;color:var(--muted-foreground);font-size:0.85rem;">Email</p>
-            <p style="margin:0.35rem 0 0;font-weight:600;">{{ buyer.email }}</p>
+            <h3>Buyer Account</h3>
+            <p>Core account details stay visible here just like the mobile Settings tab.</p>
           </div>
-          <div>
-            <p style="margin:0;color:var(--muted-foreground);font-size:0.85rem;">Verification</p>
-            <p style="margin:0.35rem 0 0;font-weight:600;">Verified</p>
+          <span id="riderWorkspaceLocationStatus" class="delivery-status-pill">Preparing rider workspace...</span>
+        </div>
+        <div class="delivery-estimate-grid">
+          <div class="delivery-estimate-card">
+            <span>Email</span>
+            <strong>{{ buyer.email }}</strong>
           </div>
-          <div>
-            <p style="margin:0;color:var(--muted-foreground);font-size:0.85rem;">Joined</p>
-            <p style="margin:0.35rem 0 0;font-weight:600;">{{ buyer.created_at|date:"M d, Y" }}</p>
+          <div class="delivery-estimate-card">
+            <span>Verified</span>
+            <strong>{% if buyer.is_email_verified %}Yes{% else %}No{% endif %}</strong>
+          </div>
+          <div class="delivery-estimate-card">
+            <span>Joined</span>
+            <strong>{{ buyer.created_at|date:"M d, Y" }}</strong>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="card" style="padding:1rem;">
-        <h3 style="margin:0 0 1rem;">Recent Delivery Requests</h3>
-        <div class="shop-list">
-          {% for request in recent_delivery_requests %}
-          <div class="card" style="padding:1rem;">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
-              <div>
-                <strong>{{ request.pickup_address }}</strong>
-                <p style="margin:0.25rem 0;color:var(--muted-foreground);">To {{ request.dropoff_address }}</p>
-                <p style="margin:0;color:var(--muted-foreground);">Status: {{ request.get_status_display }}</p>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-weight:600;">&#8358;{{ request.price|floatformat:2 }}</div>
-                <p style="margin:0.35rem 0 0;color:var(--muted-foreground);font-size:0.85rem;">{{ request.created_at|date:"M d, Y" }}</p>
-              </div>
+      <section class="card delivery-card" style="margin-bottom:1.5rem;">
+        <div class="delivery-card-header">
+          <div>
+            <h3>Rider Workspace</h3>
+            <p>Switch between your personal rider registration and your company rider management tools.</p>
+          </div>
+        </div>
+        <div class="delivery-tab-row">
+          <button type="button" class="delivery-tab active" data-rider-tab="personal">Personal Rider</button>
+          <button type="button" class="delivery-tab" data-rider-tab="company">Company Rider</button>
+        </div>
+      </section>
+
+      <section id="riderPersonalPanel" class="card delivery-card" style="margin-bottom:1.5rem;">
+        <div class="delivery-card-header">
+          <div>
+            <h3>Personal Rider Registration</h3>
+            <p>Complete the same registration fields and document uploads that the mobile web screen requires.</p>
+          </div>
+        </div>
+        <div class="delivery-form-grid">
+          <label class="delivery-field"><span>Full name</span><input id="riderFullName" class="input" type="text" value="{{ rider_profile.full_name|default:'' }}"></label>
+          <label class="delivery-field"><span>Phone</span><input id="riderPhone" class="input" type="text" value="{{ rider_profile.phone|default:'' }}"></label>
+          <label class="delivery-field"><span>Email</span><input id="riderEmail" class="input" type="email" value="{{ rider_profile.email|default:'' }}"></label>
+          <label class="delivery-field"><span>Home address</span><input id="riderHomeAddress" class="input" type="text" value="{{ rider_profile.home_address|default:'' }}"></label>
+          <label class="delivery-field">
+            <span>ID type</span>
+            <select id="riderIdType" class="input">
+              <option value="nin" {% if rider_profile.id_type == 'nin' or not rider_profile %}selected{% endif %}>National ID (NIN)</option>
+              <option value="voter" {% if rider_profile.id_type == 'voter' %}selected{% endif %}>Voter's Card</option>
+              <option value="driver" {% if rider_profile.id_type == 'driver' %}selected{% endif %}>Driver's License</option>
+            </select>
+          </label>
+          <label class="delivery-field"><span>ID number</span><input id="riderIdNumber" class="input" type="text" value="{{ rider_profile.id_number|default:'' }}"></label>
+          <label class="delivery-field">
+            <span>Vehicle type</span>
+            <select id="riderVehicleType" class="input">
+              <option value="bike" {% if rider_profile.vehicle_type == 'bike' or not rider_profile %}selected{% endif %}>Bike</option>
+              <option value="car" {% if rider_profile.vehicle_type == 'car' %}selected{% endif %}>Car</option>
+              <option value="tricycle" {% if rider_profile.vehicle_type == 'tricycle' %}selected{% endif %}>Tricycle</option>
+            </select>
+          </label>
+          <label class="delivery-field"><span>Plate number</span><input id="riderPlateNumber" class="input" type="text" value="{{ rider_profile.plate_number|default:'' }}"></label>
+          <label class="delivery-field"><span>Vehicle color</span><input id="riderVehicleColor" class="input" type="text" value="{{ rider_profile.vehicle_color|default:'' }}"></label>
+          <label class="delivery-field"><span>Vehicle model</span><input id="riderVehicleModel" class="input" type="text" value="{{ rider_profile.vehicle_model|default:'' }}"></label>
+          <label class="delivery-field"><span>City</span><input id="riderCity" class="input" type="text" value="{{ rider_profile.city|default:'' }}"></label>
+          <label class="delivery-field"><span>Operating areas</span><textarea id="riderOperatingAreas" class="input" rows="3">{{ rider_profile.operating_areas|default:'' }}</textarea></label>
+          <label class="delivery-field"><span>Bank name</span><input id="riderBankName" class="input" type="text" value="{{ rider_profile.bank_name|default:'' }}"></label>
+          <label class="delivery-field"><span>Account number</span><input id="riderAccountNumber" class="input" type="text" value="{{ rider_profile.account_number|default:'' }}"></label>
+          <label class="delivery-field"><span>Account name</span><input id="riderAccountName" class="input" type="text" value="{{ rider_profile.account_name|default:'' }}"></label>
+          <label class="delivery-field">
+            <span>Profile photo</span>
+            <input id="riderProfilePhoto" class="input" type="file" accept="image/*">
+          </label>
+          <label class="delivery-field">
+            <span>Vehicle photo</span>
+            <input id="riderVehiclePhoto" class="input" type="file" accept="image/*">
+          </label>
+          <label class="delivery-field">
+            <span>Plate photo</span>
+            <input id="riderPlatePhoto" class="input" type="file" accept="image/*">
+          </label>
+          <label class="delivery-field">
+            <span>ID document</span>
+            <input id="riderIdDocument" class="input" type="file" accept="image/*">
+          </label>
+        </div>
+        <div class="delivery-check-row">
+          <label><input id="riderAllowDirectCall" type="checkbox" {% if rider_profile.allow_direct_call or not rider_profile %}checked{% endif %}> Allow direct calls</label>
+          <label><input id="riderTermsAccepted" type="checkbox" {% if rider_profile.terms_accepted %}checked{% endif %}> I accept the rider terms</label>
+        </div>
+        <div class="delivery-actions">
+          <button type="button" class="btn btn-primary" id="riderRegisterButton">
+            <i data-lucide="badge-check"></i>
+            Save Rider Profile
+          </button>
+          <button type="button" class="btn btn-outline" id="riderRefreshRequestsButton">
+            <i data-lucide="refresh-cw"></i>
+            Refresh Requests
+          </button>
+        </div>
+      </section>
+
+      <section id="riderCompanyPanel" class="card delivery-card is-hidden" style="margin-bottom:1.5rem;">
+        <div class="delivery-card-header">
+          <div>
+            <h3>Company Rider Management</h3>
+            <p>Create a company profile, add riders, and approve or remove them from your fleet.</p>
+          </div>
+        </div>
+        <div class="delivery-form-grid">
+          <label class="delivery-field"><span>Company name</span><input id="companyName" class="input" type="text" value="{{ delivery_company.company_name|default:'' }}"></label>
+          <label class="delivery-field"><span>Phone</span><input id="companyPhone" class="input" type="text" value="{{ delivery_company.phone|default:'' }}"></label>
+          <label class="delivery-field"><span>Email</span><input id="companyEmail" class="input" type="email" value="{{ delivery_company.email|default:'' }}"></label>
+          <label class="delivery-field"><span>Address</span><input id="companyAddress" class="input" type="text" value="{{ delivery_company.address|default:'' }}"></label>
+          <label class="delivery-field"><span>City</span><input id="companyCity" class="input" type="text" value="{{ delivery_company.city|default:'' }}"></label>
+          <label class="delivery-field"><span>Operating areas</span><textarea id="companyAreas" class="input" rows="3">{{ delivery_company.operating_areas|default:'' }}</textarea></label>
+          <label class="delivery-field"><span>Bank name</span><input id="companyBankName" class="input" type="text" value="{{ delivery_company.bank_name|default:'' }}"></label>
+          <label class="delivery-field"><span>Account number</span><input id="companyAccountNumber" class="input" type="text" value="{{ delivery_company.account_number|default:'' }}"></label>
+          <label class="delivery-field"><span>Account name</span><input id="companyAccountName" class="input" type="text" value="{{ delivery_company.account_name|default:'' }}"></label>
+        </div>
+        <div class="delivery-check-row">
+          <label><input id="companyTermsAccepted" type="checkbox" {% if delivery_company.terms_accepted %}checked{% endif %}> I accept the company rider terms</label>
+        </div>
+        <div class="delivery-actions">
+          <button type="button" class="btn btn-primary" id="companySaveButton">
+            <i data-lucide="building"></i>
+            Save Company Profile
+          </button>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0;">
+
+        <div class="delivery-card-header">
+          <div>
+            <h3>Add Company Rider</h3>
+            <p>Create rider accounts directly from the web workspace.</p>
+          </div>
+        </div>
+        <div class="delivery-form-grid">
+          <label class="delivery-field"><span>Full name</span><input id="companyRiderName" class="input" type="text"></label>
+          <label class="delivery-field"><span>Phone</span><input id="companyRiderPhone" class="input" type="text"></label>
+          <label class="delivery-field"><span>Email</span><input id="companyRiderEmail" class="input" type="email"></label>
+          <label class="delivery-field"><span>Password</span><input id="companyRiderPassword" class="input" type="password"></label>
+        </div>
+        <div class="delivery-actions">
+          <button type="button" class="btn btn-secondary" id="companyAddRiderButton">
+            <i data-lucide="user-plus"></i>
+            Add Rider
+          </button>
+        </div>
+      </section>
+
+      <div class="delivery-grid">
+        <section class="card delivery-card">
+          <div class="delivery-card-header">
+            <div>
+              <h3>Incoming Rider Requests</h3>
+              <p>Accept, advance, or cancel request statuses from web the same way riders do in mobile.</p>
             </div>
           </div>
+          <div id="riderRequestsList" class="delivery-list"></div>
+        </section>
+
+        <section class="card delivery-card">
+          <div class="delivery-card-header">
+            <div>
+              <h3>Company Riders</h3>
+              <p>Approval and removal controls are connected to the company rider APIs.</p>
+            </div>
+          </div>
+          <div id="companyRidersList" class="delivery-list"></div>
+        </section>
+      </div>
+
+      <section class="card delivery-card" style="margin-top:1.5rem;">
+        <div class="delivery-card-header">
+          <div>
+            <h3>Recent Delivery Requests</h3>
+            <p>Your recent buyer-side request history remains visible here.</p>
+          </div>
+        </div>
+        <div class="delivery-list">
+          {% for request in recent_delivery_requests %}
+          <article class="delivery-list-item">
+            <div>
+              <strong>{{ request.pickup_address }}</strong>
+              <p>To {{ request.dropoff_address }}</p>
+              <p>Status: {{ request.get_status_display }}</p>
+            </div>
+            <div class="delivery-list-meta">
+              <strong>&#8358;{{ request.price|floatformat:2 }}</strong>
+              <span>{{ request.created_at|date:"M d, Y" }}</span>
+            </div>
+          </article>
           {% empty %}
-          <div class="card" style="padding:2rem;text-align:center;">
-            <i data-lucide="truck" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
-            <p style="color:var(--muted-foreground);">No delivery requests yet.</p>
+          <div class="delivery-empty">
+            <p>No delivery requests yet.</p>
           </div>
           {% endfor %}
         </div>
-      </div>
+      </section>
     </main>
   </div>
 
-  <script>
-    if (window.lucide && typeof window.lucide.createIcons === "function") {
-      window.lucide.createIcons();
-    }
-  </script>
+  <script src="{% static 'js/marketplace-delivery.js' %}"></script>
 </body>
 </html>

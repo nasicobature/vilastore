@@ -1385,15 +1385,21 @@ def api_marketplace_delivery_rider_register(request):
     if not terms_accepted:
         return _json_error("You must accept the terms.")
 
+    rider, _ = DeliveryRider.objects.get_or_create(buyer=buyer)
     id_document = request.FILES.get("id_document")
     profile_photo = request.FILES.get("profile_photo")
     vehicle_photo = request.FILES.get("vehicle_photo")
     plate_photo = request.FILES.get("plate_photo")
 
-    if not id_document or not profile_photo or not vehicle_photo or not plate_photo:
-        return _json_error("All required photos and ID document must be uploaded.")
+    if not id_document and not rider.id_document:
+        return _json_error("An ID document must be uploaded.")
+    if not profile_photo and not rider.profile_photo:
+        return _json_error("A profile photo must be uploaded.")
+    if not vehicle_photo and not rider.vehicle_photo:
+        return _json_error("A vehicle photo must be uploaded.")
+    if not plate_photo and not rider.plate_photo:
+        return _json_error("A plate photo must be uploaded.")
 
-    rider, _ = DeliveryRider.objects.get_or_create(buyer=buyer)
     rider.full_name = full_name
     rider.phone = phone
     rider.email = email

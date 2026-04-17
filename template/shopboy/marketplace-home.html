@@ -27,11 +27,17 @@
     </div>
   </header>
 
-  <div class="marketplace-container">
+  <div
+    id="buyerDeliveryApp"
+    class="marketplace-container"
+    data-token="{{ buyer_api_token }}"
+    data-request-detail-base="/api/marketplace/delivery/requests/"
+  >
     <aside class="marketplace-sidebar">
       <div class="filter-section">
-        <h4>Account</h4>
-        <p style="margin:0;color:var(--muted-foreground);">Signed in as {{ buyer.email }}</p>
+        <h4>Buyer Account</h4>
+        <p style="margin:0 0 0.35rem;font-weight:600;">{{ buyer.email }}</p>
+        <p style="margin:0;color:var(--muted-foreground);">The web home tab now includes the same delivery workflow the mobile app exposes.</p>
       </div>
       <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
       <div class="filter-section">
@@ -41,14 +47,14 @@
             <span>Browse Shops</span>
             <i data-lucide="arrow-right"></i>
           </a>
-          <a href="{% url 'marketplace_account' %}" class="filter-btn">
-            <span>My Orders</span>
-            <i data-lucide="arrow-right"></i>
-          </a>
           <a href="{% url 'marketplace_settings' %}" class="filter-btn">
-            <span>Settings</span>
+            <span>Rider Workspace</span>
             <i data-lucide="arrow-right"></i>
           </a>
+          <button type="button" class="filter-btn" data-action="refresh-delivery-home">
+            <span>Refresh Delivery Data</span>
+            <i data-lucide="refresh-cw"></i>
+          </button>
         </div>
       </div>
     </aside>
@@ -57,72 +63,165 @@
       <div class="marketplace-results-header">
         <div>
           <h2>Home</h2>
-          <p style="color:var(--muted-foreground);margin-top:0.35rem;">Your buyer dashboard on web now follows the same main structure as mobile.</p>
+          <p style="color:var(--muted-foreground);margin-top:0.35rem;">Request delivery, compare riders, and track active requests from the same tab mobile buyers use.</p>
         </div>
       </div>
 
       <div class="stats-grid" style="margin-bottom:1.5rem;">
-        <div class="stat-card">
+        <div class="stat-card card">
           <div class="stat-card-header"><span class="stat-card-title">Orders</span></div>
           <div class="stat-card-value">{{ stats.orders_count }}</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card card">
           <div class="stat-card-header"><span class="stat-card-title">Active Deliveries</span></div>
           <div class="stat-card-value">{{ stats.active_deliveries }}</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card card">
           <div class="stat-card-header"><span class="stat-card-title">Completed Deliveries</span></div>
           <div class="stat-card-value">{{ stats.completed_deliveries }}</div>
         </div>
       </div>
 
-      {% if active_delivery %}
-      <div class="card" style="padding:1rem;margin-bottom:1.5rem;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
-          <div>
-            <h3 style="margin:0 0 0.35rem;">Current Delivery</h3>
-            <p style="margin:0;color:var(--muted-foreground);">{{ active_delivery.pickup_address }} to {{ active_delivery.dropoff_address }}</p>
-            <p style="margin:0.35rem 0 0;color:var(--muted-foreground);">Status: {{ active_delivery.get_status_display }}</p>
+      <div class="delivery-grid">
+        <section class="card delivery-card">
+          <div class="delivery-card-header">
+            <div>
+              <h3>Book Delivery</h3>
+              <p>Use browser location when available, or enter the route manually and estimate the fee instantly.</p>
+            </div>
+            <span id="deliveryLocationStatus" class="delivery-status-pill">Fetching browser location...</span>
           </div>
-          <a href="{% url 'marketplace_settings' %}" class="btn btn-primary">Open Settings</a>
-        </div>
-      </div>
-      {% endif %}
 
-      <div class="card" style="padding:1rem;">
-        <div class="marketplace-results-header" style="padding:0 0 1rem;">
-          <h3 style="margin:0;">Recent Orders</h3>
-        </div>
-        <div class="shop-list">
-          {% for order in recent_orders %}
-          <div class="card" style="padding:1rem;">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
-              <div>
-                <strong>{{ order.shop_owner.business_name|default:order.shop_owner.username }}</strong>
-                <p style="margin:0.25rem 0;color:var(--muted-foreground);">Placed {{ order.created_at|date:"M d, Y" }}</p>
-                <p style="margin:0;color:var(--muted-foreground);">Status: {{ order.get_status_display }}</p>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-weight:600;">&#8358;{{ order.total_amount|floatformat:2 }}</div>
-                <a href="{% url 'marketplace_order_chat' order.public_id %}" class="btn btn-outline btn-sm" style="margin-top:0.5rem;">View Order</a>
-              </div>
+          <div class="delivery-form-grid">
+            <label class="delivery-field">
+              <span>Pickup address</span>
+              <input id="deliveryPickupAddress" class="input" type="text" placeholder="Where should the rider collect from?">
+            </label>
+            <label class="delivery-field">
+              <span>Dropoff address</span>
+              <input id="deliveryDropoffAddress" class="input" type="text" placeholder="Where should the rider deliver to?">
+            </label>
+            <label class="delivery-field">
+              <span>Customer name</span>
+              <input id="deliveryCustomerName" class="input" type="text" placeholder="Who receives the package?">
+            </label>
+            <label class="delivery-field">
+              <span>Customer phone</span>
+              <input id="deliveryCustomerPhone" class="input" type="text" placeholder="Phone number">
+            </label>
+            <label class="delivery-field">
+              <span>Estimated distance</span>
+              <select id="deliveryDistanceKm" class="input">
+                <option value="1">1 km</option>
+                <option value="3" selected>3 km</option>
+                <option value="5">5 km</option>
+                <option value="8">8 km</option>
+                <option value="12">12 km</option>
+              </select>
+            </label>
+            <label class="delivery-field">
+              <span>Notes</span>
+              <textarea id="deliveryNotes" class="input" rows="3" placeholder="Landmark, package details, or rider instructions"></textarea>
+            </label>
+          </div>
+
+          <div class="delivery-actions">
+            <button type="button" class="btn btn-secondary" id="deliveryUseCurrentLocation">
+              <i data-lucide="map-pin"></i>
+              Use My Current Location
+            </button>
+            <button type="button" class="btn btn-outline" id="deliveryEstimateButton">
+              <i data-lucide="calculator"></i>
+              Estimate Price
+            </button>
+            <button type="button" class="btn btn-primary" id="deliverySubmitButton">
+              <i data-lucide="send"></i>
+              Request Delivery
+            </button>
+          </div>
+
+          <div class="delivery-estimate-grid">
+            <div class="delivery-estimate-card">
+              <span>Estimated fare</span>
+              <strong id="deliveryPrice">₦0.00</strong>
+            </div>
+            <div class="delivery-estimate-card">
+              <span>Route distance</span>
+              <strong id="deliveryRouteDistance">3.00 km</strong>
+            </div>
+            <div class="delivery-estimate-card">
+              <span>Suggested rider</span>
+              <strong id="deliverySuggestedRider">Unassigned</strong>
             </div>
           </div>
-          {% empty %}
-          <div class="card" style="padding:2rem;text-align:center;">
-            <i data-lucide="shopping-bag" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
-            <p style="color:var(--muted-foreground);">No orders yet. Use the Marketplace tab to place your first order.</p>
+
+          <div id="deliveryPricingBreakdown" class="delivery-breakdown"></div>
+        </section>
+
+        <section class="card delivery-card">
+          <div class="delivery-card-header">
+            <div>
+              <h3>Nearby Riders</h3>
+              <p>The list refreshes from the same marketplace delivery APIs used by the mobile app.</p>
+            </div>
           </div>
-          {% endfor %}
-        </div>
+          <div id="deliveryRidersList" class="delivery-list"></div>
+        </section>
+      </div>
+
+      <div class="delivery-grid">
+        <section class="card delivery-card">
+          <div class="delivery-card-header">
+            <div>
+              <h3>Active Delivery</h3>
+              <p>Track the latest request and assigned rider details from web.</p>
+            </div>
+          </div>
+          <div id="activeDeliveryCard" class="delivery-empty">
+            {% if active_delivery %}
+            <strong>{{ active_delivery.pickup_address }}</strong>
+            <p>To {{ active_delivery.dropoff_address }}</p>
+            <p>Status: {{ active_delivery.get_status_display }}</p>
+            {% else %}
+            <p>No active delivery yet.</p>
+            {% endif %}
+          </div>
+        </section>
+
+        <section class="card delivery-card">
+          <div class="delivery-card-header">
+            <div>
+              <h3>Recent Orders</h3>
+              <p>Marketplace order history stays visible alongside delivery activity.</p>
+            </div>
+          </div>
+          <div class="shop-list shop-list--single">
+            {% for order in recent_orders %}
+            <div class="card" style="padding:1rem;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+                <div>
+                  <strong>{{ order.shop_owner.business_name|default:order.shop_owner.username }}</strong>
+                  <p style="margin:0.25rem 0;color:var(--muted-foreground);">Placed {{ order.created_at|date:"M d, Y" }}</p>
+                  <p style="margin:0;color:var(--muted-foreground);">Status: {{ order.get_status_display }}</p>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-weight:600;">&#8358;{{ order.total_amount|floatformat:2 }}</div>
+                  <a href="{% url 'marketplace_order_chat' order.public_id %}" class="btn btn-outline btn-sm" style="margin-top:0.5rem;">View Order</a>
+                </div>
+              </div>
+            </div>
+            {% empty %}
+            <div class="card" style="padding:2rem;text-align:center;">
+              <i data-lucide="shopping-bag" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
+              <p style="color:var(--muted-foreground);">No orders yet. Use the Marketplace tab to place your first order.</p>
+            </div>
+            {% endfor %}
+          </div>
+        </section>
       </div>
     </main>
   </div>
 
-  <script>
-    if (window.lucide && typeof window.lucide.createIcons === "function") {
-      window.lucide.createIcons();
-    }
-  </script>
+  <script src="{% static 'js/marketplace-delivery.js' %}"></script>
 </body>
 </html>
