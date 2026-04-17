@@ -6,7 +6,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Marketplace - Settings</title>
+  <title>Marketplace - Rider Portal</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -50,8 +50,8 @@
             <span>Company profile</span>
             <strong>{% if delivery_company %}Ready{% else %}Not set{% endif %}</strong>
           </div>
-          <a href="{% url 'marketplace_home' %}" class="filter-btn">
-            <span>Back to Delivery Home</span>
+          <a href="{% url 'marketplace' %}" class="filter-btn">
+            <span>Browse Marketplace</span>
             <i data-lucide="arrow-right"></i>
           </a>
         </div>
@@ -61,8 +61,8 @@
     <main class="marketplace-main">
       <div class="marketplace-results-header">
         <div>
-          <h2>Settings</h2>
-          <p style="color:var(--muted-foreground);margin-top:0.35rem;">Manage your account, rider registration, company fleet, and incoming delivery requests from one consistent web workspace.</p>
+          <h2>Delivery Rider Portal</h2>
+          <p style="color:var(--muted-foreground);margin-top:0.35rem;">This dashboard is designed for delivery riders and rider companies. Registration, request handling, and fleet tools all live here.</p>
         </div>
       </div>
 

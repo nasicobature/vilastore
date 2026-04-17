@@ -138,6 +138,7 @@ urlpatterns = [
     path('marketplace/forgot-password/reset/', views.marketplace_forgot_password_reset, name='marketplace_forgot_password_reset'),
     path('marketplace/logout/', views.marketplace_logout, name='marketplace_logout'),
     path('marketplace/home/', views.marketplace_home, name='marketplace_home'),
+    path('marketplace/rider/', views.marketplace_rider_portal, name='marketplace_rider_portal'),
     path('marketplace/account/', views.marketplace_account, name='marketplace_account'),
     path('marketplace/settings/', views.marketplace_settings, name='marketplace_settings'),
     path('logout/', views.logout_view, name='logout'),

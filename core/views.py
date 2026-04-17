@@ -3268,6 +3268,39 @@ def _get_marketplace_web_token(buyer):
     )
 
 
+def _is_marketplace_rider_account(buyer):
+    if not buyer:
+        return False
+    has_rider_profile = DeliveryRider.objects.filter(buyer=buyer, is_active=True).exists()
+    has_company_profile = DeliveryCompany.objects.filter(owner=buyer, is_active=True).exists()
+    return has_rider_profile or has_company_profile
+
+
+def _marketplace_default_dashboard_name(buyer):
+    if _is_marketplace_rider_account(buyer):
+        return "marketplace_rider_portal"
+    return "marketplace_home"
+
+
+def _marketplace_dashboard_redirect(request, buyer, next_url=""):
+    destination = next_url or request.session.pop("marketplace_next_url", "")
+    if destination:
+        return redirect(destination)
+    return redirect(_marketplace_default_dashboard_name(buyer))
+
+
+def _redirect_to_marketplace_login(request, fallback_next_name=None):
+    next_url = _get_marketplace_next_url(request)
+    if not next_url:
+        next_url = request.get_full_path()
+    if (not next_url or not next_url.startswith("/")) and fallback_next_name:
+        next_url = reverse(fallback_next_name)
+    login_url = reverse("marketplace_login")
+    if next_url and next_url.startswith("/"):
+        return redirect(f"{login_url}?next={next_url}")
+    return redirect("marketplace_login")
+
+
 def _send_marketplace_verification_code(buyer):
     code = str(random.randint(100000, 999999))
     buyer.email_verification_code = code
@@ -3318,10 +3351,8 @@ def _order_access_context(request, order):
 def marketplace_login(request):
     buyer = _get_marketplace_buyer(request)
     if buyer:
-        next_url = _get_marketplace_next_url(request) or request.session.pop("marketplace_next_url", "")
-        if next_url:
-            return redirect(next_url)
-        return redirect("marketplace_home")
+        next_url = _get_marketplace_next_url(request)
+        return _marketplace_dashboard_redirect(request, buyer, next_url)
 
     if request.method == "POST":
         email = (request.POST.get("email") or "").strip().lower()
@@ -3352,54 +3383,59 @@ def marketplace_login(request):
         buyer.last_login = timezone.now()
         buyer.save(update_fields=["last_login"])
         _login_marketplace_buyer(request, buyer)
-        next_url = next_url or request.session.pop("marketplace_next_url", "")
-        if next_url:
-            return redirect(next_url)
-        return redirect("marketplace_home")
+        return _marketplace_dashboard_redirect(request, buyer, next_url)
 
-    return render(request, "shopboy/marketplace-login.html")
+    return render(request, "shopboy/marketplace-login.html", {
+        "next_url": _get_marketplace_next_url(request),
+    })
 
 
 def marketplace_signup(request):
     buyer = _get_marketplace_buyer(request)
     if buyer:
-        return redirect("marketplace_home")
+        next_url = _get_marketplace_next_url(request)
+        return _marketplace_dashboard_redirect(request, buyer, next_url)
 
     if request.method == "POST":
         email = (request.POST.get("email") or "").strip().lower()
         password = request.POST.get("password") or ""
         confirm_password = request.POST.get("confirm_password") or ""
+        next_url = _get_marketplace_next_url(request)
 
         if not email or not password or not confirm_password:
             messages.error(request, "Email and passwords are required.")
-            return render(request, "shopboy/marketplace-signup.html")
+            return render(request, "shopboy/marketplace-signup.html", {"next_url": next_url})
 
         if password != confirm_password:
             messages.error(request, "Passwords do not match.")
-            return render(request, "shopboy/marketplace-signup.html")
+            return render(request, "shopboy/marketplace-signup.html", {"next_url": next_url})
 
         if not _password_meets_rules(password):
             messages.error(request, "Password must include uppercase, number, and special character.")
-            return render(request, "shopboy/marketplace-signup.html")
+            return render(request, "shopboy/marketplace-signup.html", {"next_url": next_url})
 
         if MarketplaceBuyer.objects.filter(email__iexact=email).exists():
             messages.error(request, "Email already registered. Please sign in.")
-            return render(request, "shopboy/marketplace-signup.html")
+            return render(request, "shopboy/marketplace-signup.html", {"next_url": next_url})
 
         buyer = MarketplaceBuyer.objects.create(
             email=email,
             password=make_password(password),
         )
         request.session["marketplace_pending_buyer_id"] = buyer.id
+        if next_url:
+            request.session["marketplace_next_url"] = next_url
         try:
             _send_marketplace_verification_code(buyer)
         except Exception:
             messages.error(request, "Account created, but we could not send verification email. Try again.")
-            return render(request, "shopboy/marketplace-signup.html")
+            return render(request, "shopboy/marketplace-signup.html", {"next_url": next_url})
         messages.success(request, "Account created. Verify your email to continue.")
         return redirect("marketplace_verify")
 
-    return render(request, "shopboy/marketplace-signup.html")
+    return render(request, "shopboy/marketplace-signup.html", {
+        "next_url": _get_marketplace_next_url(request),
+    })
 
 
 def marketplace_logout(request):
@@ -3440,10 +3476,7 @@ def marketplace_verify(request):
         request.session.pop("marketplace_pending_buyer_id", None)
         _login_marketplace_buyer(request, buyer)
         messages.success(request, "Email verified successfully.")
-        next_url = request.session.pop("marketplace_next_url", "")
-        if next_url:
-            return redirect(next_url)
-        return redirect("marketplace_home")
+        return _marketplace_dashboard_redirect(request, buyer)
 
     return render(request, "shopboy/marketplace-verify.html", {"buyer": buyer})
 
@@ -3575,7 +3608,7 @@ def marketplace_account(request):
         pending = _get_pending_marketplace_buyer(request)
         if pending and not pending.is_email_verified:
             return redirect("marketplace_verify")
-        return redirect("marketplace_login")
+        return _redirect_to_marketplace_login(request, "marketplace_account")
 
     orders = (
         MarketplaceOrder.objects.filter(buyer=buyer)
@@ -3586,6 +3619,7 @@ def marketplace_account(request):
     return render(request, "shopboy/marketplace-account.html", {
         "buyer": buyer,
         "orders": orders,
+        "marketplace_portal_role": "rider" if _is_marketplace_rider_account(buyer) else "customer",
         "marketplace_active_tab": "marketplace",
     })
 
@@ -3596,7 +3630,10 @@ def marketplace_home(request):
         pending = _get_pending_marketplace_buyer(request)
         if pending and not pending.is_email_verified:
             return redirect("marketplace_verify")
-        return redirect("marketplace_login")
+        return _redirect_to_marketplace_login(request, "marketplace_home")
+
+    if _is_marketplace_rider_account(buyer):
+        return redirect("marketplace_rider_portal")
 
     buyer_token = _get_marketplace_web_token(buyer)
     orders = (
@@ -3618,6 +3655,7 @@ def marketplace_home(request):
     return render(request, "shopboy/marketplace-home.html", {
         "buyer": buyer,
         "buyer_api_token": buyer_token.token,
+        "marketplace_portal_role": "customer",
         "recent_orders": orders[:5],
         "active_delivery": active_delivery,
         "stats": {
@@ -3634,12 +3672,16 @@ def marketplace_home(request):
 
 
 def marketplace_settings(request):
+    return redirect("marketplace_rider_portal")
+
+
+def marketplace_rider_portal(request):
     buyer = _get_marketplace_buyer(request)
     if not buyer:
         pending = _get_pending_marketplace_buyer(request)
         if pending and not pending.is_email_verified:
             return redirect("marketplace_verify")
-        return redirect("marketplace_login")
+        return _redirect_to_marketplace_login(request, "marketplace_rider_portal")
 
     buyer_token = _get_marketplace_web_token(buyer)
     recent_delivery_requests = (
@@ -3655,12 +3697,14 @@ def marketplace_settings(request):
         "buyer_api_token": buyer_token.token,
         "rider_profile": rider_profile,
         "delivery_company": delivery_company,
+        "marketplace_portal_role": "rider",
         "recent_delivery_requests": recent_delivery_requests,
-        "marketplace_active_tab": "settings",
+        "marketplace_active_tab": "rider",
     })
 
 
 def marketplace(request):
+    buyer = _get_marketplace_buyer(request)
     q = (request.GET.get("q") or "").strip()
     username_q = q[1:] if q.startswith("@") else q
     category = (request.GET.get("category") or "").strip()
@@ -3718,7 +3762,8 @@ def marketplace(request):
     )
 
     return render(request, "shopboy/marketplace.html", {
-        "buyer": _get_marketplace_buyer(request),
+        "buyer": buyer,
+        "marketplace_portal_role": "rider" if _is_marketplace_rider_account(buyer) else "customer",
         "profiles": profiles,
         "categories": categories,
         "locations": locations,

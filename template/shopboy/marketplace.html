@@ -28,10 +28,13 @@
         </div>
         <div class="marketplace-actions">
           {% if buyer %}
-          <a href="{% url 'marketplace_account' %}" class="btn btn-ghost">My Orders</a>
+          <a href="{% if marketplace_portal_role == 'rider' %}{% url 'marketplace_rider_portal' %}{% else %}{% url 'marketplace_home' %}{% endif %}" class="btn btn-ghost">
+            {% if marketplace_portal_role == 'rider' %}Rider Portal{% else %}Customer Portal{% endif %}
+          </a>
           <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
           {% else %}
           <a href="{% url 'marketplace_login' %}" class="btn btn-ghost">Sign In</a>
+          <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline">Register as Rider</a>
           <a href="{% url 'marketplace_signup' %}" class="btn btn-primary"><i data-lucide="user"></i> Create Account</a>
           {% endif %}
         </div>
@@ -81,6 +84,21 @@
     </aside>
 
     <main class="marketplace-main">
+      <section class="card marketplace-role-hero">
+        <div>
+          <span class="badge badge-primary">Shared Access</span>
+          <h2 style="margin:0.75rem 0 0.5rem;">One login, different portals for customers and delivery riders.</h2>
+          <p style="color:var(--muted-foreground);max-width:700px;">
+            Customers land in the customer portal after sign in. Riders land in the rider portal, and new riders can start registration directly from this landing page.
+          </p>
+        </div>
+        <div class="marketplace-role-actions">
+          <a href="{% url 'marketplace_login' %}" class="btn btn-primary">Customer Sign In</a>
+          <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline">Delivery Rider Sign In</a>
+          <a href="{% url 'marketplace_signup' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-ghost">Create Rider Account</a>
+        </div>
+      </section>
+
       <div class="marketplace-results-header">
         <h2 id="resultsCount">{{ profiles|length }} shop{{ profiles|length|pluralize }} found</h2>
         <button class="btn btn-ghost" id="clearFiltersBtn" style="display:{% if filters.q or filters.category or filters.location or filters.verified %}flex{% else %}none{% endif %};" type="button">

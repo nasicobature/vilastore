@@ -21,15 +21,15 @@
           <h1>Marketplace</h1>
         </div>
         <h2>Welcome Back</h2>
-        <p>Sign in to view your marketplace activity and orders.</p>
+        <p>Customers and delivery riders use this same sign-in page. We will send you to the right portal after login.</p>
       </div>
     </div>
 
     <div class="auth-form-panel">
       <div class="auth-form-container">
         <div class="auth-form-header">
-          <h2>Buyer Sign In</h2>
-          <p>Use your email and password.</p>
+          <h2>Customer and Rider Sign In</h2>
+          <p>Use your email and password. Your dashboard opens automatically based on your account type.</p>
         </div>
 
         {% if messages %}
@@ -40,8 +40,11 @@
         </section>
         {% endif %}
 
-        <form method="POST" action="{% url 'marketplace_login' %}" class="auth-form">
+        <form method="POST" action="{% url 'marketplace_login' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="auth-form">
           {% csrf_token %}
+          {% if next_url %}
+          <input type="hidden" name="next" value="{{ next_url }}">
+          {% endif %}
           <div class="form-group">
             <label for="buyerEmail">Email</label>
             <div class="input-with-icon">
@@ -73,8 +76,8 @@
         </div>
 
         <div class="auth-footer">
-          <p>Don't have an account?</p>
-          <a href="{% url 'marketplace_signup' %}" class="btn btn-outline btn-full">
+          <p>Don't have an account yet?</p>
+          <a href="{% url 'marketplace_signup' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="btn btn-outline btn-full">
             <i data-lucide="user-plus"></i>
             Create Account
           </a>

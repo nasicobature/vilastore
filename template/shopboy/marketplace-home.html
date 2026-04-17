@@ -6,7 +6,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Marketplace - Home</title>
+  <title>Marketplace - Customer Portal</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -47,7 +47,7 @@
             <span>Browse Shops</span>
             <i data-lucide="arrow-right"></i>
           </a>
-          <a href="{% url 'marketplace_settings' %}" class="filter-btn">
+          <a href="{% url 'marketplace_rider_portal' %}" class="filter-btn">
             <span>Rider Workspace</span>
             <i data-lucide="arrow-right"></i>
           </a>
@@ -62,8 +62,8 @@
     <main class="marketplace-main">
       <div class="marketplace-results-header">
         <div>
-          <h2>Home</h2>
-          <p style="color:var(--muted-foreground);margin-top:0.35rem;">Request delivery, compare riders, and track active requests from the same tab mobile buyers use.</p>
+          <h2>Customer Portal</h2>
+          <p style="color:var(--muted-foreground);margin-top:0.35rem;">This dashboard is designed for marketplace customers. Place orders, request deliveries, and track your activity here.</p>
         </div>
       </div>
 

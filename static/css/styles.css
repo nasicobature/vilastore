@@ -3955,6 +3955,22 @@ button {
   gap: 1rem;
 }
 
+.marketplace-role-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, hsl(34, 70%, 96%), hsl(220, 30%, 98%));
+}
+
+.marketplace-role-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
 .delivery-list-item p,
 .delivery-empty p {
   margin: 0.25rem 0 0;
@@ -4006,6 +4022,15 @@ button {
   .delivery-form-grid,
   .delivery-estimate-grid {
     grid-template-columns: 1fr;
+  }
+
+  .marketplace-role-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .marketplace-role-actions {
+    justify-content: flex-start;
   }
 }
 
