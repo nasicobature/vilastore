@@ -21,9 +21,10 @@
         <div class="marketplace-search">
           <form method="get" id="filterForm" class="search-box">
             <i data-lucide="search"></i>
-            <input type="text" class="input" placeholder="Search shops by name, @username, or product..." name="q" id="shopSearch" value="{{ filters.q }}">
+            <input type="text" class="input" placeholder="Search houses, shops, locations, or @username..." name="q" id="shopSearch" value="{{ filters.q }}">
             <input type="hidden" name="category" id="categoryInput" value="{{ filters.category }}">
             <input type="hidden" name="location" id="locationInput" value="{{ filters.location }}">
+            <input type="hidden" name="property_type" id="propertyTypeInput" value="{{ filters.property_type }}">
           </form>
         </div>
         <div class="marketplace-actions">
@@ -56,6 +57,16 @@
       </div>
       <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
       <div class="filter-section">
+        <h4>House Type</h4>
+        <div class="filter-list">
+          <button class="filter-btn {% if not filters.property_type %}active{% endif %}" data-filter="property_type" data-value="">All Types</button>
+          {% for value, label in house_types %}
+          <button class="filter-btn {% if filters.property_type == value %}active{% endif %}" data-filter="property_type" data-value="{{ value }}">{{ label }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <div class="filter-section">
         <h4>Location</h4>
         <div id="locationFilters" class="filter-list">
           <button class="filter-btn {% if not filters.location %}active{% endif %}" data-filter="location" data-value="">All Locations</button>
@@ -66,10 +77,22 @@
       </div>
       <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
       <div class="filter-section">
+        <h4>Price Range</h4>
+        <div class="stack-form">
+          <input type="number" class="input" form="filterForm" name="min_price" id="minPriceField" placeholder="Min price" value="{{ filters.min_price }}" min="0" step="0.01">
+          <input type="number" class="input" form="filterForm" name="max_price" id="maxPriceField" placeholder="Max price" value="{{ filters.max_price }}" min="0" step="0.01">
+        </div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <div class="filter-section">
         <h4>Filters</h4>
         <label class="checkbox-label">
           <input type="checkbox" name="verified" value="1" form="filterForm" {% if filters.verified %}checked{% endif %}>
           <span>Verified shops only</span>
+        </label>
+        <label class="checkbox-label" style="margin-top:0.75rem;">
+          <input type="checkbox" name="available" value="1" form="filterForm" {% if filters.available %}checked{% endif %}>
+          <span>Available houses only</span>
         </label>
       </div>
       <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
@@ -79,6 +102,8 @@
           <option value="rating" {% if filters.sort == "rating" %}selected{% endif %}>Highest Rating</option>
           <option value="sales" {% if filters.sort == "sales" %}selected{% endif %}>Most Sales</option>
           <option value="newest" {% if filters.sort == "newest" %}selected{% endif %}>Newest</option>
+          <option value="price_low" {% if filters.sort == "price_low" %}selected{% endif %}>Lowest House Price</option>
+          <option value="price_high" {% if filters.sort == "price_high" %}selected{% endif %}>Highest House Price</option>
         </select>
       </div>
     </aside>
@@ -100,11 +125,61 @@
       </section>
 
       <div class="marketplace-results-header">
-        <h2 id="resultsCount">{{ profiles|length }} shop{{ profiles|length|pluralize }} found</h2>
-        <button class="btn btn-ghost" id="clearFiltersBtn" style="display:{% if filters.q or filters.category or filters.location or filters.verified %}flex{% else %}none{% endif %};" type="button">
+        <h2 id="resultsCount">{{ houses|length }} house{{ houses|length|pluralize }} and {{ profiles|length }} shop{{ profiles|length|pluralize }} found</h2>
+        <button class="btn btn-ghost" id="clearFiltersBtn" style="display:{% if filters.q or filters.category or filters.location or filters.property_type or filters.min_price or filters.max_price or filters.available or filters.verified %}flex{% else %}none{% endif %};" type="button">
           <i data-lucide="x"></i> Clear filters
         </button>
       </div>
+      <section style="margin-bottom:1.5rem;">
+        <div class="marketplace-results-header">
+          <h2>Rental Houses</h2>
+        </div>
+        <div class="housing-market-grid">
+          {% for house in houses %}
+          <a href="{% url 'marketplace_house_detail' house.id %}" class="house-market-card">
+            <div class="house-market-card-media">
+              {% if house.primary_image %}
+              <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}">
+              {% elif house.owner.profile_image %}
+              <img src="{{ house.owner.profile_image.url }}" alt="{{ house.title }}">
+              {% else %}
+              <div class="housing-listing-fallback"><i data-lucide="house"></i></div>
+              {% endif %}
+            </div>
+            <div class="house-market-card-body">
+              <div class="housing-market-card-top">
+                <div>
+                  <h3>{{ house.title }}</h3>
+                  <p>{{ house.location }}</p>
+                </div>
+                <span class="badge {% if house.is_available %}badge-success{% else %}badge-warning{% endif %}">
+                  {{ house.get_availability_status_display }}
+                </span>
+              </div>
+              <p class="shop-card-desc">{{ house.description|default:"No description yet." }}</p>
+              <div class="shop-card-meta">
+                <span><i data-lucide="wallet" style="width:14px;height:14px;"></i> {{ house.price|floatformat:2 }}</span>
+                <span><i data-lucide="bed-double" style="width:14px;height:14px;"></i> {{ house.rooms_count }} room{{ house.rooms_count|pluralize }}</span>
+                <span><i data-lucide="layout-grid" style="width:14px;height:14px;"></i> {{ house.spaces_available }} space{{ house.spaces_available|pluralize }}</span>
+              </div>
+              <div class="shop-card-meta">
+                <span><i data-lucide="building-2" style="width:14px;height:14px;"></i> {{ house.get_property_type_display }}</span>
+                <span><i data-lucide="store" style="width:14px;height:14px;"></i> {{ house.owner.business_name|default:house.owner.username }}</span>
+              </div>
+            </div>
+          </a>
+          {% empty %}
+          <div class="card" style="padding:2rem;">
+            <h3>No houses found</h3>
+            <p style="color:var(--muted-foreground);">Try changing the location, type, or price filters.</p>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      <section>
+        <div class="marketplace-results-header">
+          <h2>Shops</h2>
+        </div>
       <div id="shopList" class="shop-list">
         {% for profile in profiles %}
         <a href="{% url 'marketplace_shop' profile.user.username %}" class="shop-card">
@@ -178,6 +253,7 @@
         </div>
         {% endfor %}
       </div>
+      </section>
     </main>
   </div>
 

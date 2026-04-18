@@ -1,11 +1,13 @@
 from django.db import models
 import uuid
 from decimal import Decimal
+from datetime import timedelta
 from io import BytesIO
 from django.core.files.base import ContentFile
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.hashers import make_password, identify_hasher
 from PIL import Image, ImageOps
+from django.utils import timezone
 
 
 # Create your models here.
@@ -394,12 +396,215 @@ class MarketplaceSettings(models.Model):
         return f"{self.user.username} Marketplace Settings"
 
 
+class HouseListing(models.Model):
+    TYPE_APARTMENT = "apartment"
+    TYPE_DUPLEX = "duplex"
+    TYPE_STUDIO = "studio"
+    TYPE_SELF_CONTAIN = "self_contain"
+    TYPE_ROOM = "room"
+    TYPE_OFFICE = "office"
+    TYPE_SHOP = "shop"
+    TYPE_OTHER = "other"
+    PROPERTY_TYPE_CHOICES = [
+        (TYPE_APARTMENT, "Apartment"),
+        (TYPE_DUPLEX, "Duplex"),
+        (TYPE_STUDIO, "Studio"),
+        (TYPE_SELF_CONTAIN, "Self Contain"),
+        (TYPE_ROOM, "Single Room"),
+        (TYPE_OFFICE, "Office Space"),
+        (TYPE_SHOP, "Shop Space"),
+        (TYPE_OTHER, "Other"),
+    ]
+
+    STATUS_AVAILABLE = "available"
+    STATUS_OCCUPIED = "occupied"
+    STATUS_PARTIAL = "partial"
+    STATUS_RESERVED = "reserved"
+    STATUS_MAINTENANCE = "maintenance"
+    AVAILABILITY_STATUS_CHOICES = [
+        (STATUS_AVAILABLE, "Available"),
+        (STATUS_OCCUPIED, "Occupied"),
+        (STATUS_PARTIAL, "Partially Occupied"),
+        (STATUS_RESERVED, "Reserved"),
+        (STATUS_MAINTENANCE, "Under Maintenance"),
+    ]
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="house_listings")
+    managed_by_agent = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_house_listings")
+    title = models.CharField(max_length=200)
+    property_type = models.CharField(max_length=30, choices=PROPERTY_TYPE_CHOICES, default=TYPE_APARTMENT)
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    location = models.CharField(max_length=255)
+    rooms_count = models.PositiveIntegerField(default=1)
+    spaces_available = models.PositiveIntegerField(default=1)
+    description = models.TextField(blank=True)
+    availability_status = models.CharField(max_length=20, choices=AVAILABILITY_STATUS_CHOICES, default=STATUS_AVAILABLE)
+    listed_in_marketplace = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def is_available(self):
+        return self.availability_status in {self.STATUS_AVAILABLE, self.STATUS_PARTIAL}
+
+    @property
+    def primary_image(self):
+        primary = self.images.filter(is_primary=True).first()
+        if primary:
+            return primary
+        return self.images.first()
+
+
+class HouseListingImage(models.Model):
+    house = models.ForeignKey(HouseListing, on_delete=models.CASCADE, related_name="images")
+    image = models.ImageField(upload_to="housing/listings/")
+    caption = models.CharField(max_length=120, blank=True)
+    is_primary = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_primary", "id"]
+
+    def __str__(self):
+        return f"{self.house.title} image"
+
+    def save(self, *args, **kwargs):
+        if self.image:
+            _optimize_image_field(self.image, max_size=1600, quality=82)
+        super().save(*args, **kwargs)
+
+
+class TenantRecord(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="tenant_records")
+    full_name = models.CharField(max_length=150)
+    phone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
+    occupation = models.CharField(max_length=120, blank=True)
+    emergency_contact = models.CharField(max_length=150, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["full_name"]
+
+    def __str__(self):
+        return self.full_name
+
+
+class RentalRecord(models.Model):
+    STATUS_ACTIVE = "active"
+    STATUS_COMPLETED = "completed"
+    STATUS_TERMINATED = "terminated"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_TERMINATED, "Terminated"),
+    ]
+
+    PAYMENT_CURRENT = "current"
+    PAYMENT_DUE = "due"
+    PAYMENT_OVERDUE = "overdue"
+    PAYMENT_PARTIAL = "partial"
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_CURRENT, "Current"),
+        (PAYMENT_DUE, "Due"),
+        (PAYMENT_OVERDUE, "Overdue"),
+        (PAYMENT_PARTIAL, "Partially Paid"),
+    ]
+
+    house = models.ForeignKey(HouseListing, on_delete=models.CASCADE, related_name="rentals")
+    tenant = models.ForeignKey(TenantRecord, on_delete=models.SET_NULL, null=True, blank=True, related_name="rentals")
+    tenant_name = models.CharField(max_length=150)
+    tenant_phone = models.CharField(max_length=30, blank=True)
+    tenant_email = models.EmailField(blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    monthly_rent = models.DecimalField(max_digits=12, decimal_places=2)
+    next_due_date = models.DateField(null=True, blank=True)
+    last_payment_date = models.DateField(null=True, blank=True)
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default=PAYMENT_CURRENT)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    reminder_sent_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["end_date", "-created_at"]
+
+    def __str__(self):
+        return f"{self.house.title} - {self.tenant_name}"
+
+    @property
+    def reminder_date(self):
+        return self.end_date - timedelta(days=60)
+
+    @property
+    def days_until_expiry(self):
+        return (self.end_date - timezone.localdate()).days
+
+    @property
+    def needs_expiry_reminder(self):
+        today = timezone.localdate()
+        return (
+            self.status == self.STATUS_ACTIVE
+            and self.reminder_date <= today <= self.end_date
+            and self.reminder_sent_at is None
+        )
+
+
+class RentalPayment(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_PAID = "paid"
+    STATUS_PARTIAL = "partial"
+    STATUS_OVERDUE = "overdue"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_PAID, "Paid"),
+        (STATUS_PARTIAL, "Partially Paid"),
+        (STATUS_OVERDUE, "Overdue"),
+    ]
+
+    rental = models.ForeignKey(RentalRecord, on_delete=models.CASCADE, related_name="payments")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    due_date = models.DateField()
+    paid_on = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-due_date", "-created_at"]
+
+    def __str__(self):
+        return f"{self.rental.tenant_name} - {self.amount}"
+
+
 class MarketplaceBuyer(models.Model):
+    ROLE_CUSTOMER = "customer"
+    ROLE_RIDER = "rider"
+    ROLE_CHOICES = [
+        (ROLE_CUSTOMER, "Customer"),
+        (ROLE_RIDER, "Rider"),
+    ]
+
     email = models.EmailField(unique=True)
+    phone = models.CharField(max_length=30, blank=True, default="")
     password = models.CharField(max_length=255)
+    registration_role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_CUSTOMER)
     is_email_verified = models.BooleanField(default=False)
     email_verification_code = models.CharField(max_length=6, blank=True)
     email_code_sent_at = models.DateTimeField(null=True, blank=True)
+    is_phone_verified = models.BooleanField(default=False)
+    phone_verification_code = models.CharField(max_length=6, blank=True)
+    phone_code_sent_at = models.DateTimeField(null=True, blank=True)
     reset_code = models.CharField(max_length=6, blank=True)
     reset_sent_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -423,6 +628,8 @@ class MarketplaceBuyerToken(models.Model):
 
 
 class DeliveryRider(models.Model):
+    id = models.AutoField(primary_key=True)
+
     ID_TYPE_NIN = "nin"
     ID_TYPE_VOTER = "voter"
     ID_TYPE_DRIVER = "driver"
@@ -488,6 +695,8 @@ class DeliveryRider(models.Model):
 
 
 class DeliveryCompany(models.Model):
+    id = models.AutoField(primary_key=True)
+
     owner = models.OneToOneField(MarketplaceBuyer, on_delete=models.CASCADE, related_name="delivery_company")
     company_name = models.CharField(max_length=200)
     phone = models.CharField(max_length=30)
@@ -508,6 +717,8 @@ class DeliveryCompany(models.Model):
 
 
 class DeliveryRequest(models.Model):
+    id = models.AutoField(primary_key=True)
+
     STATUS_REQUESTED = "requested"
     STATUS_RIDER_SELECTED = "rider_selected"
     STATUS_ACCEPTED = "accepted"

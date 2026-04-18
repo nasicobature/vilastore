@@ -1,0 +1,455 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Housing Management</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+        <h1>VilaStore</h1>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="{% url 'index' %}" class="nav-link"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+        <a href="{% url 'product' %}" class="nav-link"><i data-lucide="package"></i><span>Products</span></a>
+        <a href="{% url 'inventory' %}" class="nav-link"><i data-lucide="boxes"></i><span>Inventory</span></a>
+        <a href="{% url 'sales-history' %}" class="nav-link"><i data-lucide="receipt"></i><span>Sales History</span></a>
+        <a href="{% url 'loans' %}" class="nav-link"><i data-lucide="credit-card"></i><span>Loans</span></a>
+        <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
+        <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
+        <a href="{% url 'customer' %}" class="nav-link"><i data-lucide="users"></i><span>Customers</span></a>
+        <a href="{% url 'housing_management' %}" class="nav-link active"><i data-lucide="house"></i><span>Housing</span></a>
+        <a href="{% url 'settings' %}" class="nav-link"><i data-lucide="settings"></i><span>Settings</span></a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <h1>Housing Management</h1>
+        <p>Manage rental listings, tenants, reminders, and payment records from one place.</p>
+      </header>
+
+      {% if messages %}
+      <section style="margin-bottom: 1rem;">
+        {% for message in messages %}
+        <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      <section class="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Active Listings</span>
+            <div class="stat-card-icon primary"><i data-lucide="building-2"></i></div>
+          </div>
+          <div class="stat-card-value">{{ stats.houses }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Available</span>
+            <div class="stat-card-icon primary"><i data-lucide="door-open"></i></div>
+          </div>
+          <div class="stat-card-value">{{ stats.available_houses }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Occupied</span>
+            <div class="stat-card-icon warning"><i data-lucide="users"></i></div>
+          </div>
+          <div class="stat-card-value">{{ stats.occupied_houses }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Expiring Soon</span>
+            <div class="stat-card-icon warning"><i data-lucide="bell-ring"></i></div>
+          </div>
+          <div class="stat-card-value">{{ stats.expiring_rentals }}</div>
+        </div>
+      </section>
+
+      <section class="housing-grid" style="margin-top:1.5rem;">
+        <section class="card">
+          <div class="card-header"><h3>Add House Listing</h3></div>
+          <form method="POST" action="{% url 'add_house_listing' %}" enctype="multipart/form-data" class="stack-form" style="margin-top:1rem;">
+            {% csrf_token %}
+            <div class="form-row">
+              <div class="form-group">
+                <label>Listing Title</label>
+                <input type="text" name="title" class="input" placeholder="e.g. 2 Bedroom Flat in Lekki" required>
+              </div>
+              <div class="form-group">
+                <label>Property Type</label>
+                <select name="property_type" class="input">
+                  {% for value, label in property_type_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Price</label>
+                <input type="number" name="price" min="0" step="0.01" class="input" required>
+              </div>
+              <div class="form-group">
+                <label>Location</label>
+                <input type="text" name="location" class="input" placeholder="City, district, address" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Rooms</label>
+                <input type="number" name="rooms_count" min="1" value="1" class="input" required>
+              </div>
+              <div class="form-group">
+                <label>Spaces Available</label>
+                <input type="number" name="spaces_available" min="1" value="1" class="input" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Status</label>
+                <select name="availability_status" class="input">
+                  {% for value, label in house_status_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Managing Agent</label>
+                <select name="managed_by_agent" class="input">
+                  <option value="">No agent assigned</option>
+                  {% for agent in agents %}
+                  <option value="{{ agent.id }}">{{ agent.full_name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea name="description" class="input" rows="4" placeholder="Describe the house, amenities, and nearby landmarks"></textarea>
+            </div>
+            <div class="form-group">
+              <label>House Pictures</label>
+              <input type="file" name="images" class="input" accept="image/*" multiple>
+            </div>
+            <label class="checkbox-label">
+              <input type="checkbox" name="listed_in_marketplace" checked>
+              <span>Show this house in the marketplace</span>
+            </label>
+            <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Save House</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h3>Add Rental Record</h3></div>
+          <form method="POST" action="{% url 'add_rental_record' %}" class="stack-form" style="margin-top:1rem;">
+            {% csrf_token %}
+            <div class="form-group">
+              <label>House</label>
+              <select name="house_id" class="input" required>
+                <option value="">Select house</option>
+                {% for house in houses %}
+                <option value="{{ house.id }}">{{ house.title }} - {{ house.location }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Existing Tenant</label>
+              <select name="tenant_id" class="input">
+                <option value="">Create/use tenant details below</option>
+                {% for tenant in tenants %}
+                <option value="{{ tenant.id }}">{{ tenant.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Tenant Name</label>
+                <input type="text" name="tenant_name" class="input" placeholder="Tenant full name">
+              </div>
+              <div class="form-group">
+                <label>Tenant Phone</label>
+                <input type="text" name="tenant_phone" class="input" placeholder="Phone number">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Tenant Email</label>
+                <input type="email" name="tenant_email" class="input" placeholder="Email address">
+              </div>
+              <div class="form-group">
+                <label>Monthly Rent</label>
+                <input type="number" name="monthly_rent" min="0" step="0.01" class="input" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Start Date</label>
+                <input type="date" name="start_date" class="input" required>
+              </div>
+              <div class="form-group">
+                <label>End Date</label>
+                <input type="date" name="end_date" class="input" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Next Due Date</label>
+                <input type="date" name="next_due_date" class="input">
+              </div>
+              <div class="form-group">
+                <label>Rental Status</label>
+                <select name="status" class="input">
+                  {% for value, label in rental_status_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Payment Status</label>
+              <select name="payment_status" class="input">
+                {% for value, label in rental_payment_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea name="notes" class="input" rows="3" placeholder="Agreement notes, outstanding items, etc."></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary"><i data-lucide="file-plus-2"></i> Save Rental</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h3>Add Payment Record</h3></div>
+          <form method="POST" action="{% url 'add_rental_payment' %}" class="stack-form" style="margin-top:1rem;">
+            {% csrf_token %}
+            <div class="form-group">
+              <label>Rental</label>
+              <select name="rental_id" class="input" required>
+                <option value="">Select rental</option>
+                {% for rental in rentals %}
+                <option value="{{ rental.id }}">{{ rental.tenant_name }} - {{ rental.house.title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Amount</label>
+                <input type="number" name="amount" min="0" step="0.01" class="input" required>
+              </div>
+              <div class="form-group">
+                <label>Status</label>
+                <select name="status" class="input">
+                  {% for value, label in payment_entry_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" name="due_date" class="input" required>
+              </div>
+              <div class="form-group">
+                <label>Paid On</label>
+                <input type="date" name="paid_on" class="input">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea name="notes" class="input" rows="3" placeholder="Receipt reference, transfer details, etc."></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary"><i data-lucide="wallet-cards"></i> Save Payment</button>
+          </form>
+        </section>
+      </section>
+
+      <section class="card" style="margin-top:1.5rem;">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+          <h3>Your House Listings</h3>
+          <form method="GET" class="housing-filter-bar">
+            <input type="text" name="q" class="input" value="{{ filters.q }}" placeholder="Search title or location">
+            <select name="status" class="input">
+              <option value="">All statuses</option>
+              {% for value, label in house_status_choices %}
+              <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline">Filter</button>
+          </form>
+        </div>
+        <div class="housing-listings">
+          {% for house in houses %}
+          <article class="housing-listing-card">
+            <div class="housing-listing-media">
+              {% if house.primary_image %}
+              <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}">
+              {% else %}
+              <div class="housing-listing-fallback"><i data-lucide="house"></i></div>
+              {% endif %}
+            </div>
+            <div class="housing-listing-body">
+              <div class="housing-listing-top">
+                <div>
+                  <h3>{{ house.title }}</h3>
+                  <p style="color:var(--muted-foreground);margin:0.35rem 0 0;">{{ house.location }}</p>
+                </div>
+                <span class="badge {% if house.is_available %}badge-success{% else %}badge-warning{% endif %}">
+                  {{ house.get_availability_status_display }}
+                </span>
+              </div>
+              <p class="shop-card-desc">{{ house.description|default:"No description yet." }}</p>
+              <div class="shop-card-meta">
+                <span><i data-lucide="wallet" style="width:14px;height:14px;"></i> {{ house.price|floatformat:2 }}</span>
+                <span><i data-lucide="bed-double" style="width:14px;height:14px;"></i> {{ house.rooms_count }} room{{ house.rooms_count|pluralize }}</span>
+                <span><i data-lucide="layout-grid" style="width:14px;height:14px;"></i> {{ house.spaces_available }} space{{ house.spaces_available|pluralize }}</span>
+                <span><i data-lucide="image" style="width:14px;height:14px;"></i> {{ house.images.count }} photo{{ house.images.count|pluralize }}</span>
+              </div>
+              <form method="POST" action="{% url 'update_house_listing' house.id %}" class="housing-inline-form">
+                {% csrf_token %}
+                <select name="availability_status" class="input">
+                  {% for value, label in house_status_choices %}
+                  <option value="{{ value }}" {% if house.availability_status == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <label class="checkbox-label">
+                  <input type="checkbox" name="listed_in_marketplace" {% if house.listed_in_marketplace %}checked{% endif %}>
+                  <span>Marketplace</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" name="is_active" {% if house.is_active %}checked{% endif %}>
+                  <span>Active</span>
+                </label>
+                <button type="submit" class="btn btn-outline btn-sm">Update</button>
+              </form>
+            </div>
+          </article>
+          {% empty %}
+          <div class="empty-state">
+            <i data-lucide="house"></i>
+            <p>No house listings yet.</p>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="housing-grid" style="margin-top:1.5rem;">
+        <section class="card">
+          <div class="card-header"><h3>Rent Expiry Reminders</h3></div>
+          <div class="table-container" style="margin-top:1rem;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Tenant</th>
+                  <th>House</th>
+                  <th>Expires</th>
+                  <th>Reminder</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for rental in upcoming_reminders %}
+                <tr>
+                  <td>{{ rental.tenant_name }}</td>
+                  <td>{{ rental.house.title }}</td>
+                  <td>{{ rental.end_date|date:"M d, Y" }}</td>
+                  <td>
+                    {% if rental.needs_expiry_reminder %}
+                    <form method="POST" action="{% url 'send_rental_reminder' rental.id %}">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-outline btn-sm">Send Reminder</button>
+                    </form>
+                    {% elif rental.reminder_sent_at %}
+                    <span class="badge badge-success">Sent</span>
+                    {% else %}
+                    <span class="badge badge-primary">Upcoming</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="empty-state"><p>No expiring rent records in the next 60 days.</p></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h3>Recent Rental Records</h3></div>
+          <div class="table-container" style="margin-top:1rem;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Tenant</th>
+                  <th>House</th>
+                  <th>Due Date</th>
+                  <th>Payment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for rental in rentals %}
+                <tr>
+                  <td>{{ rental.tenant_name }}</td>
+                  <td>{{ rental.house.title }}</td>
+                  <td>{{ rental.next_due_date|date:"M d, Y"|default:"-" }}</td>
+                  <td><span class="badge badge-primary">{{ rental.get_payment_status_display }}</span></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="empty-state"><p>No rental records yet.</p></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h3>Payment Tracker</h3></div>
+          <div class="table-container" style="margin-top:1rem;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Rental</th>
+                  <th>Amount</th>
+                  <th>Due</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for payment in payments %}
+                <tr>
+                  <td>{{ payment.rental.tenant_name }} / {{ payment.rental.house.title }}</td>
+                  <td>{{ payment.amount|floatformat:2 }}</td>
+                  <td>{{ payment.due_date|date:"M d, Y" }}</td>
+                  <td><span class="badge {% if payment.status == 'paid' %}badge-success{% else %}badge-warning{% endif %}">{{ payment.get_status_display }}</span></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="empty-state"><p>No payment records yet.</p></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

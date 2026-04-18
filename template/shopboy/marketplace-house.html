@@ -1,0 +1,135 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - {{ house.title }}</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <header class="marketplace-header">
+    <div class="marketplace-header-inner {% if buyer %}marketplace-header-inner-stacked{% endif %}">
+      <div class="marketplace-header-top">
+        <a href="{% if buyer %}{% url 'marketplace_home' %}{% else %}{% url 'marketplace' %}{% endif %}" class="marketplace-logo">
+          <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+          <span>VilaStore</span>
+        </a>
+        <div class="marketplace-actions">
+          <a href="{% url 'marketplace' %}" class="btn btn-ghost"><i data-lucide="arrow-left"></i> Back</a>
+          {% if buyer %}
+          <a href="{% url 'marketplace_account' %}" class="btn btn-ghost">My Orders</a>
+          <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
+          {% else %}
+          <a href="{% url 'marketplace_login' %}" class="btn btn-ghost">Sign In</a>
+          <a href="{% url 'marketplace_signup' %}" class="btn btn-primary">Create Account</a>
+          {% endif %}
+        </div>
+      </div>
+      {% include 'partials/marketplace-buyer-nav.html' %}
+    </div>
+  </header>
+
+  <div class="marketplace-container marketplace-shop-layout">
+    <aside class="marketplace-sidebar marketplace-shop-sidebar">
+      <div class="marketplace-shop-hero">
+        <div class="marketplace-shop-cover">
+          {% if house.primary_image %}
+          <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}">
+          {% elif profile.cover_image %}
+          <img src="{{ profile.cover_image.url }}" alt="{{ house.title }}">
+          {% else %}
+          <div class="marketplace-shop-cover-fallback"></div>
+          {% endif %}
+        </div>
+        <div class="marketplace-shop-identity">
+          <div class="marketplace-shop-avatar-ring">
+            {% if profile.logo %}
+            <img src="{{ profile.logo.url }}" alt="{{ shop_owner.business_name|default:shop_owner.username }}" class="marketplace-shop-logo">
+            {% elif shop_owner.profile_image %}
+            <img src="{{ shop_owner.profile_image.url }}" alt="{{ shop_owner.business_name|default:shop_owner.username }}" class="marketplace-shop-logo">
+            {% else %}
+            <div class="marketplace-shop-logo marketplace-shop-logo-fallback"><i data-lucide="house"></i></div>
+            {% endif %}
+          </div>
+          <div>
+            <h2>{{ house.title }}</h2>
+            <p>{{ house.get_property_type_display }} by {{ shop_owner.business_name|default:shop_owner.username }}</p>
+          </div>
+        </div>
+        <p class="marketplace-shop-description">{{ house.description|default:"No description yet." }}</p>
+        <div class="marketplace-shop-meta">
+          <span><i data-lucide="map-pin"></i> {{ house.location }}</span>
+          <span><i data-lucide="wallet"></i> {{ house.price|floatformat:2 }}</span>
+          <span><i data-lucide="bed-double"></i> {{ house.rooms_count }} room{{ house.rooms_count|pluralize }}</span>
+          <span><i data-lucide="layout-grid"></i> {{ house.spaces_available }} space{{ house.spaces_available|pluralize }}</span>
+        </div>
+      </div>
+
+      <div class="card marketplace-shop-card">
+        <h4>Availability</h4>
+        <p style="margin:0.5rem 0 0;">
+          <span class="badge {% if house.is_available %}badge-success{% else %}badge-warning{% endif %}">
+            {{ house.get_availability_status_display }}
+          </span>
+        </p>
+        {% if active_rental %}
+        <p style="margin-top:1rem;color:var(--muted-foreground);">Current tenancy ends on {{ active_rental.end_date|date:"F d, Y" }}.</p>
+        {% else %}
+        <p style="margin-top:1rem;color:var(--muted-foreground);">No active rental record is attached to this listing right now.</p>
+        {% endif %}
+      </div>
+
+      <div class="card marketplace-shop-card">
+        <h4>Owner Contact</h4>
+        <p style="margin:0.5rem 0 0;">{{ shop_owner.business_name|default:shop_owner.username }}</p>
+        <p style="margin:0.5rem 0 0;color:var(--muted-foreground);">{{ shop_owner.phone|default:"Phone not provided" }}</p>
+        <p style="margin:0.5rem 0 0;color:var(--muted-foreground);">{{ shop_owner.address|default:"Address not provided" }}</p>
+        {% if house.managed_by_agent %}
+        <p style="margin-top:1rem;color:var(--muted-foreground);">Managed by agent: {{ house.managed_by_agent.full_name }}</p>
+        {% endif %}
+      </div>
+    </aside>
+
+    <main class="marketplace-main">
+      <div class="marketplace-results-header">
+        <div>
+          <h2>House Gallery</h2>
+          <p style="color:var(--muted-foreground);margin-top:0.25rem;">Browse photos and inspect the rental details before reaching out.</p>
+        </div>
+      </div>
+
+      <div class="housing-market-grid">
+        {% for image in house.images.all %}
+        <article class="house-market-card">
+          <div class="house-market-card-media">
+            <img src="{{ image.image.url }}" alt="{{ house.title }}">
+          </div>
+          <div class="house-market-card-body">
+            <h3>{{ house.title }}</h3>
+            <p>{{ image.caption|default:house.location }}</p>
+          </div>
+        </article>
+        {% empty %}
+        <article class="house-market-card">
+          <div class="house-market-card-media housing-listing-fallback"><i data-lucide="house"></i></div>
+          <div class="house-market-card-body">
+            <h3>{{ house.title }}</h3>
+            <p>No photos uploaded yet.</p>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

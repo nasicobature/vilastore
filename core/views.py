@@ -28,16 +28,21 @@ from .models import (
     DeliveryRider,
     DeliveryCompany,
     Feedback,
+    HouseListing,
+    HouseListingImage,
     Agent,
+    RentalPayment,
+    RentalRecord,
+    TenantRecord,
 )
 from .subscription import subscription_is_active
-from .utils.notifications import send_email
+from .utils.notifications import send_email, send_sms
 import random
 import string
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 import json
-from django.db.models import F, Sum, Q
+from django.db.models import F, Sum, Q, Case, When, IntegerField
 from django.db import transaction
 from django.db import OperationalError, ProgrammingError
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -192,6 +197,56 @@ def _get_agent_by_code(raw_code):
     return Agent.objects.filter(referral_code__iexact=code, is_active=True).first()
 
 
+def _refresh_house_availability(house):
+    active_rentals = house.rentals.filter(status=RentalRecord.STATUS_ACTIVE).count()
+    if house.availability_status == HouseListing.STATUS_MAINTENANCE:
+        return
+    if active_rentals <= 0:
+        new_status = HouseListing.STATUS_AVAILABLE
+    elif house.spaces_available > 1:
+        new_status = HouseListing.STATUS_PARTIAL
+    else:
+        new_status = HouseListing.STATUS_OCCUPIED
+    if house.availability_status != new_status:
+        house.availability_status = new_status
+        house.save(update_fields=["availability_status", "updated_at"])
+
+
+def _sync_rental_payment_state(rental):
+    today = timezone.localdate()
+    next_unpaid = (
+        rental.payments.exclude(status=RentalPayment.STATUS_PAID)
+        .order_by("due_date", "created_at")
+        .first()
+    )
+    latest_paid = (
+        rental.payments.filter(status=RentalPayment.STATUS_PAID, paid_on__isnull=False)
+        .order_by("-paid_on", "-created_at")
+        .first()
+    )
+
+    payment_status = rental.payment_status or RentalRecord.PAYMENT_CURRENT
+    next_due_date = rental.next_due_date
+    if next_unpaid:
+        if next_unpaid.status == RentalPayment.STATUS_PARTIAL:
+            payment_status = RentalRecord.PAYMENT_PARTIAL
+        elif next_unpaid.status == RentalPayment.STATUS_OVERDUE or next_unpaid.due_date < today:
+            payment_status = RentalRecord.PAYMENT_OVERDUE
+        else:
+            payment_status = RentalRecord.PAYMENT_DUE
+        next_due_date = next_unpaid.due_date
+    elif not rental.payments.exists():
+        if next_due_date and next_due_date < today:
+            payment_status = RentalRecord.PAYMENT_OVERDUE
+        elif next_due_date:
+            payment_status = RentalRecord.PAYMENT_DUE
+
+    rental.payment_status = payment_status
+    rental.next_due_date = next_due_date
+    rental.last_payment_date = latest_paid.paid_on if latest_paid else rental.last_payment_date
+    rental.save(update_fields=["payment_status", "next_due_date", "last_payment_date", "updated_at"])
+
+
 def home(request):
     return render(request, 'home/home.html')
 
@@ -246,6 +301,13 @@ def index(request):
     today_sales = Sale.objects.filter(user=user, created_at__date=today).aggregate(total=Sum('total_amount'))['total'] or Decimal("0.00")
     today_profit = Sale.objects.filter(user=user, created_at__date=today).aggregate(total=Sum('total_profit'))['total'] or Decimal("0.00")
     total_products = Product.objects.filter(user=user).count()
+    total_houses = HouseListing.objects.filter(owner=user, is_active=True).count()
+    expiring_rentals = RentalRecord.objects.filter(
+        house__owner=user,
+        status=RentalRecord.STATUS_ACTIVE,
+        end_date__gte=today,
+        end_date__lte=today + timedelta(days=60),
+    ).count()
 
     low_stock_count = Product.objects.filter(user=user, stock__lte=F('low_stock_threshold'), stock__gt=0).count()
 
@@ -266,6 +328,8 @@ def index(request):
         'today_sales': today_sales,
         'today_profit': today_profit,
         'total_products': total_products,
+        'total_houses': total_houses,
+        'expiring_rentals': expiring_rentals,
         'low_stock_count': low_stock_count,
         'today_transactions': today_transactions,
         'top_products': top_products,
@@ -1481,6 +1545,288 @@ def delete_shopboy(request, pk):
     shopboy.delete()
     messages.success(request, "Shop boy deleted.")
     return redirect("settings")
+
+
+@login_required
+def housing_management(request):
+    q = (request.GET.get("q") or "").strip()
+    status_filter = (request.GET.get("status") or "").strip()
+
+    houses = (
+        HouseListing.objects.filter(owner=request.user)
+        .prefetch_related("images")
+        .select_related("managed_by_agent")
+        .order_by("-created_at")
+    )
+    if q:
+        houses = houses.filter(
+            Q(title__icontains=q) |
+            Q(location__icontains=q) |
+            Q(description__icontains=q)
+        )
+    if status_filter:
+        houses = houses.filter(availability_status=status_filter)
+
+    tenants = TenantRecord.objects.filter(user=request.user).order_by("full_name")
+    rentals = (
+        RentalRecord.objects.filter(house__owner=request.user)
+        .select_related("house", "tenant")
+        .order_by("end_date", "-created_at")
+    )
+    payments = (
+        RentalPayment.objects.filter(rental__house__owner=request.user)
+        .select_related("rental", "rental__house")
+        .order_by("-due_date", "-created_at")
+    )
+    today = timezone.localdate()
+    upcoming_reminders = rentals.filter(
+        status=RentalRecord.STATUS_ACTIVE,
+        end_date__gte=today,
+        end_date__lte=today + timedelta(days=60),
+    )
+    due_payments = payments.filter(
+        Q(status__in=[RentalPayment.STATUS_PENDING, RentalPayment.STATUS_PARTIAL, RentalPayment.STATUS_OVERDUE]) |
+        Q(due_date__lt=today)
+    )
+
+    return render(request, "home/housing.html", {
+        "houses": houses,
+        "tenants": tenants,
+        "rentals": rentals[:12],
+        "payments": payments[:12],
+        "upcoming_reminders": upcoming_reminders[:8],
+        "due_payments": due_payments[:8],
+        "agents": Agent.objects.filter(is_active=True).order_by("full_name"),
+        "house_status_choices": HouseListing.AVAILABILITY_STATUS_CHOICES,
+        "property_type_choices": HouseListing.PROPERTY_TYPE_CHOICES,
+        "rental_status_choices": RentalRecord.STATUS_CHOICES,
+        "rental_payment_choices": RentalRecord.PAYMENT_STATUS_CHOICES,
+        "payment_entry_choices": RentalPayment.STATUS_CHOICES,
+        "filters": {"q": q, "status": status_filter},
+        "stats": {
+            "houses": HouseListing.objects.filter(owner=request.user, is_active=True).count(),
+            "available_houses": HouseListing.objects.filter(owner=request.user, availability_status=HouseListing.STATUS_AVAILABLE, is_active=True).count(),
+            "occupied_houses": HouseListing.objects.filter(owner=request.user, availability_status=HouseListing.STATUS_OCCUPIED, is_active=True).count(),
+            "expiring_rentals": upcoming_reminders.count(),
+        },
+    })
+
+
+@login_required
+@require_POST
+def add_house_listing(request):
+    title = (request.POST.get("title") or "").strip()
+    property_type = (request.POST.get("property_type") or HouseListing.TYPE_APARTMENT).strip()
+    location = (request.POST.get("location") or "").strip()
+    description = (request.POST.get("description") or "").strip()
+    availability_status = (request.POST.get("availability_status") or HouseListing.STATUS_AVAILABLE).strip()
+    managed_by_agent = None
+    managed_by_agent_id = (request.POST.get("managed_by_agent") or "").strip()
+    if managed_by_agent_id:
+        managed_by_agent = Agent.objects.filter(id=managed_by_agent_id, is_active=True).first()
+
+    if not title or not location:
+        messages.error(request, "House title and location are required.")
+        return redirect("housing_management")
+
+    valid_property_types = {choice[0] for choice in HouseListing.PROPERTY_TYPE_CHOICES}
+    if property_type not in valid_property_types:
+        property_type = HouseListing.TYPE_OTHER
+
+    valid_availability = {choice[0] for choice in HouseListing.AVAILABILITY_STATUS_CHOICES}
+    if availability_status not in valid_availability:
+        availability_status = HouseListing.STATUS_AVAILABLE
+
+    try:
+        price = Decimal(request.POST.get("price") or "0")
+        rooms_count = int(request.POST.get("rooms_count") or "1")
+        spaces_available = int(request.POST.get("spaces_available") or "1")
+        if price <= 0 or rooms_count <= 0 or spaces_available <= 0:
+            raise ValueError
+    except Exception:
+        messages.error(request, "Price, rooms, and spaces must be valid positive values.")
+        return redirect("housing_management")
+
+    house = HouseListing.objects.create(
+        owner=request.user,
+        managed_by_agent=managed_by_agent,
+        title=title,
+        property_type=property_type,
+        price=price,
+        location=location,
+        rooms_count=rooms_count,
+        spaces_available=spaces_available,
+        description=description,
+        availability_status=availability_status,
+        listed_in_marketplace=request.POST.get("listed_in_marketplace") == "on",
+    )
+
+    for index, image in enumerate(request.FILES.getlist("images")):
+        HouseListingImage.objects.create(
+            house=house,
+            image=image,
+            is_primary=index == 0,
+        )
+
+    messages.success(request, "House listing added.")
+    return redirect("housing_management")
+
+
+@login_required
+@require_POST
+def update_house_listing(request, house_id):
+    house = get_object_or_404(HouseListing, id=house_id, owner=request.user)
+    availability_status = (request.POST.get("availability_status") or house.availability_status).strip()
+    valid_availability = {choice[0] for choice in HouseListing.AVAILABILITY_STATUS_CHOICES}
+    if availability_status not in valid_availability:
+        availability_status = house.availability_status
+
+    house.availability_status = availability_status
+    house.listed_in_marketplace = request.POST.get("listed_in_marketplace") == "on"
+    house.is_active = request.POST.get("is_active") == "on"
+    house.save(update_fields=["availability_status", "listed_in_marketplace", "is_active", "updated_at"])
+    messages.success(request, f"{house.title} updated.")
+    return redirect("housing_management")
+
+
+@login_required
+@require_POST
+def add_rental_record(request):
+    house = get_object_or_404(HouseListing, id=request.POST.get("house_id"), owner=request.user)
+    tenant = None
+    tenant_id = (request.POST.get("tenant_id") or "").strip()
+    if tenant_id:
+        tenant = TenantRecord.objects.filter(id=tenant_id, user=request.user).first()
+
+    tenant_name = (request.POST.get("tenant_name") or (tenant.full_name if tenant else "")).strip()
+    tenant_phone = (request.POST.get("tenant_phone") or (tenant.phone if tenant else "")).strip()
+    tenant_email = (request.POST.get("tenant_email") or (tenant.email if tenant else "")).strip()
+    notes = (request.POST.get("notes") or "").strip()
+
+    if not tenant_name:
+        messages.error(request, "Tenant name is required.")
+        return redirect("housing_management")
+
+    start_date = parse_date((request.POST.get("start_date") or "").strip())
+    end_date = parse_date((request.POST.get("end_date") or "").strip())
+    next_due_date = parse_date((request.POST.get("next_due_date") or "").strip()) if request.POST.get("next_due_date") else None
+    if not start_date or not end_date or end_date <= start_date:
+        messages.error(request, "Please provide a valid rental start and end date.")
+        return redirect("housing_management")
+
+    try:
+        monthly_rent = Decimal(request.POST.get("monthly_rent") or house.price)
+        if monthly_rent <= 0:
+            raise ValueError
+    except Exception:
+        messages.error(request, "Monthly rent must be a valid positive amount.")
+        return redirect("housing_management")
+
+    if tenant is None:
+        tenant = TenantRecord.objects.create(
+            user=request.user,
+            full_name=tenant_name,
+            phone=tenant_phone,
+            email=tenant_email,
+        )
+
+    rental = RentalRecord.objects.create(
+        house=house,
+        tenant=tenant,
+        tenant_name=tenant_name,
+        tenant_phone=tenant_phone,
+        tenant_email=tenant_email,
+        start_date=start_date,
+        end_date=end_date,
+        monthly_rent=monthly_rent,
+        next_due_date=next_due_date,
+        payment_status=(request.POST.get("payment_status") or RentalRecord.PAYMENT_CURRENT).strip(),
+        status=(request.POST.get("status") or RentalRecord.STATUS_ACTIVE).strip(),
+        notes=notes,
+    )
+    _refresh_house_availability(house)
+    _sync_rental_payment_state(rental)
+    messages.success(request, "Rental record saved.")
+    return redirect("housing_management")
+
+
+@login_required
+@require_POST
+def add_rental_payment(request):
+    rental = get_object_or_404(
+        RentalRecord.objects.select_related("house"),
+        id=request.POST.get("rental_id"),
+        house__owner=request.user,
+    )
+    due_date = parse_date((request.POST.get("due_date") or "").strip())
+    paid_on = parse_date((request.POST.get("paid_on") or "").strip()) if request.POST.get("paid_on") else None
+    status = (request.POST.get("status") or RentalPayment.STATUS_PENDING).strip()
+    notes = (request.POST.get("notes") or "").strip()
+
+    if not due_date:
+        messages.error(request, "Payment due date is required.")
+        return redirect("housing_management")
+
+    valid_payment_statuses = {choice[0] for choice in RentalPayment.STATUS_CHOICES}
+    if status not in valid_payment_statuses:
+        status = RentalPayment.STATUS_PENDING
+
+    try:
+        amount = Decimal(request.POST.get("amount") or "0")
+        if amount <= 0:
+            raise ValueError
+    except Exception:
+        messages.error(request, "Payment amount must be a valid positive amount.")
+        return redirect("housing_management")
+
+    payment = RentalPayment.objects.create(
+        rental=rental,
+        amount=amount,
+        due_date=due_date,
+        paid_on=paid_on,
+        status=status,
+        notes=notes,
+    )
+    if payment.status == RentalPayment.STATUS_PAID and payment.paid_on:
+        rental.last_payment_date = payment.paid_on
+        rental.save(update_fields=["last_payment_date", "updated_at"])
+    _sync_rental_payment_state(rental)
+    messages.success(request, "Rental payment record saved.")
+    return redirect("housing_management")
+
+
+@login_required
+@require_POST
+def send_rental_reminder(request, rental_id):
+    rental = get_object_or_404(
+        RentalRecord.objects.select_related("house", "house__owner"),
+        id=rental_id,
+        house__owner=request.user,
+    )
+
+    reminder_message = (
+        f"Hello {rental.tenant_name}, your rent for {rental.house.title} at {rental.house.location} "
+        f"is set to expire on {rental.end_date:%B %d, %Y}. Please plan your renewal early."
+    )
+    sent = False
+
+    if rental.tenant_email:
+        sent = send_email(
+            rental.tenant_email,
+            "VilaStore Rent Expiry Reminder",
+            reminder_message,
+        ) or sent
+    if rental.tenant_phone:
+        sent = send_sms(rental.tenant_phone, reminder_message) or sent
+
+    if sent:
+        rental.reminder_sent_at = timezone.now()
+        rental.save(update_fields=["reminder_sent_at", "updated_at"])
+        messages.success(request, f"Reminder sent to {rental.tenant_name}.")
+    else:
+        messages.warning(request, "Reminder could not be delivered. Add tenant email or phone first.")
+
+    return redirect("housing_management")
 
 
 # Authentication
@@ -3216,14 +3562,17 @@ def _get_marketplace_buyer(request):
     buyer_id = request.session.get("marketplace_buyer_id")
     if not buyer_id:
         return None
-    return MarketplaceBuyer.objects.filter(id=buyer_id, is_active=True, is_email_verified=True).first()
+    buyer = MarketplaceBuyer.objects.filter(id=buyer_id, is_active=True).first()
+    if not _marketplace_buyer_is_fully_verified(buyer):
+        return None
+    return buyer
 
 
 def _get_pending_marketplace_buyer(request):
     buyer_id = request.session.get("marketplace_pending_buyer_id")
     if not buyer_id:
         return None
-    return MarketplaceBuyer.objects.filter(id=buyer_id, is_active=True).first()
+    return MarketplaceBuyer.objects.filter(id=buyer_id).first()
 
 
 def _get_marketplace_next_url(request):
@@ -3271,9 +3620,23 @@ def _get_marketplace_web_token(buyer):
 def _is_marketplace_rider_account(buyer):
     if not buyer:
         return False
+    if buyer.registration_role == MarketplaceBuyer.ROLE_RIDER:
+        return True
     has_rider_profile = DeliveryRider.objects.filter(buyer=buyer, is_active=True).exists()
     has_company_profile = DeliveryCompany.objects.filter(owner=buyer, is_active=True).exists()
     return has_rider_profile or has_company_profile
+
+
+def _marketplace_buyer_needs_phone_verification(buyer):
+    return bool(buyer and buyer.registration_role == MarketplaceBuyer.ROLE_RIDER)
+
+
+def _marketplace_buyer_is_fully_verified(buyer):
+    if not buyer or not buyer.is_email_verified:
+        return False
+    if _marketplace_buyer_needs_phone_verification(buyer) and not buyer.is_phone_verified:
+        return False
+    return True
 
 
 def _marketplace_default_dashboard_name(buyer):
@@ -3313,6 +3676,31 @@ def _send_marketplace_verification_code(buyer):
         f"Your verification code is {code}. It will expire in 10 minutes.",
         fail_silently=False,
     )
+
+
+def _send_marketplace_phone_verification_code(buyer):
+    phone = (buyer.phone or "").strip()
+    if not phone:
+        raise ValueError("Phone number is required for phone verification.")
+
+    code = str(random.randint(100000, 999999))
+    buyer.phone_verification_code = code
+    buyer.phone_code_sent_at = timezone.now()
+    buyer.save(update_fields=["phone_verification_code", "phone_code_sent_at"])
+
+    sent = send_sms(
+        phone,
+        f"Your VilaStore rider verification code is {code}. It will expire in 10 minutes.",
+    )
+    if not sent:
+        raise ValueError("Failed to send rider verification SMS.")
+
+
+def _send_marketplace_pending_verification_codes(buyer):
+    if not buyer.is_email_verified:
+        _send_marketplace_verification_code(buyer)
+    if _marketplace_buyer_needs_phone_verification(buyer) and not buyer.is_phone_verified:
+        _send_marketplace_phone_verification_code(buyer)
 
 
 def _send_marketplace_reset_code(buyer):
@@ -3361,22 +3749,29 @@ def marketplace_login(request):
 
         if not email or not password:
             messages.error(request, "Email and password are required.")
-            return render(request, "shopboy/marketplace-login.html")
+            return render(request, "shopboy/marketplace-login.html", {"next_url": next_url})
 
-        buyer = MarketplaceBuyer.objects.filter(email__iexact=email, is_active=True).first()
+        buyer = MarketplaceBuyer.objects.filter(email__iexact=email).first()
         if not buyer or not check_password(password, buyer.password):
             messages.error(request, "Invalid email or password.")
-            return render(request, "shopboy/marketplace-login.html")
+            return render(request, "shopboy/marketplace-login.html", {"next_url": next_url})
 
-        if not buyer.is_email_verified:
+        if not buyer.is_active and _marketplace_buyer_is_fully_verified(buyer):
+            messages.error(request, "This marketplace account is inactive.")
+            return render(request, "shopboy/marketplace-login.html", {"next_url": next_url})
+
+        if not _marketplace_buyer_is_fully_verified(buyer):
             request.session["marketplace_pending_buyer_id"] = buyer.id
             if next_url:
                 request.session["marketplace_next_url"] = next_url
             try:
-                _send_marketplace_verification_code(buyer)
+                _send_marketplace_pending_verification_codes(buyer)
             except Exception:
-                messages.error(request, "Could not send verification email. Please try again.")
-                return render(request, "shopboy/marketplace-login.html")
+                messages.error(request, "Could not send verification codes. Please try again.")
+                return render(request, "shopboy/marketplace-login.html", {"next_url": next_url})
+            if _marketplace_buyer_needs_phone_verification(buyer):
+                messages.success(request, "Verify your email and phone number to activate your rider account.")
+                return redirect("marketplace_rider_verify")
             messages.success(request, "Verify your email to continue. We sent you a code.")
             return redirect("marketplace_verify")
 
@@ -3438,6 +3833,81 @@ def marketplace_signup(request):
     })
 
 
+def marketplace_rider_signup(request):
+    buyer = _get_marketplace_buyer(request)
+    if buyer:
+        next_url = _get_marketplace_next_url(request) or reverse("marketplace_rider_portal")
+        return _marketplace_dashboard_redirect(request, buyer, next_url)
+
+    next_url = _get_marketplace_next_url(request) or reverse("marketplace_rider_portal")
+    if request.method == "POST":
+        full_name = (request.POST.get("full_name") or "").strip()
+        email = (request.POST.get("email") or "").strip().lower()
+        phone = (request.POST.get("phone") or "").strip()
+        password = request.POST.get("password") or ""
+        confirm_password = request.POST.get("confirm_password") or ""
+
+        context = {
+            "next_url": next_url,
+            "full_name": full_name,
+            "email": email,
+            "phone": phone,
+        }
+
+        if not full_name or not email or not phone or not password or not confirm_password:
+            messages.error(request, "Full name, email, phone number, and passwords are required.")
+            return render(request, "shopboy/marketplace-rider-signup.html", context)
+
+        if password != confirm_password:
+            messages.error(request, "Passwords do not match.")
+            return render(request, "shopboy/marketplace-rider-signup.html", context)
+
+        if not _password_meets_rules(password):
+            messages.error(request, "Password must include uppercase, number, and special character.")
+            return render(request, "shopboy/marketplace-rider-signup.html", context)
+
+        if MarketplaceBuyer.objects.filter(email__iexact=email).exists():
+            messages.error(request, "Email already registered. Please sign in instead.")
+            return render(request, "shopboy/marketplace-rider-signup.html", context)
+
+        if DeliveryRider.objects.filter(phone__iexact=phone).exists():
+            messages.error(request, "That phone number is already linked to a rider account.")
+            return render(request, "shopboy/marketplace-rider-signup.html", context)
+
+        buyer = MarketplaceBuyer.objects.create(
+            email=email,
+            phone=phone,
+            password=make_password(password),
+            registration_role=MarketplaceBuyer.ROLE_RIDER,
+            is_active=False,
+        )
+        DeliveryRider.objects.create(
+            buyer=buyer,
+            full_name=full_name,
+            phone=phone,
+            email=email,
+            rider_type=DeliveryRider.RIDER_PERSONAL,
+            is_approved=False,
+            is_active=False,
+            is_available=False,
+        )
+
+        request.session["marketplace_pending_buyer_id"] = buyer.id
+        request.session["marketplace_next_url"] = next_url
+        try:
+            _send_marketplace_pending_verification_codes(buyer)
+        except Exception:
+            messages.error(request, "Account created, but we could not send verification codes. Please try again.")
+            return render(request, "shopboy/marketplace-rider-signup.html", context)
+
+        messages.success(request, "Rider account created. Verify your email and phone to activate it.")
+        return redirect("marketplace_rider_verify")
+
+    return render(request, "shopboy/marketplace-rider-signup.html", {
+        "next_url": next_url,
+    })
+
+
 def marketplace_logout(request):
     _logout_marketplace_buyer(request)
     return redirect("marketplace")
@@ -3481,6 +3951,71 @@ def marketplace_verify(request):
     return render(request, "shopboy/marketplace-verify.html", {"buyer": buyer})
 
 
+def marketplace_rider_verify(request):
+    buyer = _get_pending_marketplace_buyer(request)
+    if not buyer or buyer.registration_role != MarketplaceBuyer.ROLE_RIDER:
+        return redirect("marketplace_rider_signup")
+
+    if request.method == "POST":
+        email_code = (request.POST.get("email_code") or "").strip()
+        phone_code = (request.POST.get("phone_code") or "").strip()
+        context = {"buyer": buyer}
+
+        if not email_code or not phone_code:
+            messages.error(request, "Both email and phone verification codes are required.")
+            return render(request, "shopboy/marketplace-rider-verify.html", context)
+
+        if not buyer.email_verification_code or not buyer.email_code_sent_at:
+            messages.error(request, "No email verification code found. Send a new code.")
+            return render(request, "shopboy/marketplace-rider-verify.html", context)
+
+        if not buyer.phone_verification_code or not buyer.phone_code_sent_at:
+            messages.error(request, "No phone verification code found. Send a new code.")
+            return render(request, "shopboy/marketplace-rider-verify.html", context)
+
+        if timezone.now() - buyer.email_code_sent_at > timedelta(minutes=10):
+            messages.error(request, "Your email verification code has expired. Send a new code.")
+            return render(request, "shopboy/marketplace-rider-verify.html", context)
+
+        if timezone.now() - buyer.phone_code_sent_at > timedelta(minutes=10):
+            messages.error(request, "Your phone verification code has expired. Send a new code.")
+            return render(request, "shopboy/marketplace-rider-verify.html", context)
+
+        if email_code != buyer.email_verification_code:
+            messages.error(request, "The email verification code is invalid.")
+            return render(request, "shopboy/marketplace-rider-verify.html", context)
+
+        if phone_code != buyer.phone_verification_code:
+            messages.error(request, "The phone verification code is invalid.")
+            return render(request, "shopboy/marketplace-rider-verify.html", context)
+
+        buyer.is_email_verified = True
+        buyer.email_verification_code = ""
+        buyer.email_code_sent_at = None
+        buyer.is_phone_verified = True
+        buyer.phone_verification_code = ""
+        buyer.phone_code_sent_at = None
+        buyer.is_active = True
+        buyer.last_login = timezone.now()
+        buyer.save(update_fields=[
+            "is_email_verified",
+            "email_verification_code",
+            "email_code_sent_at",
+            "is_phone_verified",
+            "phone_verification_code",
+            "phone_code_sent_at",
+            "is_active",
+            "last_login",
+        ])
+
+        request.session.pop("marketplace_pending_buyer_id", None)
+        _login_marketplace_buyer(request, buyer)
+        messages.success(request, "Your rider account is now active.")
+        return _marketplace_dashboard_redirect(request, buyer)
+
+    return render(request, "shopboy/marketplace-rider-verify.html", {"buyer": buyer})
+
+
 @require_POST
 def marketplace_send_verification_code(request):
     buyer = _get_pending_marketplace_buyer(request)
@@ -3488,10 +4023,16 @@ def marketplace_send_verification_code(request):
         return redirect("marketplace_login")
 
     try:
-        _send_marketplace_verification_code(buyer)
+        _send_marketplace_pending_verification_codes(buyer)
     except Exception:
-        messages.error(request, "Failed to send verification email. Please try again.")
+        messages.error(request, "Failed to send verification codes. Please try again.")
+        if buyer.registration_role == MarketplaceBuyer.ROLE_RIDER:
+            return redirect("marketplace_rider_verify")
         return redirect("marketplace_verify")
+
+    if buyer.registration_role == MarketplaceBuyer.ROLE_RIDER:
+        messages.success(request, f"Codes sent to {buyer.email} and {buyer.phone}.")
+        return redirect("marketplace_rider_verify")
 
     messages.success(request, f"Code sent to {buyer.email}.")
     return redirect("marketplace_verify")
@@ -3606,6 +4147,8 @@ def marketplace_account(request):
     buyer = _get_marketplace_buyer(request)
     if not buyer:
         pending = _get_pending_marketplace_buyer(request)
+        if pending and pending.registration_role == MarketplaceBuyer.ROLE_RIDER:
+            return redirect("marketplace_rider_verify")
         if pending and not pending.is_email_verified:
             return redirect("marketplace_verify")
         return _redirect_to_marketplace_login(request, "marketplace_account")
@@ -3628,6 +4171,8 @@ def marketplace_home(request):
     buyer = _get_marketplace_buyer(request)
     if not buyer:
         pending = _get_pending_marketplace_buyer(request)
+        if pending and pending.registration_role == MarketplaceBuyer.ROLE_RIDER:
+            return redirect("marketplace_rider_verify")
         if pending and not pending.is_email_verified:
             return redirect("marketplace_verify")
         return _redirect_to_marketplace_login(request, "marketplace_home")
@@ -3679,6 +4224,8 @@ def marketplace_rider_portal(request):
     buyer = _get_marketplace_buyer(request)
     if not buyer:
         pending = _get_pending_marketplace_buyer(request)
+        if pending and pending.registration_role == MarketplaceBuyer.ROLE_RIDER:
+            return redirect("marketplace_rider_verify")
         if pending and not pending.is_email_verified:
             return redirect("marketplace_verify")
         return _redirect_to_marketplace_login(request, "marketplace_rider_portal")
@@ -3709,6 +4256,10 @@ def marketplace(request):
     username_q = q[1:] if q.startswith("@") else q
     category = (request.GET.get("category") or "").strip()
     location = (request.GET.get("location") or "").strip()
+    property_type = (request.GET.get("property_type") or "").strip()
+    min_price = (request.GET.get("min_price") or "").strip()
+    max_price = (request.GET.get("max_price") or "").strip()
+    available_only = request.GET.get("available") == "1"
     verified = request.GET.get("verified") == "1"
     sort = request.GET.get("sort") or "rating"
 
@@ -3760,20 +4311,111 @@ def marketplace(request):
         .distinct()
         .order_by("location")
     )
+    houses = (
+        HouseListing.objects.filter(is_active=True, listed_in_marketplace=True)
+        .select_related("owner", "owner__marketplace_profile")
+        .prefetch_related("images")
+        .distinct()
+    )
+    if q:
+        houses = houses.filter(
+            Q(title__icontains=q) |
+            Q(location__icontains=q) |
+            Q(description__icontains=q) |
+            Q(owner__business_name__icontains=q) |
+            Q(owner__username__icontains=username_q)
+        )
+    if location:
+        houses = houses.filter(location__icontains=location)
+    if property_type:
+        houses = houses.filter(property_type=property_type)
+    if available_only:
+        houses = houses.filter(
+            availability_status__in=[HouseListing.STATUS_AVAILABLE, HouseListing.STATUS_PARTIAL]
+        )
+    if verified:
+        houses = houses.filter(owner__marketplace_profile__is_verified=True)
+
+    min_price_value = None
+    if min_price:
+        try:
+            min_price_value = Decimal(min_price)
+            houses = houses.filter(price__gte=min_price_value)
+        except Exception:
+            min_price = ""
+    max_price_value = None
+    if max_price:
+        try:
+            max_price_value = Decimal(max_price)
+            houses = houses.filter(price__lte=max_price_value)
+        except Exception:
+            max_price = ""
+
+    if sort == "newest":
+        houses = houses.order_by("-created_at")
+    elif sort == "price_low":
+        houses = houses.order_by("price", "-created_at")
+    elif sort == "price_high":
+        houses = houses.order_by("-price", "-created_at")
+    else:
+        houses = houses.order_by(
+            Case(
+                When(availability_status=HouseListing.STATUS_AVAILABLE, then=0),
+                When(availability_status=HouseListing.STATUS_PARTIAL, then=1),
+                default=2,
+                output_field=IntegerField(),
+            ),
+            "-created_at",
+        )
+
+    house_locations = (
+        HouseListing.objects.filter(is_active=True, listed_in_marketplace=True)
+        .exclude(location="")
+        .values_list("location", flat=True)
+        .distinct()
+    )
+    all_locations = sorted({*locations, *house_locations})
+    house_types = [choice for choice in HouseListing.PROPERTY_TYPE_CHOICES]
 
     return render(request, "shopboy/marketplace.html", {
         "buyer": buyer,
         "marketplace_portal_role": "rider" if _is_marketplace_rider_account(buyer) else "customer",
         "profiles": profiles,
+        "houses": houses,
         "categories": categories,
-        "locations": locations,
+        "locations": all_locations,
+        "house_types": house_types,
         "filters": {
             "q": q,
             "category": category,
             "location": location,
+            "property_type": property_type,
+            "min_price": min_price,
+            "max_price": max_price,
+            "available": available_only,
             "verified": verified,
             "sort": sort,
         },
+        "marketplace_active_tab": "marketplace",
+    })
+
+
+def marketplace_house_detail(request, house_id):
+    house = get_object_or_404(
+        HouseListing.objects.filter(is_active=True, listed_in_marketplace=True)
+        .select_related("owner", "managed_by_agent", "owner__marketplace_profile")
+        .prefetch_related("images", "rentals"),
+        id=house_id,
+    )
+    profile, _ = MarketplaceShopProfile.objects.get_or_create(user=house.owner)
+    active_rental = house.rentals.filter(status=RentalRecord.STATUS_ACTIVE).order_by("end_date").first()
+
+    return render(request, "shopboy/marketplace-house.html", {
+        "buyer": _get_marketplace_buyer(request),
+        "house": house,
+        "profile": profile,
+        "shop_owner": house.owner,
+        "active_rental": active_rental,
         "marketplace_active_tab": "marketplace",
     })
 

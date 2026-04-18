@@ -19,9 +19,14 @@ from .models import (
     DeliveryRider,
     DeliveryRequest,
     DeliveryCompany,
+    HouseListing,
+    HouseListingImage,
     Investor,
     Feedback,
     Agent,
+    RentalPayment,
+    RentalRecord,
+    TenantRecord,
 )
 
 
@@ -258,3 +263,43 @@ class MarketplaceOrderAdmin(admin.ModelAdmin):
 class MarketplaceChatMessageAdmin(admin.ModelAdmin):
     list_display = ("order", "sender_type", "created_at")
     list_filter = ("sender_type", "created_at")
+
+
+class HouseListingImageInline(admin.TabularInline):
+    model = HouseListingImage
+    extra = 0
+
+
+@admin.register(HouseListing)
+class HouseListingAdmin(admin.ModelAdmin):
+    list_display = ("title", "owner", "property_type", "location", "price", "availability_status", "listed_in_marketplace", "created_at")
+    list_filter = ("property_type", "availability_status", "listed_in_marketplace", "is_active")
+    search_fields = ("title", "location", "description", "owner__username", "owner__business_name")
+    inlines = [HouseListingImageInline]
+
+
+@admin.register(TenantRecord)
+class TenantRecordAdmin(admin.ModelAdmin):
+    list_display = ("full_name", "user", "phone", "email", "created_at")
+    list_filter = ("user",)
+    search_fields = ("full_name", "phone", "email")
+
+
+class RentalPaymentInline(admin.TabularInline):
+    model = RentalPayment
+    extra = 0
+
+
+@admin.register(RentalRecord)
+class RentalRecordAdmin(admin.ModelAdmin):
+    list_display = ("house", "tenant_name", "start_date", "end_date", "monthly_rent", "payment_status", "status")
+    list_filter = ("status", "payment_status", "house__owner")
+    search_fields = ("tenant_name", "tenant_phone", "tenant_email", "house__title")
+    inlines = [RentalPaymentInline]
+
+
+@admin.register(RentalPayment)
+class RentalPaymentAdmin(admin.ModelAdmin):
+    list_display = ("rental", "amount", "due_date", "paid_on", "status", "created_at")
+    list_filter = ("status", "due_date", "rental__house__owner")
+    search_fields = ("rental__tenant_name", "rental__house__title", "notes")
