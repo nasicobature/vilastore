@@ -1886,6 +1886,14 @@ def _get_signup_user(request):
     return User.objects.filter(id=signup_user_id).first()
 
 
+def _signup_route_name(request):
+    return "housing_signup" if request.session.get("signup_flow") == "housing" else "signup"
+
+
+def _signup_step_redirect(request, step):
+    return redirect(f"{reverse(_signup_route_name(request))}?step={step}")
+
+
 def _send_signup_code(user):
     code = str(random.randint(100000, 999999))
     user.email_verification_code = code
@@ -1916,19 +1924,19 @@ def signup_create_account(request):
 
     if not first_name or not last_name or not username or not email or not password or not confirm_password or not phone:
         messages.error(request, "First name, last name, username, email, phone, and passwords are required.")
-        return redirect(f"{reverse('signup')}?step=1")
+        return _signup_step_redirect(request, 1)
 
     if not _username_is_valid(username):
         messages.error(request, "Username must be 3-30 characters and use only letters, numbers, dot, dash, or underscore.")
-        return redirect(f"{reverse('signup')}?step=1")
+        return _signup_step_redirect(request, 1)
 
     if password != confirm_password:
         messages.error(request, "Passwords do not match.")
-        return redirect(f"{reverse('signup')}?step=1")
+        return _signup_step_redirect(request, 1)
 
     if not _password_meets_rules(password):
         messages.error(request, "Password must include uppercase, number, and special character.")
-        return redirect(f"{reverse('signup')}?step=1")
+        return _signup_step_redirect(request, 1)
 
     current_signup_user = _get_signup_user(request)
     current_signup_user_id = current_signup_user.id if current_signup_user else None
@@ -1941,21 +1949,21 @@ def signup_create_account(request):
     )
     if existing_email_account:
         messages.error(request, "Email already registered. Use another email or sign in.")
-        return redirect(f"{reverse('signup')}?step=1")
+        return _signup_step_redirect(request, 1)
 
     username_qs = User.objects.filter(username__iexact=username)
     if current_signup_user_id:
         username_qs = username_qs.exclude(id=current_signup_user_id)
     if username_qs.exists():
         messages.error(request, "This username is already taken. Please choose another one.")
-        return redirect(f"{reverse('signup')}?step=1")
+        return _signup_step_redirect(request, 1)
 
     phone_qs = User.objects.filter(phone=phone)
     if current_signup_user_id:
         phone_qs = phone_qs.exclude(id=current_signup_user_id)
     if phone_qs.filter(Q(is_active=True) | Q(is_email_verified=True)).exists():
         messages.error(request, "Phone number already in use. Please use another one.")
-        return redirect(f"{reverse('signup')}?step=1")
+        return _signup_step_redirect(request, 1)
 
     signup_user = current_signup_user
     if not signup_user or signup_user.is_active or signup_user.is_email_verified:
@@ -2026,10 +2034,12 @@ def signup_create_account(request):
         logger.exception("Failed to send signup verification email", extra={"signup_user_id": signup_user.id, "signup_email": signup_user.email})
         messages.warning(request, "Account created. Could not send verification email now; use Send Code after checking email settings.")
 
-    return redirect(f"{reverse('signup')}?step=2")
+    return _signup_step_redirect(request, 2)
 
 
 def signup(request):
+    if request.method != "POST":
+        request.session["signup_flow"] = "owner"
     ref_param = request.GET.get("ref")
     if ref_param:
         ref_agent = _get_agent_by_code(ref_param)
@@ -2042,11 +2052,11 @@ def signup(request):
 
         if not signup_user:
             messages.error(request, "Start by creating your account first.")
-            return redirect(f"{reverse('signup')}?step=1")
+            return _signup_step_redirect(request, 1)
 
         if verified_signup_user_id != signup_user.id or not signup_user.is_email_verified:
             messages.error(request, "Please verify your email before completing shop setup.")
-            return redirect(f"{reverse('signup')}?step=2")
+            return _signup_step_redirect(request, 2)
 
         business_name = (request.POST.get("business_name") or "").strip()
         business_type = (request.POST.get("business_type") or "").strip()
@@ -2061,12 +2071,12 @@ def signup(request):
 
         if not business_name or not business_type or not country or not address or not state:
             messages.error(request, "Business name, business type, country, address, and state are required.")
-            return redirect(f"{reverse('signup')}?step=3")
+            return _signup_step_redirect(request, 3)
 
         if phone:
             if User.objects.filter(phone=phone).exclude(id=signup_user.id).filter(Q(is_active=True) | Q(is_email_verified=True)).exists():
                 messages.error(request, "Phone number already in use. Please use another one.")
-                return redirect(f"{reverse('signup')}?step=3")
+                return _signup_step_redirect(request, 3)
             signup_user.phone = phone
 
         plan_prices = _plan_pricing()
@@ -2116,6 +2126,7 @@ def signup(request):
         request.session.pop("otp_code", None)
         request.session.pop("otp_sent_at", None)
         request.session.pop("agent_ref_code", None)
+        request.session.pop("signup_flow", None)
 
         trial_end_display = trial_end.strftime("%b %d, %Y")
         first_payment_total = BASE_FEE + MONTHLY_SUBSCRIPTION_FEE
@@ -2175,6 +2186,112 @@ def signup(request):
         "base_fee": BASE_FEE,
         "monthly_fee": MONTHLY_SUBSCRIPTION_FEE,
         "first_payment_total": BASE_FEE + MONTHLY_SUBSCRIPTION_FEE,
+        "signup_flow": "owner",
+        "brand_title": "VilaStore",
+        "brand_heading": "Launch With Confidence",
+        "brand_description": "Create your owner account, verify your email, then set up your shop for marketplace visibility.",
+        "account_heading": "Create Owner Account",
+        "account_description": "First create your account details before email verification.",
+        "setup_heading": "Set Up Your Shop",
+        "setup_description": "Add your business and marketplace details. Start your 1-month free trial once you finish signup.",
+        "business_name_label": "Business Name",
+        "business_type_label": "Business Type",
+        "shop_category_label": "Marketplace Category",
+        "shop_location_label": "Marketplace Location",
+        "shop_description_label": "Shop Description",
+        "signup_finish_label": "Start Free Trial",
+        "setup_form_url": reverse("signup"),
+    })
+
+
+def housing_signup(request):
+    request.session["signup_flow"] = "housing"
+
+    ref_param = request.GET.get("ref")
+    if ref_param:
+        ref_agent = _get_agent_by_code(ref_param)
+        if ref_agent:
+            request.session["agent_ref_code"] = ref_agent.referral_code
+
+    if request.method == "POST":
+        signup_user = _get_signup_user(request)
+        verified_signup_user_id = request.session.get("verified_signup_user_id")
+
+        if not signup_user:
+            messages.error(request, "Start by creating your housing account first.")
+            return _signup_step_redirect(request, 1)
+
+        if verified_signup_user_id != signup_user.id or not signup_user.is_email_verified:
+            messages.error(request, "Please verify your email before completing housing setup.")
+            return _signup_step_redirect(request, 2)
+
+        mutable_post = request.POST.copy()
+        if not (mutable_post.get("business_type") or "").strip():
+            mutable_post["business_type"] = "housing"
+        request.POST = mutable_post
+        return signup(request)
+
+    signup_user = _get_signup_user(request)
+    marketplace_profile = None
+    if signup_user:
+        marketplace_profile = MarketplaceShopProfile.objects.filter(user=signup_user).first()
+
+    def _prefill(value):
+        if not value:
+            return ""
+        if isinstance(value, str) and value.strip().lower() == "pending":
+            return ""
+        return value
+
+    default_step = "1"
+    if signup_user:
+        default_step = "3" if signup_user.is_email_verified else "2"
+
+    current_step = request.GET.get("step", default_step)
+    if current_step not in {"1", "2", "3"}:
+        current_step = default_step
+
+    return render(request, "auth/signup.html", {
+        "PAYSTACK_PUBLIC_KEY": getattr(django_settings, "PAYSTACK_PUBLIC_KEY", ""),
+        "current_step": current_step,
+        "email_verified": bool(signup_user and signup_user.is_email_verified),
+        "prefill_ref_code": (
+            signup_user.referred_by_agent.referral_code
+            if signup_user and signup_user.referred_by_agent
+            else request.session.get("agent_ref_code", "")
+        ),
+        "prefill_first_name": signup_user.first_name if signup_user else "",
+        "prefill_last_name": signup_user.last_name if signup_user else "",
+        "prefill_username": signup_user.username if signup_user else "",
+        "prefill_email": signup_user.email if signup_user else "",
+        "prefill_phone": signup_user.phone if signup_user else "",
+        "prefill_business_name": _prefill(signup_user.business_name) if signup_user else "",
+        "prefill_business_type": _prefill(signup_user.business_type) if signup_user else "housing",
+        "prefill_country": _prefill(signup_user.country) if signup_user else "",
+        "prefill_address": _prefill(signup_user.address) if signup_user else "",
+        "prefill_state": _prefill(signup_user.state) if signup_user else "",
+        "prefill_plan": signup_user.plan if signup_user else "starter",
+        "prefill_shop_description": marketplace_profile.description if marketplace_profile else "",
+        "prefill_shop_category": marketplace_profile.category if marketplace_profile else "House Rentals",
+        "prefill_shop_location": marketplace_profile.location if marketplace_profile else "",
+        "base_fee": BASE_FEE,
+        "monthly_fee": MONTHLY_SUBSCRIPTION_FEE,
+        "first_payment_total": BASE_FEE + MONTHLY_SUBSCRIPTION_FEE,
+        "signup_flow": "housing",
+        "brand_title": "VilaStore Housing",
+        "brand_heading": "Register for Housing Management",
+        "brand_description": "Create your housing owner or agent account, verify your email, then set up your rental business profile and start managing properties online.",
+        "account_heading": "Create Housing Account",
+        "account_description": "Start your housing management registration here before email verification.",
+        "setup_heading": "Set Up Your Housing Business",
+        "setup_description": "Add your housing business details so you can manage listings, tenants, payments, and reminders from the web dashboard.",
+        "business_name_label": "Business or Agency Name",
+        "business_type_label": "Housing Type",
+        "shop_category_label": "Housing Category",
+        "shop_location_label": "Primary Service Location",
+        "shop_description_label": "Housing Description",
+        "signup_finish_label": "Create Housing Account",
+        "setup_form_url": reverse("housing_signup"),
     })
 
 
@@ -2714,7 +2831,7 @@ def send_code(request):
         if is_json:
             return JsonResponse({"success": False, "message": "Create your account first."}, status=400)
         messages.error(request, "Create your account first.")
-        return redirect(f"{reverse('signup')}?step=1")
+        return _signup_step_redirect(request, 1)
 
     if signup_user.is_email_verified:
         request.session["verified_signup_user_id"] = signup_user.id
@@ -2722,7 +2839,7 @@ def send_code(request):
         if is_json:
             return JsonResponse({"success": True, "message": "Email already verified"})
         messages.success(request, "Email already verified.")
-        return redirect(f"{reverse('signup')}?step=3")
+        return _signup_step_redirect(request, 3)
 
     try:
         _send_signup_code(signup_user)
@@ -2735,12 +2852,12 @@ def send_code(request):
                 "error": str(exc),
             }, status=500)
         messages.error(request, "Failed to send OTP email. Configure email settings.")
-        return redirect(f"{reverse('signup')}?step=2")
+        return _signup_step_redirect(request, 2)
 
     if is_json:
         return JsonResponse({"success": True, "message": f"Code sent to {signup_user.email}"})
     messages.success(request, f"Code sent to {signup_user.email}")
-    return redirect(f"{reverse('signup')}?step=2")
+    return _signup_step_redirect(request, 2)
 
 
 @require_POST
@@ -2758,32 +2875,32 @@ def verify_code(request):
         if is_json:
             return JsonResponse({"success": False, "message": "Create account first."}, status=400)
         messages.error(request, "Create account first.")
-        return redirect(f"{reverse('signup')}?step=1")
+        return _signup_step_redirect(request, 1)
 
     if not code:
         if is_json:
             return JsonResponse({"success": False, "message": "Verification code is required."}, status=400)
         messages.error(request, "Verification code is required.")
-        return redirect(f"{reverse('signup')}?step=2")
+        return _signup_step_redirect(request, 2)
 
     sent_at = signup_user.email_code_sent_at
     if not signup_user.email_verification_code or not sent_at:
         if is_json:
             return JsonResponse({"success": False, "message": "No OTP found. Send code first."}, status=400)
         messages.error(request, "No OTP found. Send code first.")
-        return redirect(f"{reverse('signup')}?step=2")
+        return _signup_step_redirect(request, 2)
 
     if timezone.now() - sent_at > timedelta(minutes=10):
         if is_json:
             return JsonResponse({"success": False, "message": "OTP expired. Send a new code."}, status=400)
         messages.error(request, "OTP expired. Send a new code.")
-        return redirect(f"{reverse('signup')}?step=2")
+        return _signup_step_redirect(request, 2)
 
     if code != signup_user.email_verification_code:
         if is_json:
             return JsonResponse({"success": False, "message": "Invalid code"}, status=400)
         messages.error(request, "Invalid code.")
-        return redirect(f"{reverse('signup')}?step=2")
+        return _signup_step_redirect(request, 2)
 
     signup_user.is_email_verified = True
     signup_user.email_verification_code = ""
@@ -2797,7 +2914,7 @@ def verify_code(request):
         return JsonResponse({"success": True, "message": "Email verified"})
 
     messages.success(request, "Email verified successfully.")
-    return redirect(f"{reverse('signup')}?step=3")
+    return _signup_step_redirect(request, 3)
 
 
 def forgot_password(request):

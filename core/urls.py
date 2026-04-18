@@ -186,6 +186,7 @@ urlpatterns = [
     path('home/', views.home, name='home'),
     path('', views.home, name='signup'),
     path('signup/', views.signup, name='signup'),
+    path('housing/register/', views.housing_signup, name='housing_signup'),
     path("signup/create-account/", views.signup_create_account, name="signup_create_account"),
     path("send-code/", views.send_code, name='send_code'),
     path("verify-code/", views.verify_code, name='verify-code'),

@@ -192,7 +192,7 @@
       <div class="hero-buttons">
         <a href="{% url 'signup' %}" class="btn-hero"><i data-lucide="rocket" style="width:20px;height:20px;"></i> Start Free Trial</a>
         <a href="{% url 'marketplace' %}" class="btn-secondary"><i data-lucide="shopping-bag" style="width:20px;height:20px;"></i> Browse Marketplace</a>
-        <a href="{% url 'signup' %}" class="btn-secondary"><i data-lucide="house-plus" style="width:20px;height:20px;"></i> Register House Management</a>
+        <a href="{% url 'housing_signup' %}" class="btn-secondary"><i data-lucide="house-plus" style="width:20px;height:20px;"></i> Register House Management</a>
         <a href="{% url 'marketplace_rider_signup' %}" class="btn-secondary"><i data-lucide="bike" style="width:20px;height:20px;"></i> Register as Rider</a>
         <a href="#how-it-works" class="btn-secondary"><i data-lucide="play-circle" style="width:20px;height:20px;"></i> How It Works</a>
       </div>
@@ -246,7 +246,7 @@
         <h3>House Management</h3>
         <p>Register as a house owner or agent, then manage rental listings, tenants, payments, availability, and reminders from the web dashboard.</p>
         <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-          <a href="{% url 'signup' %}" class="portal-btn"><i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register Housing</a>
+          <a href="{% url 'housing_signup' %}" class="portal-btn"><i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register Housing</a>
           <a href="{% url 'login' %}" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
             <i data-lucide="log-in" style="width:18px;height:18px;"></i> Housing Login
           </a>
