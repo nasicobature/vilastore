@@ -1,0 +1,109 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketplace - Rider Registration</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="auth-page">
+  <div class="auth-container">
+    <div class="auth-branding">
+      <div class="auth-branding-content">
+        <div class="auth-logo">
+          <div class="auth-logo-icon">
+            <i data-lucide="bike"></i>
+          </div>
+          <h1>Rider Portal</h1>
+        </div>
+        <h2>Register as a Delivery Rider</h2>
+        <p>Create your rider account here. We will verify both your email address and phone number before activation.</p>
+      </div>
+    </div>
+
+    <div class="auth-form-panel">
+      <div class="auth-form-container">
+        <div class="auth-form-header">
+          <h2>Rider Sign Up</h2>
+          <p>Start here, then finish your rider profile inside the rider workspace after verification.</p>
+        </div>
+
+        {% if messages %}
+        <section style="margin-bottom:1rem;">
+          {% for message in messages %}
+          <div class="card" style="padding:0.75rem 1rem;margin-bottom:0.5rem;">{{ message }}</div>
+          {% endfor %}
+        </section>
+        {% endif %}
+
+        <form method="POST" action="{% url 'marketplace_rider_signup' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="auth-form">
+          {% csrf_token %}
+          {% if next_url %}
+          <input type="hidden" name="next" value="{{ next_url }}">
+          {% endif %}
+          <div class="form-group">
+            <label for="riderFullName">Full Name</label>
+            <div class="input-with-icon">
+              <i data-lucide="user"></i>
+              <input type="text" id="riderFullName" name="full_name" class="input" placeholder="Your full name" value="{{ full_name|default:'' }}" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="riderEmail">Email</label>
+            <div class="input-with-icon">
+              <i data-lucide="mail"></i>
+              <input type="email" id="riderEmail" name="email" class="input" placeholder="you@email.com" value="{{ email|default:'' }}" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="riderPhone">Phone Number</label>
+            <div class="input-with-icon">
+              <i data-lucide="phone"></i>
+              <input type="text" id="riderPhone" name="phone" class="input" placeholder="+234..." value="{{ phone|default:'' }}" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="riderPassword">Password</label>
+            <div class="input-with-icon">
+              <i data-lucide="lock"></i>
+              <input type="password" id="riderPassword" name="password" class="input" placeholder="Create a password" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="riderConfirmPassword">Confirm Password</label>
+            <div class="input-with-icon">
+              <i data-lucide="lock"></i>
+              <input type="password" id="riderConfirmPassword" name="confirm_password" class="input" placeholder="Re-enter password" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg btn-full">
+            <i data-lucide="user-plus"></i>
+            Create Rider Account
+          </button>
+        </form>
+
+        <div class="auth-divider">
+          <span>or</span>
+        </div>
+
+        <div class="auth-footer">
+          <p>Already started rider registration?</p>
+          <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline btn-full">
+            <i data-lucide="log-in"></i>
+            Sign In to Rider Portal
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
