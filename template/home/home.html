@@ -28,6 +28,7 @@
       --gradient-5: linear-gradient(135deg, #fab1a0, #e84393);
       --gradient-6: linear-gradient(135deg, #55efc4, #00b894);
       --gradient-7: linear-gradient(135deg, #ffeaa7, #fdcb6e);
+      --gradient-8: linear-gradient(135deg, #f97316, #ea580c);
       --radius: 16px;
       --radius-sm: 10px;
     }
@@ -80,6 +81,8 @@
     .portal-card.investor::before { background: var(--gradient-5); }
     .portal-card.admin::before { background: var(--gradient-6); }
     .portal-card.agent::before { background: var(--gradient-7); }
+    .portal-card.rider::before { background: linear-gradient(135deg, #2dd4bf, #0f766e); }
+    .portal-card.housing::before { background: var(--gradient-8); }
     .portal-icon { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem; }
     .portal-card.owner .portal-icon { background: rgba(108,92,231,0.15); color: var(--primary-light); }
     .portal-card.shopboy .portal-icon { background: rgba(0,206,201,0.15); color: var(--accent); }
@@ -88,6 +91,8 @@
     .portal-card.investor .portal-icon { background: rgba(232,67,147,0.16); color: #fab1a0; }
     .portal-card.admin .portal-icon { background: rgba(0,184,148,0.16); color: #55efc4; }
     .portal-card.agent .portal-icon { background: rgba(253,203,110,0.18); color: #ffeaa7; }
+    .portal-card.rider .portal-icon { background: rgba(45,212,191,0.18); color: #7dd3fc; }
+    .portal-card.housing .portal-icon { background: rgba(249,115,22,0.18); color: #fdba74; }
     .portal-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
     .portal-card p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
     .portal-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1.5rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; border: none; cursor: pointer; }
@@ -98,6 +103,8 @@
     .portal-card.investor .portal-btn { background: var(--gradient-5); color: #fff; }
     .portal-card.admin .portal-btn { background: var(--gradient-6); color: #0f1117; }
     .portal-card.agent .portal-btn { background: var(--gradient-7); color: #3d2e00; }
+    .portal-card.rider .portal-btn { background: linear-gradient(135deg, #2dd4bf, #0f766e); color: #fff; }
+    .portal-card.housing .portal-btn { background: var(--gradient-8); color: #fff; }
     .portal-btn:hover { opacity: 0.9; transform: translateY(-1px); }
 
     /* HOW IT WORKS */
@@ -185,6 +192,8 @@
       <div class="hero-buttons">
         <a href="{% url 'signup' %}" class="btn-hero"><i data-lucide="rocket" style="width:20px;height:20px;"></i> Start Free Trial</a>
         <a href="{% url 'marketplace' %}" class="btn-secondary"><i data-lucide="shopping-bag" style="width:20px;height:20px;"></i> Browse Marketplace</a>
+        <a href="{% url 'signup' %}" class="btn-secondary"><i data-lucide="house-plus" style="width:20px;height:20px;"></i> Register House Management</a>
+        <a href="{% url 'marketplace_rider_signup' %}" class="btn-secondary"><i data-lucide="bike" style="width:20px;height:20px;"></i> Register as Rider</a>
         <a href="#how-it-works" class="btn-secondary"><i data-lucide="play-circle" style="width:20px;height:20px;"></i> How It Works</a>
       </div>
     </div>
@@ -220,6 +229,28 @@
         <h3>Marketplace Login</h3>
         <p>Sign in to the marketplace to manage your shop profile, listings, and customer orders in one place.</p>
         <a href="{% url 'marketplace_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Marketplace Login</a>
+      </div>
+      <div class="portal-card rider">
+        <div class="portal-icon"><i data-lucide="bike" style="width:28px;height:28px;"></i></div>
+        <h3>Delivery Rider Register</h3>
+        <p>Create a marketplace account for delivery work, then complete your rider or rider-company setup inside the Settings portal.</p>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+          <a href="{% url 'marketplace_rider_signup' %}" class="portal-btn"><i data-lucide="user-plus" style="width:18px;height:18px;"></i> Rider Sign Up</a>
+          <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
+            <i data-lucide="settings" style="width:18px;height:18px;"></i> Rider Settings
+          </a>
+        </div>
+      </div>
+      <div class="portal-card housing">
+        <div class="portal-icon"><i data-lucide="house-plus" style="width:28px;height:28px;"></i></div>
+        <h3>House Management</h3>
+        <p>Register as a house owner or agent, then manage rental listings, tenants, payments, availability, and reminders from the web dashboard.</p>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+          <a href="{% url 'signup' %}" class="portal-btn"><i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register Housing</a>
+          <a href="{% url 'login' %}" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
+            <i data-lucide="log-in" style="width:18px;height:18px;"></i> Housing Login
+          </a>
+        </div>
       </div>
       <div class="portal-card investor">
         <div class="portal-icon"><i data-lucide="line-chart" style="width:28px;height:28px;"></i></div>
