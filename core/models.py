@@ -83,6 +83,14 @@ class Agent(models.Model):
 
 
 class User(AbstractUser):
+    ACCOUNT_TYPE_SHOP = "shop"
+    ACCOUNT_TYPE_HOUSING = "housing"
+    ACCOUNT_TYPE_CHOICES = [
+        (ACCOUNT_TYPE_SHOP, "Shop Owner"),
+        (ACCOUNT_TYPE_HOUSING, "Housing Owner"),
+    ]
+
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default=ACCOUNT_TYPE_SHOP)
     # Business Information
     business_name = models.CharField(max_length=200)
     business_type = models.CharField(max_length=100)
@@ -126,6 +134,14 @@ class User(AbstractUser):
         if self.profile_image:
             _optimize_image_field(self.profile_image, max_size=600, quality=80)
         super().save(*args, **kwargs)
+
+    @property
+    def is_housing_account(self):
+        return self.account_type == self.ACCOUNT_TYPE_HOUSING
+
+    @property
+    def is_shop_account(self):
+        return self.account_type == self.ACCOUNT_TYPE_SHOP
     
     
 

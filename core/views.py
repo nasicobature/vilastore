@@ -1919,12 +1919,24 @@ def _get_signup_user(request):
     return User.objects.filter(id=signup_user_id).first()
 
 
+def _signup_account_type(request):
+    if request.session.get("signup_flow") == "housing":
+        return User.ACCOUNT_TYPE_HOUSING
+    return User.ACCOUNT_TYPE_SHOP
+
+
 def _signup_route_name(request):
     return "housing_signup" if request.session.get("signup_flow") == "housing" else "signup"
 
 
 def _signup_step_redirect(request, step):
     return redirect(f"{reverse(_signup_route_name(request))}?step={step}")
+
+
+def _post_login_redirect_name(user):
+    if getattr(user, "account_type", User.ACCOUNT_TYPE_SHOP) == User.ACCOUNT_TYPE_HOUSING:
+        return "housing_management"
+    return "index"
 
 
 def _send_signup_code(user):
@@ -1973,10 +1985,12 @@ def signup_create_account(request):
 
     current_signup_user = _get_signup_user(request)
     current_signup_user_id = current_signup_user.id if current_signup_user else None
+    account_type = _signup_account_type(request)
 
     existing_email_account = (
         User.objects.filter(email__iexact=email)
         .exclude(id=current_signup_user_id)
+        .filter(account_type=account_type)
         .filter(Q(is_active=True) | Q(is_email_verified=True))
         .first()
     )
@@ -1984,14 +1998,14 @@ def signup_create_account(request):
         messages.error(request, "Email already registered. Use another email or sign in.")
         return _signup_step_redirect(request, 1)
 
-    username_qs = User.objects.filter(username__iexact=username)
+    username_qs = User.objects.filter(username__iexact=username, account_type=account_type)
     if current_signup_user_id:
         username_qs = username_qs.exclude(id=current_signup_user_id)
     if username_qs.exists():
         messages.error(request, "This username is already taken. Please choose another one.")
         return _signup_step_redirect(request, 1)
 
-    phone_qs = User.objects.filter(phone=phone)
+    phone_qs = User.objects.filter(phone=phone, account_type=account_type)
     if current_signup_user_id:
         phone_qs = phone_qs.exclude(id=current_signup_user_id)
     if phone_qs.filter(Q(is_active=True) | Q(is_email_verified=True)).exists():
@@ -2001,7 +2015,12 @@ def signup_create_account(request):
     signup_user = current_signup_user
     if not signup_user or signup_user.is_active or signup_user.is_email_verified:
         signup_user = (
-            User.objects.filter(email__iexact=email, is_active=False, is_email_verified=False)
+            User.objects.filter(
+                email__iexact=email,
+                is_active=False,
+                is_email_verified=False,
+                account_type=account_type,
+            )
             .order_by("-id")
             .first()
         )
@@ -2018,10 +2037,11 @@ def signup_create_account(request):
         signup_user.email_verification_code = ""
         signup_user.email_code_sent_at = None
         signup_user.is_paid = False
+        signup_user.account_type = account_type
         if not signup_user.business_name:
-            signup_user.business_name = f"{first_name}'s Shop"
+            signup_user.business_name = f"{first_name}'s Housing" if account_type == User.ACCOUNT_TYPE_HOUSING else f"{first_name}'s Shop"
         if not signup_user.business_type:
-            signup_user.business_type = "other"
+            signup_user.business_type = "housing" if account_type == User.ACCOUNT_TYPE_HOUSING else "other"
         if not signup_user.state:
             signup_user.state = "pending"
         if not signup_user.address:
@@ -2041,12 +2061,13 @@ def signup_create_account(request):
             first_name=first_name,
             last_name=last_name,
             phone=phone,
-            business_name=f"{first_name}'s Shop",
-            business_type="other",
+            business_name=f"{first_name}'s Housing" if account_type == User.ACCOUNT_TYPE_HOUSING else f"{first_name}'s Shop",
+            business_type="housing" if account_type == User.ACCOUNT_TYPE_HOUSING else "other",
             state="pending",
             address="pending",
             country="pending",
             plan="starter",
+            account_type=account_type,
             is_paid=False,
             is_active=False,
             is_email_verified=False,
@@ -2120,6 +2141,7 @@ def signup(request):
 
         signup_user.business_name = business_name
         signup_user.business_type = business_type
+        signup_user.account_type = User.ACCOUNT_TYPE_SHOP
         signup_user.country = country
         signup_user.address = address
         signup_user.state = state
@@ -2171,7 +2193,7 @@ def signup(request):
             f"(NGN {BASE_FEE:,} base + NGN {MONTHLY_SUBSCRIPTION_FEE:,} subscription), "
             f"then NGN {MONTHLY_SUBSCRIPTION_FEE:,}/month.",
         )
-        return redirect("index")
+        return redirect(_post_login_redirect_name(signup_user))
 
     signup_user = _get_signup_user(request)
     marketplace_profile = None
@@ -2225,6 +2247,8 @@ def signup(request):
         "brand_description": "Create your owner account, verify your email, then set up your shop for marketplace visibility.",
         "account_heading": "Create Owner Account",
         "account_description": "First create your account details before email verification.",
+        "verify_description": "Verify your email before adding shop information.",
+        "setup_step_label": "Shop Setup",
         "setup_heading": "Set Up Your Shop",
         "setup_description": "Add your business and marketplace details. Start your 1-month free trial once you finish signup.",
         "business_name_label": "Business Name",
@@ -2232,6 +2256,7 @@ def signup(request):
         "shop_category_label": "Marketplace Category",
         "shop_location_label": "Marketplace Location",
         "shop_description_label": "Shop Description",
+        "plan_heading": "Shop Owner Plan",
         "signup_finish_label": "Start Free Trial",
         "setup_form_url": reverse("signup"),
     })
@@ -2258,11 +2283,69 @@ def housing_signup(request):
             messages.error(request, "Please verify your email before completing housing setup.")
             return _signup_step_redirect(request, 2)
 
-        mutable_post = request.POST.copy()
-        if not (mutable_post.get("business_type") or "").strip():
-            mutable_post["business_type"] = "housing"
-        request.POST = mutable_post
-        return signup(request)
+        business_name = (request.POST.get("business_name") or "").strip()
+        business_type = (request.POST.get("business_type") or "housing").strip() or "housing"
+        country = (request.POST.get("country") or "").strip()
+        address = (request.POST.get("address") or "").strip()
+        state = (request.POST.get("state") or "").strip()
+        plan = (request.POST.get("plan") or "starter").strip() or "starter"
+        phone = (request.POST.get("phone") or "").strip()
+
+        if not business_name or not business_type or not country or not address or not state:
+            messages.error(request, "Business name, housing type, country, address, and state are required.")
+            return _signup_step_redirect(request, 3)
+
+        if phone:
+            if User.objects.filter(phone=phone, account_type=User.ACCOUNT_TYPE_HOUSING).exclude(id=signup_user.id).filter(Q(is_active=True) | Q(is_email_verified=True)).exists():
+                messages.error(request, "Phone number already in use for another housing account. Please use another one.")
+                return _signup_step_redirect(request, 3)
+            signup_user.phone = phone
+
+        plan_prices = _plan_pricing()
+        if plan not in plan_prices:
+            plan = "starter"
+
+        trial_end = timezone.now().date() + timedelta(days=TRIAL_DAYS)
+
+        signup_user.business_name = business_name
+        signup_user.business_type = business_type
+        signup_user.account_type = User.ACCOUNT_TYPE_HOUSING
+        signup_user.country = country
+        signup_user.address = address
+        signup_user.state = state
+        signup_user.plan = plan
+        signup_user.is_paid = False
+        signup_user.monthly_fee = plan_prices[plan]
+        signup_user.is_active = True
+        signup_user.subscription_active_until = trial_end
+
+        profile_image = request.FILES.get("profile_image")
+        if profile_image:
+            signup_user.profile_image = profile_image
+        signup_user.save()
+
+        login(request, signup_user, backend="django.contrib.auth.backends.ModelBackend")
+
+        request.session.pop("signup_user_id", None)
+        request.session.pop("verified_signup_user_id", None)
+        request.session.pop("verified_email", None)
+        request.session.pop("otp_email", None)
+        request.session.pop("otp_code", None)
+        request.session.pop("otp_sent_at", None)
+        request.session.pop("agent_ref_code", None)
+        request.session.pop("signup_flow", None)
+
+        trial_end_display = trial_end.strftime("%b %d, %Y")
+        first_payment_total = BASE_FEE + MONTHLY_SUBSCRIPTION_FEE
+        messages.success(
+            request,
+            "Housing signup completed successfully. "
+            f"Your free trial runs until {trial_end_display}. "
+            f"First payment due after trial is NGN {first_payment_total:,} "
+            f"(NGN {BASE_FEE:,} base + NGN {MONTHLY_SUBSCRIPTION_FEE:,} subscription), "
+            f"then NGN {MONTHLY_SUBSCRIPTION_FEE:,}/month.",
+        )
+        return redirect("housing_management")
 
     signup_user = _get_signup_user(request)
     marketplace_profile = None
@@ -2316,6 +2399,8 @@ def housing_signup(request):
         "brand_description": "Create your housing owner or agent account, verify your email, then set up your rental business profile and start managing properties online.",
         "account_heading": "Create Housing Account",
         "account_description": "Start your housing management registration here before email verification.",
+        "verify_description": "Verify your email before completing your housing account setup.",
+        "setup_step_label": "Housing Setup",
         "setup_heading": "Set Up Your Housing Business",
         "setup_description": "Add your housing business details so you can manage listings, tenants, payments, and reminders from the web dashboard.",
         "business_name_label": "Business or Agency Name",
@@ -2323,6 +2408,7 @@ def housing_signup(request):
         "shop_category_label": "Housing Category",
         "shop_location_label": "Primary Service Location",
         "shop_description_label": "Housing Description",
+        "plan_heading": "Housing Owner Plan",
         "signup_finish_label": "Create Housing Account",
         "setup_form_url": reverse("housing_signup"),
     })
@@ -2330,7 +2416,7 @@ def housing_signup(request):
 
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect("index")
+        return redirect(_post_login_redirect_name(request.user))
 
     if request.method == "POST":
         identifier = (request.POST.get("email") or "").strip()
@@ -2344,7 +2430,7 @@ def login_view(request):
                 return redirect("subscription_payment")
             login(request, user)
             request.session.pop("pending_payment_user_id", None)
-            return redirect("index")
+            return redirect(_post_login_redirect_name(user))
 
         pending_user = User.objects.filter(
             Q(email__iexact=identifier) | Q(username__iexact=identifier),
@@ -2411,6 +2497,7 @@ def investor_dashboard(request):
         is_paid=True,
         is_staff=False,
         is_superuser=False,
+        account_type=User.ACCOUNT_TYPE_SHOP,
     )
     active_shops = active_qs.count()
     monthly_revenue = active_qs.aggregate(total=Sum("monthly_fee"))["total"] or Decimal("0.00")
@@ -3706,17 +3793,18 @@ def admin_portal(request):
             is_paid=True,
             is_staff=False,
             is_superuser=False,
+            account_type=User.ACCOUNT_TYPE_SHOP,
         )
         .aggregate(total=Sum("monthly_fee"))["total"]
         or Decimal("0.00")
     )
 
-    active_shops = User.objects.filter(is_active=True, is_paid=True).count()
-    total_shops = User.objects.count()
+    active_shops = User.objects.filter(is_active=True, is_paid=True, account_type=User.ACCOUNT_TYPE_SHOP).count()
+    total_shops = User.objects.filter(account_type=User.ACCOUNT_TYPE_SHOP).count()
     total_products = Product.objects.count()
     total_orders = MarketplaceOrder.objects.count()
 
-    recent_users = User.objects.order_by("-date_joined")[:5]
+    recent_users = User.objects.filter(account_type=User.ACCOUNT_TYPE_SHOP).order_by("-date_joined")[:5]
     investors = Investor.objects.order_by("-created_at")
     feedbacks = Feedback.objects.order_by("-created_at")[:50]
     for investor in investors:
@@ -3829,7 +3917,7 @@ def _get_marketplace_settings(user):
 
 def _ensure_marketplace_profiles():
     shop_owner_ids = list(
-        User.objects.filter(is_active=True)
+        User.objects.filter(is_active=True, account_type=User.ACCOUNT_TYPE_SHOP)
         .values_list("id", flat=True)
         .distinct()
     )
@@ -4568,7 +4656,7 @@ def marketplace(request):
     profiles = (
         MarketplaceShopProfile.objects.select_related("user")
         .prefetch_related("user__product_set")
-        .filter(user__is_active=True)
+        .filter(user__is_active=True, user__account_type=User.ACCOUNT_TYPE_SHOP)
         .distinct()
     )
     if q:

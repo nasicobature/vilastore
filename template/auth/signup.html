@@ -55,7 +55,7 @@
           <div class="step-line"></div>
           <div class="step" data-step="3">
             <span class="step-number">3</span>
-            <span class="step-label">Shop Setup</span>
+            <span class="step-label">{{ setup_step_label|default:"Shop Setup" }}</span>
           </div>
         </div>
 
@@ -148,7 +148,7 @@
           <div class="form-step" data-step="2">
             <div class="auth-form-header">
               <h2>Verify Email</h2>
-              <p>Verify your email before adding shop information.</p>
+              <p>{{ verify_description|default:"Verify your email before adding shop information." }}</p>
             </div>
 
             <div class="card" style="padding:1rem;margin-bottom:1rem;">
@@ -299,7 +299,7 @@
                 <div class="plan-options" style="margin-bottom:0;">
                   <div class="plan-card" style="width:100%;">
                     <div class="plan-header">
-                      <h3>Shop Owner Plan</h3>
+                      <h3>{{ plan_heading|default:"Shop Owner Plan" }}</h3>
                       <div class="plan-price"><span class="price">1 Month Free Trial</span></div>
                     </div>
                     <ul class="plan-features">
