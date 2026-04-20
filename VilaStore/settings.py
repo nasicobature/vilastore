@@ -73,7 +73,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
-    'core'
+    'core',
+    'edu.apps.EduConfig',
 ]
 
 MIDDLEWARE = [

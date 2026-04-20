@@ -80,8 +80,16 @@
             <strong>{{ buyer.email }}</strong>
           </div>
           <div class="delivery-estimate-card">
-            <span>Verified</span>
+            <span>Phone</span>
+            <strong>{{ buyer.phone|default:"Not set" }}</strong>
+          </div>
+          <div class="delivery-estimate-card">
+            <span>Email Verified</span>
             <strong>{% if buyer.is_email_verified %}Yes{% else %}No{% endif %}</strong>
+          </div>
+          <div class="delivery-estimate-card">
+            <span>Phone Verified</span>
+            <strong>{% if buyer.is_phone_verified %}Yes{% else %}No{% endif %}</strong>
           </div>
           <div class="delivery-estimate-card">
             <span>Joined</span>

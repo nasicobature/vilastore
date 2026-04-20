@@ -23,6 +23,7 @@ from core import views as core_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('edu/', include(('edu.urls', 'edu'), namespace='edu')),
     path('', include('core.urls'))
 ]
 

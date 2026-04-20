@@ -39,7 +39,7 @@
         <div class="marketplace-shop-cover">
           {% if house.primary_image %}
           <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}">
-          {% elif profile.cover_image %}
+          {% elif profile and profile.cover_image %}
           <img src="{{ profile.cover_image.url }}" alt="{{ house.title }}">
           {% else %}
           <div class="marketplace-shop-cover-fallback"></div>
@@ -47,17 +47,17 @@
         </div>
         <div class="marketplace-shop-identity">
           <div class="marketplace-shop-avatar-ring">
-            {% if profile.logo %}
-            <img src="{{ profile.logo.url }}" alt="{{ shop_owner.business_name|default:shop_owner.username }}" class="marketplace-shop-logo">
-            {% elif shop_owner.profile_image %}
-            <img src="{{ shop_owner.profile_image.url }}" alt="{{ shop_owner.business_name|default:shop_owner.username }}" class="marketplace-shop-logo">
+            {% if profile and profile.logo %}
+            <img src="{{ profile.logo.url }}" alt="{{ house.display_owner_name }}" class="marketplace-shop-logo">
+            {% elif shop_owner and shop_owner.profile_image %}
+            <img src="{{ shop_owner.profile_image.url }}" alt="{{ house.display_owner_name }}" class="marketplace-shop-logo">
             {% else %}
             <div class="marketplace-shop-logo marketplace-shop-logo-fallback"><i data-lucide="house"></i></div>
             {% endif %}
           </div>
           <div>
             <h2>{{ house.title }}</h2>
-            <p>{{ house.get_property_type_display }} by {{ shop_owner.business_name|default:shop_owner.username }}</p>
+            <p>{{ house.get_listing_mode_display }} {{ house.get_property_type_display }} by {{ house.display_owner_name }}</p>
           </div>
         </div>
         <p class="marketplace-shop-description">{{ house.description|default:"No description yet." }}</p>
@@ -85,9 +85,12 @@
 
       <div class="card marketplace-shop-card">
         <h4>Owner Contact</h4>
-        <p style="margin:0.5rem 0 0;">{{ shop_owner.business_name|default:shop_owner.username }}</p>
-        <p style="margin:0.5rem 0 0;color:var(--muted-foreground);">{{ shop_owner.phone|default:"Phone not provided" }}</p>
-        <p style="margin:0.5rem 0 0;color:var(--muted-foreground);">{{ shop_owner.address|default:"Address not provided" }}</p>
+        <p style="margin:0.5rem 0 0;">{{ house.display_owner_name }}</p>
+        <p style="margin:0.5rem 0 0;color:var(--muted-foreground);">{{ house.display_owner_phone|default:"Phone not provided" }}</p>
+        <p style="margin:0.5rem 0 0;color:var(--muted-foreground);">{{ house.display_owner_address|default:"Address not provided" }}</p>
+        {% if house_agent %}
+        <p style="margin-top:1rem;color:var(--muted-foreground);">Property agent: {{ house_agent.full_name }}</p>
+        {% endif %}
         {% if house.managed_by_agent %}
         <p style="margin-top:1rem;color:var(--muted-foreground);">Managed by agent: {{ house.managed_by_agent.full_name }}</p>
         {% endif %}

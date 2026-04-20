@@ -29,6 +29,7 @@
       --gradient-6: linear-gradient(135deg, #55efc4, #00b894);
       --gradient-7: linear-gradient(135deg, #ffeaa7, #fdcb6e);
       --gradient-8: linear-gradient(135deg, #f97316, #ea580c);
+      --gradient-9: linear-gradient(135deg, #22c55e, #15803d);
       --radius: 16px;
       --radius-sm: 10px;
     }
@@ -83,6 +84,7 @@
     .portal-card.agent::before { background: var(--gradient-7); }
     .portal-card.rider::before { background: linear-gradient(135deg, #2dd4bf, #0f766e); }
     .portal-card.housing::before { background: var(--gradient-8); }
+    .portal-card.edu::before { background: var(--gradient-9); }
     .portal-icon { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem; }
     .portal-card.owner .portal-icon { background: rgba(108,92,231,0.15); color: var(--primary-light); }
     .portal-card.shopboy .portal-icon { background: rgba(0,206,201,0.15); color: var(--accent); }
@@ -93,6 +95,7 @@
     .portal-card.agent .portal-icon { background: rgba(253,203,110,0.18); color: #ffeaa7; }
     .portal-card.rider .portal-icon { background: rgba(45,212,191,0.18); color: #7dd3fc; }
     .portal-card.housing .portal-icon { background: rgba(249,115,22,0.18); color: #fdba74; }
+    .portal-card.edu .portal-icon { background: rgba(34,197,94,0.18); color: #86efac; }
     .portal-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
     .portal-card p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
     .portal-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1.5rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; border: none; cursor: pointer; }
@@ -105,6 +108,7 @@
     .portal-card.agent .portal-btn { background: var(--gradient-7); color: #3d2e00; }
     .portal-card.rider .portal-btn { background: linear-gradient(135deg, #2dd4bf, #0f766e); color: #fff; }
     .portal-card.housing .portal-btn { background: var(--gradient-8); color: #fff; }
+    .portal-card.edu .portal-btn { background: var(--gradient-9); color: #fff; }
     .portal-btn:hover { opacity: 0.9; transform: translateY(-1px); }
 
     /* HOW IT WORKS */
@@ -179,7 +183,7 @@
     </div>
     <div class="nav-links">
       <a href="{% url 'login' %}" class="btn-outline">Sign In</a>
-      <a href="{% url 'signup' %}" class="btn-primary">Get Started</a>
+      <a href="{% url 'shop_signup' %}" class="btn-primary">Register Shop</a>
     </div>
   </nav>
 
@@ -190,9 +194,10 @@
       <h1>Manage Your Business <span>Smarter & Faster</span></h1>
       <p>VilaStore helps you track sales, manage inventory, monitor expenses, and grow your business &mdash; all from one simple dashboard.</p>
       <div class="hero-buttons">
-        <a href="{% url 'signup' %}" class="btn-hero"><i data-lucide="rocket" style="width:20px;height:20px;"></i> Start Free Trial</a>
+        <a href="{% url 'shop_signup' %}" class="btn-hero"><i data-lucide="rocket" style="width:20px;height:20px;"></i> Register Shop</a>
         <a href="{% url 'marketplace' %}" class="btn-secondary"><i data-lucide="shopping-bag" style="width:20px;height:20px;"></i> Browse Marketplace</a>
-        <a href="{% url 'housing_signup' %}" class="btn-secondary"><i data-lucide="house-plus" style="width:20px;height:20px;"></i> Register House Management</a>
+        <a href="{% url 'edu:index' %}" class="btn-secondary"><i data-lucide="graduation-cap" style="width:20px;height:20px;"></i> Open Edu Portal</a>
+        <a href="{% url 'housing_signup' %}" class="btn-secondary"><i data-lucide="house-plus" style="width:20px;height:20px;"></i> Register Housing</a>
         <a href="{% url 'marketplace_rider_signup' %}" class="btn-secondary"><i data-lucide="bike" style="width:20px;height:20px;"></i> Register as Rider</a>
         <a href="#how-it-works" class="btn-secondary"><i data-lucide="play-circle" style="width:20px;height:20px;"></i> How It Works</a>
       </div>
@@ -220,9 +225,9 @@
       </div>
       <div class="portal-card register">
         <div class="portal-icon"><i data-lucide="user-plus" style="width:28px;height:28px;"></i></div>
-        <h3>Register Your Shop</h3>
+        <h3>Shop Registration</h3>
         <p>New to VilaStore? Create your account in minutes &mdash; set up your business profile, choose a plan, and start selling right away.</p>
-        <a href="{% url 'signup' %}" class="portal-btn"><i data-lucide="arrow-right" style="width:18px;height:18px;"></i> Create Account</a>
+        <a href="{% url 'shop_signup' %}" class="portal-btn"><i data-lucide="store" style="width:18px;height:18px;"></i> Register Shop</a>
       </div>
       <div class="portal-card marketplace">
         <div class="portal-icon"><i data-lucide="shopping-bag" style="width:28px;height:28px;"></i></div>
@@ -249,6 +254,17 @@
           <a href="{% url 'housing_signup' %}" class="portal-btn"><i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register Housing</a>
           <a href="{% url 'login' %}" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
             <i data-lucide="log-in" style="width:18px;height:18px;"></i> Housing Login
+          </a>
+        </div>
+      </div>
+      <div class="portal-card edu">
+        <div class="portal-icon"><i data-lucide="graduation-cap" style="width:28px;height:28px;"></i></div>
+        <h3>Education Portal</h3>
+        <p>Manage secondary schools and tertiary institutions in the same VilaStore project, including users, classes, fees, payments, and results.</p>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+          <a href="{% url 'edu:index' %}" class="portal-btn"><i data-lucide="arrow-right" style="width:18px;height:18px;"></i> Open Edu Portal</a>
+          <a href="{% url 'edu:secondary_register' %}" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
+            <i data-lucide="school" style="width:18px;height:18px;"></i> Register School
           </a>
         </div>
       </div>

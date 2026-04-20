@@ -1,0 +1,60 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+  <div class="text-center mb-12">
+    <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
+      <i data-lucide="graduation-cap" class="text-primary-foreground"></i>
+    </div>
+    <h1 class="font-display text-4xl font-bold mb-2">EduPortal</h1>
+    <p class="text-muted-foreground text-lg">School Management System</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl w-full">
+    <a
+      href="/secondary/login/"
+      class="group bg-card border-2 border-border rounded-2xl p-8 text-left hover:border-primary hover:shadow-lg transition-all duration-300"
+    >
+      <div class="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+        <i data-lucide="school" class="text-primary group-hover:text-primary-foreground"></i>
+      </div>
+      <h2 class="font-display text-xl font-bold mb-2">Secondary School</h2>
+      <p class="text-sm text-muted-foreground">
+        Manage JSS1–SS3 classes, teachers, exams, results, and school fees with role-based access.
+      </p>
+      <div class="mt-4 flex flex-wrap gap-1.5">
+        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Admin</span>
+        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Registry</span>
+        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Teacher</span>
+        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Student</span>
+      </div>
+    </a>
+
+    <a
+      href="/tertiary/login/"
+      class="group bg-card border-2 border-border rounded-2xl p-8 text-left hover:border-secondary hover:shadow-lg transition-all duration-300"
+    >
+      <div class="w-14 h-14 rounded-xl bg-secondary/10 flex items-center justify-center mb-4 group-hover:bg-secondary group-hover:text-secondary-foreground transition-colors">
+        <i data-lucide="building-2" class="text-secondary group-hover:text-secondary-foreground"></i>
+      </div>
+      <h2 class="font-display text-xl font-bold mb-2">Tertiary Institution</h2>
+      <p class="text-sm text-muted-foreground">
+        University and polytechnic management with faculties, departments, CBT, and hierarchical approval.
+      </p>
+      <div class="mt-4 flex flex-wrap gap-1.5">
+        <span class="text-xs bg-muted rounded-full px-2.5 py-1">VC</span>
+        <span class="text-xs bg-muted rounded-full px-2.5 py-1">ICT Admin</span>
+        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Lecturer</span>
+        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Student</span>
+      </div>
+    </a>
+  </div>
+
+  <div class="mt-8 text-sm text-muted-foreground">
+    <a class="hover:text-foreground transition-colors" href="/secondary/register/">Register Secondary School</a>
+    <span class="mx-2">•</span>
+    <a class="hover:text-foreground transition-colors" href="/tertiary/register/">Register Tertiary Institution</a>
+  </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,1298 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-background">
+  <aside class="w-64 bg-sidebar flex flex-col flex-shrink-0">
+    <div class="p-4 border-b border-sidebar-border">
+      <div class="flex items-center gap-2">
+        <i data-lucide="graduation-cap" class="text-sidebar-primary-foreground"></i>
+        <div>
+          <h1 class="font-display text-sm font-bold text-sidebar-foreground">EduPortal</h1>
+          <p class="text-xs text-sidebar-foreground/60">Secondary School</p>
+        </div>
+      </div>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+      {% for item in nav_items %}
+        <a
+          href="{{ item.url }}"
+          class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors {% if active_page == item.id %}bg-sidebar-accent text-sidebar-accent-foreground font-medium{% else %}text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground{% endif %}"
+        >
+          <i data-lucide="{{ item.icon }}" class="w-4 h-4"></i>
+          <span>{{ item.label }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+
+    <div class="p-3 border-t border-sidebar-border">
+      <a href="/logout/" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-destructive/20 hover:text-destructive transition-colors">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <header class="h-16 bg-card border-b border-border flex items-center justify-between px-4 md:px-6 flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="hidden md:flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+          <i data-lucide="search" class="text-muted-foreground w-4 h-4"></i>
+          <input type="text" placeholder="Search..." class="bg-transparent border-none outline-none text-sm w-48" />
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <button class="relative p-2 rounded-lg hover:bg-muted transition-colors">
+          <i data-lucide="bell" class="w-5 h-5"></i>
+          <span class="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
+        </button>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-semibold">
+            {{ user_name|slice:':1'|upper }}
+          </div>
+          <div class="hidden md:block">
+            <p class="text-sm font-medium">{{ user_name }}</p>
+            <p class="text-xs text-muted-foreground">{{ role_label }}</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+      {% if role == 'teacher' %}
+        {{ teacher_subject_map|json_script:"teacher-subject-map" }}
+        {{ teacher_results_map|json_script:"teacher-results-map" }}
+      {% endif %}
+
+      {% if active_page == 'dashboard' %}
+        <div id="dashboard">
+          <h2 class="font-display text-2xl font-bold mb-4">{{ role_label }} Dashboard</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {% for stat in stats %}
+              <div class="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-sm text-muted-foreground">{{ stat.label }}</p>
+                    <p class="text-2xl font-display font-bold mt-1">{{ stat.value }}</p>
+                  </div>
+                  <div class="p-2.5 rounded-lg bg-primary/10 text-primary">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'users' and role == 'admin' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Create User Account</h3>
+            <span class="text-xs text-muted-foreground">Admin-only access</span>
+          </div>
+          <form method="post" action="/secondary/users/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Full Name *</label>
+              <input type="text" name="full_name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">User ID (auto)</label>
+              <div class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm text-muted-foreground">Generated after submit</div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Password *</label>
+              <input type="password" name="password" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Role *</label>
+              <select name="role" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                {% for opt in role_options %}
+                  <option value="{{ opt.slug }}">{{ opt.label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Class (students)</label>
+              <select name="academic_class" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Class</option>
+                {% for cls in classes %}
+                  <option value="{{ cls.id }}">{{ cls.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Create Account
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Create Teacher Account</h3>
+            <span class="text-xs text-muted-foreground">Admin access</span>
+          </div>
+          <form method="post" action="/secondary/teachers/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Full Name *</label>
+              <input type="text" name="full_name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">User ID (auto)</label>
+              <div class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm text-muted-foreground">Generated after submit</div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Password *</label>
+              <input type="password" name="password" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Teacher Photo</label>
+              <input type="file" name="photo" class="w-full text-sm" />
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Create Teacher
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Students</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">ID</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Name</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for student in students_all %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ student.student_id }}</td>
+                    <td class="px-4 py-3 text-sm">{{ student.full_name }}</td>
+                    <td class="px-4 py-3 text-sm">{% if student.academic_class %}{{ student.academic_class.name }}{% else %}-{% endif %}</td>
+                    <td class="px-4 py-3 text-sm">{{ student.status }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="4" class="px-4 py-3 text-sm">No students yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Teachers</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">ID</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Name</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Classes</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for teacher in teachers %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ teacher.staff_id }}</td>
+                    <td class="px-4 py-3 text-sm">{{ teacher.full_name }}</td>
+                    <td class="px-4 py-3 text-sm">
+                      {% with classes=teacher.assignments.all %}
+                        {% if classes %}
+                          {% for assignment in classes %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary mr-1">{{ assignment.academic_class.name }}</span>
+                          {% endfor %}
+                        {% else %}
+                          -
+                        {% endif %}
+                      {% endwith %}
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="3" class="px-4 py-3 text-sm">No teachers yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'users' and role == 'registry' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Create Teacher Account</h3>
+            <span class="text-xs text-muted-foreground">Registry access</span>
+          </div>
+          <form method="post" action="/secondary/teachers/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Full Name *</label>
+              <input type="text" name="full_name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">User ID (auto)</label>
+              <div class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm text-muted-foreground">Generated after submit</div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Password *</label>
+              <input type="password" name="password" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Teacher Photo</label>
+              <input type="file" name="photo" class="w-full text-sm" />
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Create Teacher
+              </button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'classes' and role == 'admin' or active_page == 'classes' and role == 'registry' %}
+        {{ class_subject_map|json_script:"class-subject-map" }}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Add Class</h3>
+          </div>
+          <form method="post" action="/secondary/classes/add/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Class Name *</label>
+              <input type="text" name="class_name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Level</label>
+              <input type="number" name="level" value="1" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Save Class
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Assign Subjects to Class</h3>
+          </div>
+          <form method="post" action="/secondary/classes/subjects/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Class *</label>
+              <select name="academic_class" id="class-subject-class" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Class</option>
+                {% for cls in classes %}
+                  <option value="{{ cls.id }}">{{ cls.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Subjects *</label>
+              <div class="subject-grid">
+                {% for subject in subjects %}
+                  <label class="subject-item">
+                    <input type="checkbox" name="subjects" value="{{ subject.id }}" class="subject-input" />
+                    <span class="subject-pill">{{ subject.name }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+              <p class="text-xs text-muted-foreground mt-1">Click to select multiple subjects. Assigned subjects will auto-highlight.</p>
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Save Subjects
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Class Subjects</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subjects</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for cls in class_subjects %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ cls.name }}</td>
+                    <td class="px-4 py-3 text-sm">
+                      {% for rel in cls.class_subjects.all %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary mr-1">
+                          {{ rel.subject.name }}
+                          <form method="post" action="/secondary/classes/subjects/remove/" class="inline ml-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="academic_class" value="{{ cls.id }}" />
+                            <input type="hidden" name="subject" value="{{ rel.subject.id }}" />
+                            <button type="submit" class="text-xs text-destructive hover:underline">Remove</button>
+                          </form>
+                        </span>
+                      {% empty %}
+                        -
+                      {% endfor %}
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="2" class="px-4 py-3 text-sm">No class subjects yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'teachers' and role == 'admin' or active_page == 'teachers' and role == 'registry' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Create Teacher Account</h3>
+            <span class="text-xs text-muted-foreground">{% if role == 'admin' %}Admin access{% else %}Registry access{% endif %}</span>
+          </div>
+          <form method="post" action="/secondary/teachers/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Full Name *</label>
+              <input type="text" name="full_name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">User ID (auto)</label>
+              <div class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm text-muted-foreground">Generated after submit</div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Password *</label>
+              <input type="password" name="password" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Teacher Photo</label>
+              <input type="file" name="photo" class="w-full text-sm" />
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Create Teacher
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Teachers</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">ID</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Name</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Classes</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for teacher in teachers %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ teacher.staff_id }}</td>
+                    <td class="px-4 py-3 text-sm">{{ teacher.full_name }}</td>
+                    <td class="px-4 py-3 text-sm">
+                      {% with classes=teacher.assignments.all %}
+                        {% if classes %}
+                          {% for assignment in classes %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary mr-1">{{ assignment.academic_class.name }}</span>
+                          {% endfor %}
+                        {% else %}
+                          -
+                        {% endif %}
+                      {% endwith %}
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="3" class="px-4 py-3 text-sm">No teachers yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'subjects' and role == 'admin' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Add Subject</h3>
+          </div>
+          <form method="post" action="/secondary/subjects/add/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Subject Name *</label>
+              <input type="text" name="subject_name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Subject Code</label>
+              <input type="text" name="subject_code" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Save Subject
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Subjects</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Name</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Code</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for subject in subjects %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ subject.name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ subject.code }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="2" class="px-4 py-3 text-sm">No subjects yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+      {% if active_page == 'sessions' and role == 'admin' or active_page == 'sessions' and role == 'registry' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Add Session & Term</h3>
+          </div>
+          <form method="post" action="/secondary/sessions/add/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Session Name *</label>
+              <input type="text" name="session_name" placeholder="2026/2027" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Term *</label>
+              <select name="term" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="first">First Term</option>
+                <option value="second">Second Term</option>
+                <option value="third">Third Term</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-3 text-sm">
+              <input type="checkbox" name="is_current" class="h-4 w-4 rounded border-input" />
+              <span>Set as current</span>
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Save Session
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Existing Sessions</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Session</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Current</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for session in sessions %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ session.name }}</td>
+                    <td class="px-4 py-3 text-sm">{% if session.is_current %}Yes{% else %}No{% endif %}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="2" class="px-4 py-3 text-sm">No sessions yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'register' and role == 'admin' or active_page == 'register' and role == 'registry' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Register Student</h3>
+          </div>
+          <form method="post" action="/secondary/students/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Full Name *</label>
+              <input type="text" name="full_name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">User ID (auto)</label>
+              <div class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm text-muted-foreground">Generated after submit</div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Password *</label>
+              <input type="password" name="password" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Class *</label>
+              <select name="academic_class" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Class</option>
+                {% for cls in classes %}
+                  <option value="{{ cls.id }}">{{ cls.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Next of Kin Name</label>
+              <input type="text" name="next_of_kin_name" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Next of Kin Phone</label>
+              <input type="text" name="next_of_kin_phone" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Relationship</label>
+              <input type="text" name="next_of_kin_relationship" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Student Photo</label>
+              <input type="file" name="photo" class="w-full text-sm" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-sm font-medium mb-1.5">Assign Class Teacher (optional)</label>
+              <select name="teacher" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Teacher</option>
+                {% for teacher in teachers %}
+                  <option value="{{ teacher.id }}">{{ teacher.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Register Student
+              </button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'assign-teachers' and role == 'admin' or active_page == 'assign-teachers' and role == 'registry' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Assign Teacher to Class</h3>
+          </div>
+          <form method="post" action="/secondary/teachers/assign/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Teacher *</label>
+              <select name="teacher" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Teacher</option>
+                {% for teacher in teachers %}
+                  <option value="{{ teacher.id }}">{{ teacher.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Class *</label>
+              <select name="academic_class" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Class</option>
+                {% for cls in classes %}
+                  <option value="{{ cls.id }}">{{ cls.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Assign Teacher
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Assign Teacher to Subject</h3>
+            <span class="text-xs text-muted-foreground">Class + Subject</span>
+          </div>
+          <form method="post" action="/secondary/teachers/assign-subject/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Teacher *</label>
+              <select name="teacher" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Teacher</option>
+                {% for teacher in teachers %}
+                  <option value="{{ teacher.id }}">{{ teacher.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Class *</label>
+              <select name="academic_class" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Class</option>
+                {% for cls in classes %}
+                  <option value="{{ cls.id }}">{{ cls.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-sm font-medium mb-1.5">Subject *</label>
+              <select name="subject" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Subject</option>
+                {% for subject in subjects %}
+                  <option value="{{ subject.id }}">{{ subject.name }}</option>
+                {% endfor %}
+              </select>
+              <p class="text-xs text-muted-foreground mt-1">Subject must already be assigned to the class.</p>
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Assign Subject
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Teacher Subject Assignments</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Teacher</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for assignment in teacher_subject_assignments %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ assignment.teacher.full_name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ assignment.academic_class.name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ assignment.subject.name }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="3" class="px-4 py-3 text-sm">No subject assignments yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'my-classes' and role == 'teacher' %}
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">My Classes</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Students</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for cls in teacher_classes %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ cls.name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ cls.students.count }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="2" class="px-4 py-3 text-sm">No classes assigned yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'my-students' and role == 'teacher' %}
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">My Students</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">ID</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Name</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for student in teacher_students %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ student.student_id }}</td>
+                    <td class="px-4 py-3 text-sm">{{ student.full_name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ student.academic_class.name }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="3" class="px-4 py-3 text-sm">No students assigned yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'enter-scores' and role == 'teacher' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Enter Scores</h3>
+            <span class="text-xs text-muted-foreground">Only your assigned classes</span>
+          </div>
+          <form method="post" action="/secondary/teacher/scores/save/" class="space-y-4">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Class *</label>
+                <select name="academic_class" id="teacher-score-class" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">Select Class</option>
+                  {% for cls in teacher_classes %}
+                    <option value="{{ cls.id }}">{{ cls.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Subject *</label>
+                <select name="subject" id="teacher-score-subject" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">Select Subject</option>
+                </select>
+                <p class="text-xs text-muted-foreground mt-1">Subjects are shown based on your assigned class + subject.</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Session</label>
+                <input type="text" name="session" value="{{ current_session_name }}" placeholder="2026/2027" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Term</label>
+                <input type="text" name="term" value="{{ current_term_name }}" placeholder="First Term" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Search Student ID</label>
+                <input type="text" id="teacher-score-search" placeholder="e.g. FUD/2026/001" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div class="md:col-span-2 flex flex-wrap items-center gap-3">
+                <button type="button" id="teacher-score-fetch" class="inline-flex items-center justify-center gap-2 rounded-lg bg-secondary text-secondary-foreground px-4 py-2.5 text-sm font-medium hover:bg-secondary/80 transition-colors">
+                  Fetch Students
+                </button>
+                <span id="teacher-score-hint" class="text-xs text-muted-foreground">Select class + subject, then click Fetch Students. Saved scores will show as “Saved”.</span>
+              </div>
+            </div>
+
+            <div class="bg-muted/30 rounded-xl border border-border overflow-hidden">
+              <div class="overflow-x-auto">
+                <table class="w-full" id="teacher-score-table">
+                  <thead>
+                    <tr class="bg-muted/50">
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Student</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 1</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 2</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Assignment</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Exam</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-border">
+                    <tr id="teacher-score-empty">
+                      <td colspan="6" class="px-4 py-3 text-sm text-muted-foreground">Select class and subject, then click Fetch Students.</td>
+                    </tr>
+                    {% for student in teacher_students %}
+                      <tr class="teacher-score-row" data-class="{{ student.academic_class.id }}" data-student-id="{{ student.student_id }}">
+                        <td class="px-4 py-3 text-sm">
+                          {{ student.full_name }}
+                          <input type="hidden" name="students" value="{{ student.id }}" />
+                        </td>
+                        <td class="px-4 py-3 text-sm"><input type="number" step="0.01" name="test1_{{ student.id }}" class="w-24 px-2 py-1.5 rounded-lg border border-input bg-background text-sm" /></td>
+                        <td class="px-4 py-3 text-sm"><input type="number" step="0.01" name="test2_{{ student.id }}" class="w-24 px-2 py-1.5 rounded-lg border border-input bg-background text-sm" /></td>
+                        <td class="px-4 py-3 text-sm"><input type="number" step="0.01" name="assignment_{{ student.id }}" class="w-24 px-2 py-1.5 rounded-lg border border-input bg-background text-sm" /></td>
+                        <td class="px-4 py-3 text-sm"><input type="number" step="0.01" name="exam_{{ student.id }}" class="w-24 px-2 py-1.5 rounded-lg border border-input bg-background text-sm" /></td>
+                        <td class="px-4 py-3 text-sm">
+                          <span class="teacher-score-status inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">Not saved</span>
+                        </td>
+                      </tr>
+                    {% empty %}
+                      <tr><td colspan="6" class="px-4 py-3 text-sm">No students assigned.</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Save Scores
+              </button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'submit-results' and role == 'teacher' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Submit Results to Examiner</h3>
+          </div>
+          <form method="post" action="/secondary/teacher/results/submit/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Class *</label>
+              <select name="academic_class" id="teacher-submit-class" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Class</option>
+                {% for cls in teacher_classes %}
+                  <option value="{{ cls.id }}">{{ cls.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Subject *</label>
+              <select name="subject" id="teacher-submit-subject" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Subject</option>
+              </select>
+              <p class="text-xs text-muted-foreground mt-1">Subjects are shown based on your assigned class + subject.</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Session</label>
+              <input type="text" name="session" value="{{ current_session_name }}" placeholder="2026/2027" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Term</label>
+              <input type="text" name="term" value="{{ current_term_name }}" placeholder="First Term" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Submit Results
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Submission History</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Session</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Term</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for submission in teacher_submissions %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ submission.academic_class.name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ submission.subject.name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ submission.session|default:"-" }}</td>
+                    <td class="px-4 py-3 text-sm">{{ submission.term|default:"-" }}</td>
+                    <td class="px-4 py-3 text-sm">
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary/10 text-secondary">{{ submission.status|title }}</span>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="5" class="px-4 py-3 text-sm">No submissions yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'approve-results' and role == 'admin' %}
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Pending Approvals</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">User</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Role</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for p in pending_profiles %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ p.user.username }}</td>
+                    <td class="px-4 py-3 text-sm">{{ p.get_role_display }}</td>
+                    <td class="px-4 py-3 text-sm">
+                      <a href="/approve/{{ p.id }}/" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium">Approve</a>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="3" class="px-4 py-3 text-sm">No pending approvals.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'review-results' and role == 'examiner' %}
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="bg-card rounded-xl border border-border overflow-hidden lg:col-span-1">
+            <div class="flex items-center justify-between p-4 border-b border-border">
+              <h3 class="font-display font-semibold">Submitted Results</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="bg-muted/50">
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  {% for submission in examiner_submissions %}
+                    <tr class="hover:bg-muted/30 transition-colors">
+                      <td class="px-4 py-3 text-sm">
+                        <a href="/secondary/examiner/review-results/?submission={{ submission.id }}" class="text-primary hover:underline">
+                          {{ submission.academic_class.name }}
+                        </a>
+                      </td>
+                      <td class="px-4 py-3 text-sm">{{ submission.subject.name }}</td>
+                      <td class="px-4 py-3 text-sm">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary/10 text-secondary">{{ submission.status|title }}</span>
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="3" class="px-4 py-3 text-sm">No submissions yet.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border p-5 lg:col-span-2 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="font-display font-semibold">Review Results</h3>
+                <p class="text-xs text-muted-foreground">Select a submission on the left to view results.</p>
+              </div>
+              {% if selected_submission %}
+                <form method="post" action="/secondary/examiner/results/review/">
+                  {% csrf_token %}
+                  <input type="hidden" name="submission_id" value="{{ selected_submission.id }}" />
+                  <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                    Mark Reviewed
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+
+            {% if selected_submission %}
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                <div><span class="text-muted-foreground">Class:</span> {{ selected_submission.academic_class.name }}</div>
+                <div><span class="text-muted-foreground">Subject:</span> {{ selected_submission.subject.name }}</div>
+                <div><span class="text-muted-foreground">Session/Term:</span> {{ selected_submission.session }} {{ selected_submission.term }}</div>
+              </div>
+
+              <div class="bg-muted/30 rounded-xl border border-border overflow-hidden">
+                <div class="overflow-x-auto">
+                  <table class="w-full">
+                    <thead>
+                      <tr class="bg-muted/50">
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Student</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 1</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 2</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Assignment</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Exam</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Total</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Grade</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                      {% for result in examiner_results %}
+                        <tr class="hover:bg-muted/30 transition-colors">
+                          <td class="px-4 py-3 text-sm">{{ result.student.full_name }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.test1 }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.test2 }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.assignment }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.exam }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.total }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.grade }}</td>
+                        </tr>
+                      {% empty %}
+                        <tr><td colspan="7" class="px-4 py-3 text-sm">No results found for this submission.</td></tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'result-sheets' and role == 'examiner' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Class Result Sheet</h3>
+            <span class="text-xs text-muted-foreground">Overall class ranking</span>
+          </div>
+          <form method="get" action="/secondary/examiner/result-sheets/" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Class *</label>
+              <select name="class" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Class</option>
+                {% for cls in classes %}
+                  <option value="{{ cls.id }}" {% if result_sheet_class and result_sheet_class.id == cls.id %}selected{% endif %}>{{ cls.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Session</label>
+              <input type="text" name="session" value="{{ result_sheet_session }}" placeholder="2026/2027" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Term</label>
+              <input type="text" name="term" value="{{ result_sheet_term }}" placeholder="First Term" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div class="md:col-span-3">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Generate Sheet
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Class Ranking</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Position</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Student</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Total Score</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for row in result_sheet_rows %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ row.position_display }}</td>
+                    <td class="px-4 py-3 text-sm">{{ row.student.full_name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ row.total }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="3" class="px-4 py-3 text-sm">Select a class to generate the ranking.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'fees' %}
+        <div class="bg-card rounded-xl border border-border p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-display font-semibold">Fees Summary</h3>
+            <button class="text-sm text-muted-foreground hover:text-foreground">Record Payment</button>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <p class="text-sm text-muted-foreground">Collected</p>
+              <p class="text-xl font-display font-bold">?{{ fees_total|floatformat:2 }}</p>
+            </div>
+            <div>
+              <p class="text-sm text-muted-foreground">Outstanding</p>
+              <p class="text-xl font-display font-bold">?{{ fees_pending|floatformat:2 }}</p>
+            </div>
+            <div>
+              <p class="text-sm text-muted-foreground">Receipts</p>
+              <p class="text-xl font-display font-bold">{{ students|length }}</p>
+            </div>
+          </div>
+        </div>
+
+        {% if role == 'accountant' %}
+          <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="font-display font-semibold">Create School Fee</h3>
+              <span class="text-xs text-muted-foreground">Accountant access</span>
+            </div>
+            <form method="post" action="/secondary/fees/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {% csrf_token %}
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Fee Name *</label>
+                <input type="text" name="name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Fee Type</label>
+                <input type="text" name="fee_type" placeholder="Tuition, Exam, Accommodation" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Amount *</label>
+                <input type="number" step="0.01" name="amount" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Payment Deadline</label>
+                <input type="date" name="due_date" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Session</label>
+                <input type="text" name="session" placeholder="2026/2027" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Term</label>
+                <input type="text" name="term" placeholder="First Term" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div class="md:col-span-2">
+                <label class="block text-sm font-medium mb-1.5">Applicable Classes</label>
+                <div class="subject-grid">
+                  {% for cls in classes %}
+                    <label class="subject-item">
+                      <input type="checkbox" name="classes" value="{{ cls.id }}" class="subject-input" />
+                      <span class="subject-pill">{{ cls.name }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="flex items-center gap-3 text-sm md:col-span-2">
+                <input type="checkbox" name="applies_to_all" class="h-4 w-4 rounded border-input" />
+                <span>Applies to all students/classes</span>
+              </div>
+              <div class="md:col-span-2">
+                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                  Save Fee
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border overflow-hidden">
+            <div class="flex items-center justify-between p-4 border-b border-border">
+              <h3 class="font-display font-semibold">Fee List</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="bg-muted/50">
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Name</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Type</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Amount</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Deadline</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Classes</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  {% for fee in fees %}
+                    <tr class="hover:bg-muted/30 transition-colors">
+                      <td class="px-4 py-3 text-sm">{{ fee.name }}</td>
+                      <td class="px-4 py-3 text-sm">{{ fee.fee_type|default:"-" }}</td>
+                      <td class="px-4 py-3 text-sm">?{{ fee.amount }}</td>
+                      <td class="px-4 py-3 text-sm">{% if fee.due_date %}{{ fee.due_date }}{% else %}-{% endif %}</td>
+                      <td class="px-4 py-3 text-sm">
+                        {% if fee.applies_to_all %}
+                          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary/10 text-secondary">All</span>
+                        {% else %}
+                          {% for cls in fee.classes.all %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary mr-1">{{ cls.name }}</span>
+                          {% empty %}
+                            -
+                          {% endfor %}
+                        {% endif %}
+                      </td>
+                      <td class="px-4 py-3 text-sm">
+                        <form method="post" action="/secondary/fees/{{ fee.id }}/delete/">
+                          {% csrf_token %}
+                          <button type="submit" class="text-xs text-destructive hover:underline">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="6" class="px-4 py-3 text-sm">No fees yet.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="font-display font-semibold">Payment Gateway Settings</h3>
+            </div>
+            <form method="post" action="/secondary/payment/settings/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {% csrf_token %}
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Payment Provider</label>
+                <input type="text" name="payment_provider" value="{{ user.profile.institution.payment_provider }}" placeholder="Paystack, Remita" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Public Key</label>
+                <input type="text" name="payment_public_key" value="{{ user.profile.institution.payment_public_key }}" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Secret Key</label>
+                <input type="text" name="payment_secret_key" value="{{ user.profile.institution.payment_secret_key }}" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div class="flex items-center gap-3 text-sm">
+                <input type="checkbox" name="allow_online_payment" class="h-4 w-4 rounded border-input" {% if user.profile.institution.allow_online_payment %}checked{% endif %} />
+                <span>Enable online payments</span>
+              </div>
+              <div class="md:col-span-2">
+                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                  Save Settings
+                </button>
+              </div>
+            </form>
+          </div>
+        {% endif %}
+      {% endif %}
+
+      {% for item in nav_placeholders %}
+        {% if active_page == item.id %}
+          <div class="bg-card rounded-xl border border-border p-5">
+            <h3 class="font-display font-semibold mb-2">{{ item.label }}</h3>
+            <p class="text-sm text-muted-foreground">Section ready. We can wire full functionality next.</p>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </main>
+  </div>
+</div>
+{% endblock %}
+

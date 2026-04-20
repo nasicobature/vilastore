@@ -16,9 +16,12 @@
       <header class="page-header">
         <div>
           <h1>Welcome, {{ agent.full_name }}</h1>
-          <p>Your commission rate: {{ commission_rate_percent }}%</p>
+          <p>Your commission rate: {{ commission_rate_percent }}%. You can also register and manage property listings from your agent portal.</p>
         </div>
         <div>
+          <a href="{% url 'agent_property_management' %}" class="btn btn-primary" style="margin-right:0.5rem;">
+            <i data-lucide="house-plus"></i> Manage Properties
+          </a>
           <a href="{% url 'agent_logout' %}" class="btn btn-ghost">
             <i data-lucide="log-out"></i> Logout
           </a>
@@ -47,6 +50,20 @@
           </div>
           <div class="stat-card-value">&#8358;{{ monthly_total|floatformat:2 }}</div>
           <p style="color:var(--muted-foreground); font-size:0.85rem;">Paid only for active subscriptions.</p>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Property Listings</span>
+            <div class="stat-card-icon primary"><i data-lucide="building-2"></i></div>
+          </div>
+          <div class="stat-card-value">{{ property_count }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Live In Marketplace</span>
+            <div class="stat-card-icon primary"><i data-lucide="store"></i></div>
+          </div>
+          <div class="stat-card-value">{{ marketplace_property_count }}</div>
         </div>
       </section>
 

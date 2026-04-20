@@ -140,7 +140,7 @@
             <div class="house-market-card-media">
               {% if house.primary_image %}
               <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}">
-              {% elif house.owner.profile_image %}
+              {% elif house.owner and house.owner.profile_image %}
               <img src="{{ house.owner.profile_image.url }}" alt="{{ house.title }}">
               {% else %}
               <div class="housing-listing-fallback"><i data-lucide="house"></i></div>
@@ -158,13 +158,14 @@
               </div>
               <p class="shop-card-desc">{{ house.description|default:"No description yet." }}</p>
               <div class="shop-card-meta">
+                <span><i data-lucide="badge-dollar-sign" style="width:14px;height:14px;"></i> {{ house.get_listing_mode_display }}</span>
                 <span><i data-lucide="wallet" style="width:14px;height:14px;"></i> {{ house.price|floatformat:2 }}</span>
                 <span><i data-lucide="bed-double" style="width:14px;height:14px;"></i> {{ house.rooms_count }} room{{ house.rooms_count|pluralize }}</span>
                 <span><i data-lucide="layout-grid" style="width:14px;height:14px;"></i> {{ house.spaces_available }} space{{ house.spaces_available|pluralize }}</span>
               </div>
               <div class="shop-card-meta">
                 <span><i data-lucide="building-2" style="width:14px;height:14px;"></i> {{ house.get_property_type_display }}</span>
-                <span><i data-lucide="store" style="width:14px;height:14px;"></i> {{ house.owner.business_name|default:house.owner.username }}</span>
+                <span><i data-lucide="store" style="width:14px;height:14px;"></i> {{ house.display_owner_name }}</span>
               </div>
             </div>
           </a>

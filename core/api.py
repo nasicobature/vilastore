@@ -55,6 +55,7 @@ from .views import (
     _send_marketplace_verification_code,
 )
 from .subscription import subscription_is_active
+from .utils.notifications import send_sms
 
 
 TOKEN_TTL_DAYS = 30
@@ -225,7 +226,44 @@ def _issue_token(buyer):
         buyer=buyer,
         token=token,
         expires_at=expires_at,
+    )        
+
+
+def _marketplace_buyer_needs_phone_verification(buyer):
+    return bool(buyer and buyer.registration_role == MarketplaceBuyer.ROLE_RIDER)
+
+
+def _marketplace_buyer_is_fully_verified(buyer):
+    if not buyer or not buyer.is_email_verified:
+        return False
+    if _marketplace_buyer_needs_phone_verification(buyer) and not buyer.is_phone_verified:
+        return False
+    return True
+
+
+def _send_marketplace_phone_verification_code(buyer):
+    phone = (buyer.phone or "").strip()
+    if not phone:
+        raise ValueError("Phone number is required for phone verification.")
+
+    code = str(secrets.randbelow(900000) + 100000)
+    buyer.phone_verification_code = code
+    buyer.phone_code_sent_at = timezone.now()
+    buyer.save(update_fields=["phone_verification_code", "phone_code_sent_at"])
+
+    sent = send_sms(
+        phone,
+        f"Your VilaStore rider verification code is {code}. It will expire in {OTP_EXPIRY_MINUTES} minutes.",
     )
+    if not sent:
+        raise ValueError("Failed to send rider verification SMS.")
+
+
+def _send_marketplace_pending_verification_codes(buyer):
+    if not buyer.is_email_verified:
+        _send_marketplace_verification_code(buyer)
+    if _marketplace_buyer_needs_phone_verification(buyer) and not buyer.is_phone_verified:
+        _send_marketplace_phone_verification_code(buyer)
 
 
 def _issue_auth_token(role, *, owner=None, shopboy=None, agent=None):
@@ -505,7 +543,7 @@ def _get_buyer_from_request(request):
         return None, token_obj
 
     buyer = token_obj.buyer
-    if not buyer.is_active or not buyer.is_email_verified:
+    if not buyer.is_active or not _marketplace_buyer_is_fully_verified(buyer):
         return None, token_obj
 
     token_obj.last_used_at = timezone.now()
@@ -517,7 +555,10 @@ def _serialize_buyer(buyer):
     return {
         "id": buyer.id,
         "email": buyer.email,
+        "phone": buyer.phone,
+        "registration_role": buyer.registration_role,
         "is_email_verified": buyer.is_email_verified,
+        "is_phone_verified": buyer.is_phone_verified,
         "last_login": buyer.last_login.isoformat() if buyer.last_login else None,
         "created_at": buyer.created_at.isoformat() if buyer.created_at else None,
     }
@@ -617,6 +658,9 @@ def api_marketplace_signup(request):
         return _json_error("Invalid JSON payload.")
 
     email = (data.get("email") or "").strip().lower()
+    phone = (data.get("phone") or "").strip()
+    registration_role = (data.get("registration_role") or MarketplaceBuyer.ROLE_CUSTOMER).strip().lower()
+    full_name = (data.get("full_name") or "").strip()
     password = data.get("password") or ""
     confirm_password = data.get("confirm_password") or ""
 
@@ -632,19 +676,45 @@ def api_marketplace_signup(request):
     if MarketplaceBuyer.objects.filter(email__iexact=email).exists():
         return _json_error("Email already registered. Please sign in.", status=409)
 
+    if registration_role not in {MarketplaceBuyer.ROLE_CUSTOMER, MarketplaceBuyer.ROLE_RIDER}:
+        registration_role = MarketplaceBuyer.ROLE_CUSTOMER
+
+    if registration_role == MarketplaceBuyer.ROLE_RIDER:
+        if not full_name or not phone:
+            return _json_error("Full name and phone number are required for rider registration.")
+        if DeliveryRider.objects.filter(phone__iexact=phone).exists():
+            return _json_error("That phone number is already linked to a rider account.", status=409)
+
     buyer = MarketplaceBuyer.objects.create(
         email=email,
+        phone=phone,
         password=make_password(password),
+        registration_role=registration_role,
+        is_active=registration_role != MarketplaceBuyer.ROLE_RIDER,
     )
 
+    if registration_role == MarketplaceBuyer.ROLE_RIDER:
+        DeliveryRider.objects.create(
+            buyer=buyer,
+            full_name=full_name,
+            phone=phone,
+            email=email,
+            rider_type=DeliveryRider.RIDER_PERSONAL,
+            is_approved=False,
+            is_active=False,
+            is_available=False,
+        )
+
     try:
-        _send_marketplace_verification_code(buyer)
+        _send_marketplace_pending_verification_codes(buyer)
     except Exception:
-        return _json_error("Account created, but verification email failed. Try again.", status=500)
+        return _json_error("Account created, but verification codes could not be sent. Try again.", status=500)
 
     return _json_success({
         "requires_verification": True,
         "email": buyer.email,
+        "phone": buyer.phone,
+        "registration_role": buyer.registration_role,
     }, status=201)
 
 
@@ -661,18 +731,23 @@ def api_marketplace_login(request):
     if not email or not password:
         return _json_error("Email and password are required.")
 
-    buyer = MarketplaceBuyer.objects.filter(email__iexact=email, is_active=True).first()
+    buyer = MarketplaceBuyer.objects.filter(email__iexact=email).first()
     if not buyer or not check_password(password, buyer.password):
         return _json_error("Invalid email or password.", status=401)
 
-    if not buyer.is_email_verified:
+    if not buyer.is_active and _marketplace_buyer_is_fully_verified(buyer):
+        return _json_error("This marketplace account is inactive.", status=403)
+
+    if not _marketplace_buyer_is_fully_verified(buyer):
         try:
-            _send_marketplace_verification_code(buyer)
+            _send_marketplace_pending_verification_codes(buyer)
         except Exception:
-            return _json_error("Could not send verification email. Please try again.", status=500)
+            return _json_error("Could not send verification codes. Please try again.", status=500)
         return _json_success({
             "requires_verification": True,
             "email": buyer.email,
+            "phone": buyer.phone,
+            "registration_role": buyer.registration_role,
         })
 
     buyer.last_login = timezone.now()
@@ -694,16 +769,17 @@ def api_marketplace_verify(request):
         return _json_error("Invalid JSON payload.")
 
     email = (data.get("email") or "").strip().lower()
-    code = (data.get("code") or "").strip()
+    email_code = (data.get("email_code") or data.get("code") or "").strip()
+    phone_code = (data.get("phone_code") or "").strip()
 
-    if not email or not code:
-        return _json_error("Email and code are required.")
+    if not email or not email_code:
+        return _json_error("Email and verification code are required.")
 
-    buyer = MarketplaceBuyer.objects.filter(email__iexact=email, is_active=True).first()
+    buyer = MarketplaceBuyer.objects.filter(email__iexact=email).first()
     if not buyer:
         return _json_error("Account not found.", status=404)
 
-    if buyer.is_email_verified:
+    if _marketplace_buyer_is_fully_verified(buyer):
         token_obj = _issue_token(buyer)
         return _json_success({
             "token": token_obj.token,
@@ -711,20 +787,40 @@ def api_marketplace_verify(request):
             "expires_at": token_obj.expires_at.isoformat() if token_obj.expires_at else None,
         })
 
-    if not buyer.email_verification_code or not buyer.email_code_sent_at:
-        return _json_error("No OTP found. Send code first.")
+    update_fields = ["last_login"]
 
-    if timezone.now() - buyer.email_code_sent_at > timedelta(minutes=OTP_EXPIRY_MINUTES):
-        return _json_error("OTP expired. Send a new code.")
+    if not buyer.is_email_verified:
+        if not buyer.email_verification_code or not buyer.email_code_sent_at:
+            return _json_error("No email verification code found. Send code first.")
+        if timezone.now() - buyer.email_code_sent_at > timedelta(minutes=OTP_EXPIRY_MINUTES):
+            return _json_error("Email verification code expired. Send a new code.")
+        if email_code != buyer.email_verification_code:
+            return _json_error("Invalid email verification code.")
+        buyer.is_email_verified = True
+        buyer.email_verification_code = ""
+        buyer.email_code_sent_at = None
+        update_fields.extend(["is_email_verified", "email_verification_code", "email_code_sent_at"])
 
-    if code != buyer.email_verification_code:
-        return _json_error("Invalid code.")
+    if _marketplace_buyer_needs_phone_verification(buyer) and not buyer.is_phone_verified:
+        if not phone_code:
+            return _json_error("Phone verification code is required for rider accounts.")
+        if not buyer.phone_verification_code or not buyer.phone_code_sent_at:
+            return _json_error("No phone verification code found. Send code first.")
+        if timezone.now() - buyer.phone_code_sent_at > timedelta(minutes=OTP_EXPIRY_MINUTES):
+            return _json_error("Phone verification code expired. Send a new code.")
+        if phone_code != buyer.phone_verification_code:
+            return _json_error("Invalid phone verification code.")
+        buyer.is_phone_verified = True
+        buyer.phone_verification_code = ""
+        buyer.phone_code_sent_at = None
+        update_fields.extend(["is_phone_verified", "phone_verification_code", "phone_code_sent_at"])
 
-    buyer.is_email_verified = True
-    buyer.email_verification_code = ""
-    buyer.email_code_sent_at = None
+    if buyer.registration_role == MarketplaceBuyer.ROLE_RIDER and not buyer.is_active:
+        buyer.is_active = True
+        update_fields.append("is_active")
+
     buyer.last_login = timezone.now()
-    buyer.save(update_fields=["is_email_verified", "email_verification_code", "email_code_sent_at", "last_login"])
+    buyer.save(update_fields=update_fields)
 
     token_obj = _issue_token(buyer)
     return _json_success({
@@ -745,19 +841,19 @@ def api_marketplace_resend_code(request):
     if not email:
         return _json_error("Email is required.")
 
-    buyer = MarketplaceBuyer.objects.filter(email__iexact=email, is_active=True).first()
+    buyer = MarketplaceBuyer.objects.filter(email__iexact=email).first()
     if not buyer:
         return _json_success({"sent": True})
 
-    if buyer.is_email_verified:
-        return _json_error("Email already verified.")
+    if _marketplace_buyer_is_fully_verified(buyer):
+        return _json_error("Account already verified.")
 
     try:
-        _send_marketplace_verification_code(buyer)
+        _send_marketplace_pending_verification_codes(buyer)
     except Exception:
-        return _json_error("Failed to send verification email. Please try again.", status=500)
+        return _json_error("Failed to send verification codes. Please try again.", status=500)
 
-    return _json_success({"sent": True})
+    return _json_success({"sent": True, "email": buyer.email, "phone": buyer.phone})
 
 
 @csrf_exempt
@@ -1341,6 +1437,8 @@ def api_marketplace_delivery_rider_register(request):
     buyer, _ = _get_buyer_from_request(request)
     if not buyer:
         return _json_error("Unauthorized.", status=401)
+    if not _marketplace_buyer_is_fully_verified(buyer):
+        return _json_error("Verify your email and phone number before completing rider registration.", status=403)
 
     data = _get_body_data(request) or {}
 
@@ -1640,12 +1738,15 @@ def api_marketplace_delivery_company_riders(request):
 
     if MarketplaceBuyer.objects.filter(email__iexact=email).exists():
         return _json_error("Email already exists for a rider.", status=409)
+    if DeliveryRider.objects.filter(phone__iexact=phone).exists():
+        return _json_error("That phone number is already linked to a rider.", status=409)
 
     rider_buyer = MarketplaceBuyer.objects.create(
         email=email,
+        phone=phone,
         password=make_password(password),
-        is_email_verified=True,
-        is_active=True,
+        registration_role=MarketplaceBuyer.ROLE_RIDER,
+        is_active=False,
     )
 
     rider = DeliveryRider.objects.create(
@@ -1655,12 +1756,15 @@ def api_marketplace_delivery_company_riders(request):
         allow_direct_call=allow_direct_call,
         rider_type=DeliveryRider.RIDER_COMPANY,
         is_approved=False,
-        is_active=True,
-        is_available=True,
+        is_active=False,
+        is_available=False,
         terms_accepted=True,
         company=company,
     )
-    rider.save()
+    try:
+        _send_marketplace_pending_verification_codes(rider_buyer)
+    except Exception:
+        return _json_error("Rider account created, but verification codes could not be sent.", status=500)
 
     return _json_success({
         "rider": {

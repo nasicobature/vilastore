@@ -1,0 +1,140 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="min-h-screen bg-background flex items-center justify-center p-6">
+  <div class="w-full max-w-3xl">
+    <a href="/tertiary/login/" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to login
+    </a>
+
+    <div class="bg-card border border-border rounded-2xl p-8">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="building-2" class="text-secondary-foreground"></i>
+        </div>
+        <h2 class="font-display text-2xl font-bold">Tertiary Institution Registration</h2>
+        <p class="text-sm text-muted-foreground mt-1">Register your institution and create the VC/Provost account.</p>
+      </div>
+
+      <form method="post" class="space-y-6" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="space-y-4">
+          <h3 class="font-display text-lg font-bold">Institution Details</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Institution Name *</label>
+              <input type="text" name="institution_name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">School Code (auto-generated)</label>
+              <input type="text" name="school_code" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="Leave blank to auto-generate" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Short Name</label>
+              <input type="text" name="short_name" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Ownership Type</label>
+              <select name="ownership_type" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                {% for value, label in ownership_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Year Established</label>
+              <input type="number" name="year_established" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">License Number</label>
+              <input type="text" name="license_number" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">CAC Number</label>
+              <input type="text" name="cac_number" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Country</label>
+              <input type="text" name="country" value="Nigeria" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">State</label>
+              <input type="text" name="state" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">City</label>
+              <input type="text" name="city" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Address</label>
+              <input type="text" name="address" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Postal Code</label>
+              <input type="text" name="postal_code" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Phone Number</label>
+              <input type="text" name="phone_number" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Email</label>
+              <input type="email" name="email" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Website</label>
+              <input type="url" name="website" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Grading System</label>
+              <select name="grading_system" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                {% for value, label in grading_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Max Grade</label>
+              <input type="number" step="0.01" name="max_grade" value="100" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Currency</label>
+              <input type="text" name="currency" value="NGN" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <h3 class="font-display text-lg font-bold">VC/Provost Account</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Full Name *</label>
+              <input type="text" name="vc_full_name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">VC/Provost ID (auto)</label>
+              <div class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm text-muted-foreground">Generated after submit</div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Password *</label>
+              <input type="password" name="vc_password" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Role *</label>
+              <select name="vc_role" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="vc">VC</option>
+                <option value="provost">Provost</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-secondary text-secondary-foreground px-4 py-2.5 text-sm font-medium hover:bg-secondary/90 transition-colors">
+          Register Institution
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

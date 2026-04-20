@@ -1,0 +1,254 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Agent Properties</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app-container" style="min-height:100vh;">
+    <main class="main-content" style="margin-left:0;">
+      <header class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+        <div>
+          <h1>Property Listings</h1>
+          <p>Add houses for rent or sale, upload photos, update availability, and publish approved listings directly into the marketplace.</p>
+        </div>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+          <a href="{% url 'agent_dashboard' %}" class="btn btn-outline"><i data-lucide="arrow-left"></i> Back to Dashboard</a>
+          <a href="{% url 'agent_logout' %}" class="btn btn-ghost"><i data-lucide="log-out"></i> Logout</a>
+        </div>
+      </header>
+
+      {% if messages %}
+      <section style="margin-bottom: 1rem;">
+        {% for message in messages %}
+        <div class="card" style="padding:0.75rem 1rem;">{{ message }}</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      <section class="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Active Listings</span>
+            <div class="stat-card-icon primary"><i data-lucide="building-2"></i></div>
+          </div>
+          <div class="stat-card-value">{{ stats.houses }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Available</span>
+            <div class="stat-card-icon primary"><i data-lucide="door-open"></i></div>
+          </div>
+          <div class="stat-card-value">{{ stats.available_houses }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Live In Marketplace</span>
+            <div class="stat-card-icon primary"><i data-lucide="store"></i></div>
+          </div>
+          <div class="stat-card-value">{{ stats.marketplace_live }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Pending Approval</span>
+            <div class="stat-card-icon warning"><i data-lucide="badge-alert"></i></div>
+          </div>
+          <div class="stat-card-value">{{ stats.pending_approval }}</div>
+        </div>
+      </section>
+
+      <section class="housing-grid" style="margin-top:1.5rem;">
+        <section class="card">
+          <div class="card-header"><h3>Add Property Listing</h3></div>
+          <form method="POST" action="{% url 'agent_add_house_listing' %}" enctype="multipart/form-data" class="stack-form" style="margin-top:1rem;">
+            {% csrf_token %}
+            <div class="form-row">
+              <div class="form-group">
+                <label>Listing Title</label>
+                <input type="text" name="title" class="input" placeholder="e.g. Luxury 3 Bedroom Duplex" required>
+              </div>
+              <div class="form-group">
+                <label>Listing Mode</label>
+                <select name="listing_mode" class="input">
+                  {% for value, label in listing_mode_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Property Type</label>
+                <select name="property_type" class="input">
+                  {% for value, label in property_type_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Location</label>
+                <input type="text" name="location" class="input" placeholder="City, district, estate, or address" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Price</label>
+                <input type="number" name="price" min="0" step="0.01" class="input" required>
+              </div>
+              <div class="form-group">
+                <label>Status</label>
+                <select name="availability_status" class="input">
+                  {% for value, label in house_status_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Rooms</label>
+                <input type="number" name="rooms_count" min="1" value="1" class="input" required>
+              </div>
+              <div class="form-group">
+                <label>Spaces Available</label>
+                <input type="number" name="spaces_available" min="1" value="1" class="input" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea name="description" class="input" rows="4" placeholder="Add property details, amenities, landmarks, and selling points"></textarea>
+            </div>
+            <div class="form-group">
+              <label>House Pictures</label>
+              <input type="file" name="images" class="input" accept="image/*" multiple>
+            </div>
+            <label class="checkbox-label">
+              <input type="checkbox" name="listed_in_marketplace" checked>
+              <span>Show this approved listing in the marketplace</span>
+            </label>
+            <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Save Property</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h3>How It Works</h3></div>
+          <div class="stack-form" style="margin-top:1rem;">
+            <div class="delivery-insight-card">
+              <span class="delivery-insight-label">1. Register as agent</span>
+              <strong>Your verified agent account can publish property listings.</strong>
+              <p>Once your account is verified, listings you add can be approved and shown in the marketplace.</p>
+            </div>
+            <div class="delivery-insight-card">
+              <span class="delivery-insight-label">2. Add property details</span>
+              <strong>Capture photos, location, pricing, and availability.</strong>
+              <p>Each listing supports pictures, rent or sale mode, property type, and a clear status.</p>
+            </div>
+            <div class="delivery-insight-card">
+              <span class="delivery-insight-label">3. Marketplace visibility</span>
+              <strong>Approved active listings appear beside shop listings.</strong>
+              <p>When a listing is active, approved, and set to show in marketplace, it becomes visible to buyers automatically.</p>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="card" style="margin-top:1.5rem;">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+          <h3>Your Property Listings</h3>
+          <form method="GET" class="housing-filter-bar">
+            <input type="text" name="q" class="input" value="{{ filters.q }}" placeholder="Search title or location">
+            <select name="status" class="input">
+              <option value="">All statuses</option>
+              {% for value, label in house_status_choices %}
+              <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline">Filter</button>
+          </form>
+        </div>
+        <div class="housing-listings">
+          {% for house in houses %}
+          <article class="housing-listing-card">
+            <div class="housing-listing-media">
+              {% if house.primary_image %}
+              <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}">
+              {% else %}
+              <div class="housing-listing-fallback"><i data-lucide="house"></i></div>
+              {% endif %}
+            </div>
+            <div class="housing-listing-body">
+              <div class="housing-listing-top">
+                <div>
+                  <h3>{{ house.title }}</h3>
+                  <p style="color:var(--muted-foreground);margin:0.35rem 0 0;">{{ house.location }}</p>
+                </div>
+                <span class="badge {% if house.is_available %}badge-success{% else %}badge-warning{% endif %}">
+                  {{ house.get_availability_status_display }}
+                </span>
+              </div>
+              <p class="shop-card-desc">{{ house.description|default:"No description yet." }}</p>
+              <div class="shop-card-meta">
+                <span><i data-lucide="badge-dollar-sign" style="width:14px;height:14px;"></i> {{ house.get_listing_mode_display }}</span>
+                <span><i data-lucide="wallet" style="width:14px;height:14px;"></i> {{ house.price|floatformat:2 }}</span>
+                <span><i data-lucide="bed-double" style="width:14px;height:14px;"></i> {{ house.rooms_count }} room{{ house.rooms_count|pluralize }}</span>
+                <span><i data-lucide="layout-grid" style="width:14px;height:14px;"></i> {{ house.spaces_available }} space{{ house.spaces_available|pluralize }}</span>
+                <span><i data-lucide="image" style="width:14px;height:14px;"></i> {{ house.images.count }} photo{{ house.images.count|pluralize }}</span>
+              </div>
+              <div class="shop-card-meta" style="margin-top:0.5rem;">
+                <span>
+                  <i data-lucide="badge-check" style="width:14px;height:14px;"></i>
+                  {% if house.is_approved %}Approved{% else %}Pending approval{% endif %}
+                </span>
+                <span>
+                  <i data-lucide="store" style="width:14px;height:14px;"></i>
+                  {% if house.listed_in_marketplace and house.is_approved and house.is_active %}Visible in marketplace{% else %}Hidden from marketplace{% endif %}
+                </span>
+              </div>
+              <form method="POST" action="{% url 'agent_update_house_listing' house.id %}" class="housing-inline-form">
+                {% csrf_token %}
+                <select name="listing_mode" class="input">
+                  {% for value, label in listing_mode_choices %}
+                  <option value="{{ value }}" {% if house.listing_mode == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <select name="availability_status" class="input">
+                  {% for value, label in house_status_choices %}
+                  <option value="{{ value }}" {% if house.availability_status == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <label class="checkbox-label">
+                  <input type="checkbox" name="listed_in_marketplace" {% if house.listed_in_marketplace %}checked{% endif %}>
+                  <span>Marketplace</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" name="is_active" {% if house.is_active %}checked{% endif %}>
+                  <span>Active</span>
+                </label>
+                <button type="submit" class="btn btn-outline btn-sm">Update</button>
+              </form>
+            </div>
+          </article>
+          {% empty %}
+          <div class="empty-state">
+            <i data-lucide="house-plus"></i>
+            <p>No property listings yet.</p>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

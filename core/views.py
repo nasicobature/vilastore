@@ -212,6 +212,28 @@ def _refresh_house_availability(house):
         house.save(update_fields=["availability_status", "updated_at"])
 
 
+def _marketplace_house_queryset():
+    return (
+        HouseListing.objects.filter(
+            is_active=True,
+            listed_in_marketplace=True,
+            is_approved=True,
+        )
+        .filter(
+            Q(owner__is_active=True) |
+            Q(owner__isnull=True, listing_agent__is_active=True)
+        )
+        .select_related(
+            "owner",
+            "owner__marketplace_profile",
+            "managed_by_agent",
+            "listing_agent",
+        )
+        .prefetch_related("images")
+        .distinct()
+    )
+
+
 def _sync_rental_payment_state(rental):
     today = timezone.localdate()
     next_unpaid = (
@@ -1599,6 +1621,7 @@ def housing_management(request):
         "agents": Agent.objects.filter(is_active=True).order_by("full_name"),
         "house_status_choices": HouseListing.AVAILABILITY_STATUS_CHOICES,
         "property_type_choices": HouseListing.PROPERTY_TYPE_CHOICES,
+        "listing_mode_choices": HouseListing.LISTING_MODE_CHOICES,
         "rental_status_choices": RentalRecord.STATUS_CHOICES,
         "rental_payment_choices": RentalRecord.PAYMENT_STATUS_CHOICES,
         "payment_entry_choices": RentalPayment.STATUS_CHOICES,
@@ -1616,6 +1639,7 @@ def housing_management(request):
 @require_POST
 def add_house_listing(request):
     title = (request.POST.get("title") or "").strip()
+    listing_mode = (request.POST.get("listing_mode") or HouseListing.MODE_RENT).strip()
     property_type = (request.POST.get("property_type") or HouseListing.TYPE_APARTMENT).strip()
     location = (request.POST.get("location") or "").strip()
     description = (request.POST.get("description") or "").strip()
@@ -1632,6 +1656,9 @@ def add_house_listing(request):
     valid_property_types = {choice[0] for choice in HouseListing.PROPERTY_TYPE_CHOICES}
     if property_type not in valid_property_types:
         property_type = HouseListing.TYPE_OTHER
+    valid_listing_modes = {choice[0] for choice in HouseListing.LISTING_MODE_CHOICES}
+    if listing_mode not in valid_listing_modes:
+        listing_mode = HouseListing.MODE_RENT
 
     valid_availability = {choice[0] for choice in HouseListing.AVAILABILITY_STATUS_CHOICES}
     if availability_status not in valid_availability:
@@ -1651,6 +1678,7 @@ def add_house_listing(request):
         owner=request.user,
         managed_by_agent=managed_by_agent,
         title=title,
+        listing_mode=listing_mode,
         property_type=property_type,
         price=price,
         location=location,
@@ -1677,14 +1705,19 @@ def add_house_listing(request):
 def update_house_listing(request, house_id):
     house = get_object_or_404(HouseListing, id=house_id, owner=request.user)
     availability_status = (request.POST.get("availability_status") or house.availability_status).strip()
+    listing_mode = (request.POST.get("listing_mode") or house.listing_mode).strip()
     valid_availability = {choice[0] for choice in HouseListing.AVAILABILITY_STATUS_CHOICES}
     if availability_status not in valid_availability:
         availability_status = house.availability_status
+    valid_listing_modes = {choice[0] for choice in HouseListing.LISTING_MODE_CHOICES}
+    if listing_mode not in valid_listing_modes:
+        listing_mode = house.listing_mode
 
     house.availability_status = availability_status
+    house.listing_mode = listing_mode
     house.listed_in_marketplace = request.POST.get("listed_in_marketplace") == "on"
     house.is_active = request.POST.get("is_active") == "on"
-    house.save(update_fields=["availability_status", "listed_in_marketplace", "is_active", "updated_at"])
+    house.save(update_fields=["availability_status", "listing_mode", "listed_in_marketplace", "is_active", "updated_at"])
     messages.success(request, f"{house.title} updated.")
     return redirect("housing_management")
 
@@ -2724,7 +2757,157 @@ def agent_dashboard(request):
         "monthly_total": monthly_total.quantize(Decimal("0.01")),
         "commission_rate_percent": (rate * Decimal("100")).quantize(Decimal("0.01")),
         "invite_link": invite_link,
+        "property_count": HouseListing.objects.filter(listing_agent=agent, is_active=True).count(),
+        "marketplace_property_count": HouseListing.objects.filter(
+            listing_agent=agent,
+            is_active=True,
+            listed_in_marketplace=True,
+            is_approved=True,
+        ).count(),
     })
+
+
+def agent_property_management(request):
+    agent = _get_agent_session(request)
+    if not agent:
+        return redirect("agent_login")
+
+    q = (request.GET.get("q") or "").strip()
+    status_filter = (request.GET.get("status") or "").strip()
+
+    houses = (
+        HouseListing.objects.filter(listing_agent=agent)
+        .prefetch_related("images")
+        .select_related("managed_by_agent")
+        .order_by("-created_at")
+    )
+    if q:
+        houses = houses.filter(
+            Q(title__icontains=q) |
+            Q(location__icontains=q) |
+            Q(description__icontains=q)
+        )
+    if status_filter:
+        houses = houses.filter(availability_status=status_filter)
+
+    return render(request, "agent/agent-properties.html", {
+        "agent": agent,
+        "houses": houses,
+        "filters": {"q": q, "status": status_filter},
+        "house_status_choices": HouseListing.AVAILABILITY_STATUS_CHOICES,
+        "property_type_choices": HouseListing.PROPERTY_TYPE_CHOICES,
+        "listing_mode_choices": HouseListing.LISTING_MODE_CHOICES,
+        "stats": {
+            "houses": HouseListing.objects.filter(listing_agent=agent, is_active=True).count(),
+            "available_houses": HouseListing.objects.filter(
+                listing_agent=agent,
+                availability_status=HouseListing.STATUS_AVAILABLE,
+                is_active=True,
+            ).count(),
+            "marketplace_live": HouseListing.objects.filter(
+                listing_agent=agent,
+                listed_in_marketplace=True,
+                is_active=True,
+                is_approved=True,
+            ).count(),
+            "pending_approval": HouseListing.objects.filter(
+                listing_agent=agent,
+                is_active=True,
+                is_approved=False,
+            ).count(),
+        },
+    })
+
+
+@require_POST
+def agent_add_house_listing(request):
+    agent = _get_agent_session(request)
+    if not agent:
+        return redirect("agent_login")
+
+    title = (request.POST.get("title") or "").strip()
+    listing_mode = (request.POST.get("listing_mode") or HouseListing.MODE_RENT).strip()
+    property_type = (request.POST.get("property_type") or HouseListing.TYPE_APARTMENT).strip()
+    location = (request.POST.get("location") or "").strip()
+    description = (request.POST.get("description") or "").strip()
+    availability_status = (request.POST.get("availability_status") or HouseListing.STATUS_AVAILABLE).strip()
+
+    if not title or not location:
+        messages.error(request, "House title and location are required.")
+        return redirect("agent_property_management")
+
+    valid_property_types = {choice[0] for choice in HouseListing.PROPERTY_TYPE_CHOICES}
+    if property_type not in valid_property_types:
+        property_type = HouseListing.TYPE_OTHER
+    valid_listing_modes = {choice[0] for choice in HouseListing.LISTING_MODE_CHOICES}
+    if listing_mode not in valid_listing_modes:
+        listing_mode = HouseListing.MODE_RENT
+    valid_availability = {choice[0] for choice in HouseListing.AVAILABILITY_STATUS_CHOICES}
+    if availability_status not in valid_availability:
+        availability_status = HouseListing.STATUS_AVAILABLE
+
+    try:
+        price = Decimal(request.POST.get("price") or "0")
+        rooms_count = int(request.POST.get("rooms_count") or "1")
+        spaces_available = int(request.POST.get("spaces_available") or "1")
+        if price <= 0 or rooms_count <= 0 or spaces_available <= 0:
+            raise ValueError
+    except Exception:
+        messages.error(request, "Price, rooms, and spaces must be valid positive values.")
+        return redirect("agent_property_management")
+
+    house = HouseListing.objects.create(
+        owner=None,
+        listing_agent=agent,
+        managed_by_agent=agent,
+        title=title,
+        listing_mode=listing_mode,
+        property_type=property_type,
+        price=price,
+        location=location,
+        rooms_count=rooms_count,
+        spaces_available=spaces_available,
+        description=description,
+        availability_status=availability_status,
+        listed_in_marketplace=request.POST.get("listed_in_marketplace") == "on",
+        is_approved=agent.is_email_verified,
+    )
+
+    for index, image in enumerate(request.FILES.getlist("images")):
+        HouseListingImage.objects.create(
+            house=house,
+            image=image,
+            is_primary=index == 0,
+        )
+
+    messages.success(request, "Property listing added. Approved listings automatically appear in the marketplace.")
+    return redirect("agent_property_management")
+
+
+@require_POST
+def agent_update_house_listing(request, house_id):
+    agent = _get_agent_session(request)
+    if not agent:
+        return redirect("agent_login")
+
+    house = get_object_or_404(HouseListing, id=house_id, listing_agent=agent)
+    availability_status = (request.POST.get("availability_status") or house.availability_status).strip()
+    listing_mode = (request.POST.get("listing_mode") or house.listing_mode).strip()
+
+    valid_availability = {choice[0] for choice in HouseListing.AVAILABILITY_STATUS_CHOICES}
+    if availability_status not in valid_availability:
+        availability_status = house.availability_status
+    valid_listing_modes = {choice[0] for choice in HouseListing.LISTING_MODE_CHOICES}
+    if listing_mode not in valid_listing_modes:
+        listing_mode = house.listing_mode
+
+    house.availability_status = availability_status
+    house.listing_mode = listing_mode
+    house.listed_in_marketplace = request.POST.get("listed_in_marketplace") == "on"
+    house.is_active = request.POST.get("is_active") == "on"
+    house.save(update_fields=["availability_status", "listing_mode", "listed_in_marketplace", "is_active", "updated_at"])
+    messages.success(request, f"{house.title} updated.")
+    return redirect("agent_property_management")
 
 
 def subscription_payment(request):
@@ -4428,19 +4611,16 @@ def marketplace(request):
         .distinct()
         .order_by("location")
     )
-    houses = (
-        HouseListing.objects.filter(is_active=True, listed_in_marketplace=True)
-        .select_related("owner", "owner__marketplace_profile")
-        .prefetch_related("images")
-        .distinct()
-    )
+    houses = _marketplace_house_queryset()
     if q:
         houses = houses.filter(
             Q(title__icontains=q) |
             Q(location__icontains=q) |
             Q(description__icontains=q) |
             Q(owner__business_name__icontains=q) |
-            Q(owner__username__icontains=username_q)
+            Q(owner__username__icontains=username_q) |
+            Q(listing_agent__full_name__icontains=q) |
+            Q(listing_agent__username__icontains=username_q)
         )
     if location:
         houses = houses.filter(location__icontains=location)
@@ -4451,7 +4631,10 @@ def marketplace(request):
             availability_status__in=[HouseListing.STATUS_AVAILABLE, HouseListing.STATUS_PARTIAL]
         )
     if verified:
-        houses = houses.filter(owner__marketplace_profile__is_verified=True)
+        houses = houses.filter(
+            Q(owner__marketplace_profile__is_verified=True) |
+            Q(owner__isnull=True, listing_agent__is_email_verified=True)
+        )
 
     min_price_value = None
     if min_price:
@@ -4486,7 +4669,7 @@ def marketplace(request):
         )
 
     house_locations = (
-        HouseListing.objects.filter(is_active=True, listed_in_marketplace=True)
+        _marketplace_house_queryset()
         .exclude(location="")
         .values_list("location", flat=True)
         .distinct()
@@ -4519,12 +4702,12 @@ def marketplace(request):
 
 def marketplace_house_detail(request, house_id):
     house = get_object_or_404(
-        HouseListing.objects.filter(is_active=True, listed_in_marketplace=True)
-        .select_related("owner", "managed_by_agent", "owner__marketplace_profile")
-        .prefetch_related("images", "rentals"),
+        _marketplace_house_queryset().prefetch_related("rentals"),
         id=house_id,
     )
-    profile, _ = MarketplaceShopProfile.objects.get_or_create(user=house.owner)
+    profile = None
+    if house.owner:
+        profile, _ = MarketplaceShopProfile.objects.get_or_create(user=house.owner)
     active_rental = house.rentals.filter(status=RentalRecord.STATUS_ACTIVE).order_by("end_date").first()
 
     return render(request, "shopboy/marketplace-house.html", {
@@ -4532,6 +4715,7 @@ def marketplace_house_detail(request, house_id):
         "house": house,
         "profile": profile,
         "shop_owner": house.owner,
+        "house_agent": house.listing_agent,
         "active_rental": active_rental,
         "marketplace_active_tab": "marketplace",
     })

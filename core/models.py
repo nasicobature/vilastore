@@ -397,6 +397,13 @@ class MarketplaceSettings(models.Model):
 
 
 class HouseListing(models.Model):
+    MODE_RENT = "rent"
+    MODE_SALE = "sale"
+    LISTING_MODE_CHOICES = [
+        (MODE_RENT, "For Rent"),
+        (MODE_SALE, "For Sale"),
+    ]
+
     TYPE_APARTMENT = "apartment"
     TYPE_DUPLEX = "duplex"
     TYPE_STUDIO = "studio"
@@ -429,9 +436,11 @@ class HouseListing(models.Model):
         (STATUS_MAINTENANCE, "Under Maintenance"),
     ]
 
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="house_listings")
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="house_listings", null=True, blank=True)
+    listing_agent = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True, related_name="property_listings")
     managed_by_agent = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_house_listings")
     title = models.CharField(max_length=200)
+    listing_mode = models.CharField(max_length=10, choices=LISTING_MODE_CHOICES, default=MODE_RENT)
     property_type = models.CharField(max_length=30, choices=PROPERTY_TYPE_CHOICES, default=TYPE_APARTMENT)
     price = models.DecimalField(max_digits=12, decimal_places=2)
     location = models.CharField(max_length=255)
@@ -439,6 +448,7 @@ class HouseListing(models.Model):
     spaces_available = models.PositiveIntegerField(default=1)
     description = models.TextField(blank=True)
     availability_status = models.CharField(max_length=20, choices=AVAILABILITY_STATUS_CHOICES, default=STATUS_AVAILABLE)
+    is_approved = models.BooleanField(default=True)
     listed_in_marketplace = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -453,6 +463,28 @@ class HouseListing(models.Model):
     @property
     def is_available(self):
         return self.availability_status in {self.STATUS_AVAILABLE, self.STATUS_PARTIAL}
+
+    @property
+    def display_owner_name(self):
+        if self.owner:
+            return self.owner.business_name or self.owner.username
+        if self.listing_agent:
+            return self.listing_agent.full_name
+        return "VilaStore"
+
+    @property
+    def display_owner_phone(self):
+        if self.owner:
+            return self.owner.phone
+        if self.listing_agent:
+            return self.listing_agent.phone
+        return ""
+
+    @property
+    def display_owner_address(self):
+        if self.owner:
+            return self.owner.address
+        return self.location
 
     @property
     def primary_image(self):

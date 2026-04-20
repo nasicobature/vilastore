@@ -126,6 +126,9 @@ urlpatterns = [
     path('agent/forgot-password/reset/', views.agent_forgot_password_reset, name='agent_forgot_password_reset'),
     path('agent/logout/', views.agent_logout, name='agent_logout'),
     path('agent/', views.agent_dashboard, name='agent_dashboard'),
+    path('agent/properties/', views.agent_property_management, name='agent_property_management'),
+    path('agent/properties/add/', views.agent_add_house_listing, name='agent_add_house_listing'),
+    path('agent/properties/<int:house_id>/update/', views.agent_update_house_listing, name='agent_update_house_listing'),
 
     path('shopboy/marketplace-orders/', views.shopboy_marketplace_orders, name='shopboy_marketplace_orders'),
     path('marketplace/login/', views.marketplace_login, name='marketplace_login'),
@@ -185,6 +188,7 @@ urlpatterns = [
     path('feedback/', views.submit_feedback, name='submit_feedback'),
     path('home/', views.home, name='home'),
     path('', views.home, name='signup'),
+    path('shop/register/', views.signup, name='shop_signup'),
     path('signup/', views.signup, name='signup'),
     path('housing/register/', views.housing_signup, name='housing_signup'),
     path("signup/create-account/", views.signup_create_account, name="signup_create_account"),
