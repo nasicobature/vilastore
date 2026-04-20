@@ -52,10 +52,13 @@ document.addEventListener("DOMContentLoaded", () => {
 function initBuyerDeliveryApp(app) {
   const token = app.dataset.token || "";
   const state = {
-    coords: null,
+    browserCoords: null,
+    pickupCoords: null,
+    dropoffCoords: null,
     availableRiders: [],
     activeRequest: null,
     estimate: null,
+    lookupTimers: {},
   };
 
   const els = {
@@ -76,27 +79,189 @@ function initBuyerDeliveryApp(app) {
     estimateButton: document.getElementById("deliveryEstimateButton"),
     submitButton: document.getElementById("deliverySubmitButton"),
     refreshButton: app.querySelector('[data-action="refresh-delivery-home"]'),
+    routeSummary: document.getElementById("deliveryRouteSummary"),
+    mapFrame: document.getElementById("deliveryMapFrame"),
+    mapPlaceholder: document.getElementById("deliveryMapPlaceholder"),
+    mapLink: document.getElementById("deliveryMapLink"),
+    pickupHint: document.getElementById("deliveryPickupHint"),
+    dropoffHint: document.getElementById("deliveryDropoffHint"),
   };
 
   function getDistanceKm() {
     return Number(els.distance.value || 3);
   }
 
+  function getPickupText() {
+    return els.pickup.value.trim();
+  }
+
+  function getDropoffText() {
+    return els.dropoff.value.trim();
+  }
+
+  function getPreviewPickupCoords() {
+    return state.pickupCoords || state.browserCoords;
+  }
+
+  function getRequestPickupCoords() {
+    return getPickupText() ? state.pickupCoords : state.browserCoords;
+  }
+
   function requestBody(extra = {}) {
     const body = {
-      pickup_address: els.pickup.value.trim(),
-      dropoff_address: els.dropoff.value.trim(),
+      pickup_address: getPickupText(),
+      dropoff_address: getDropoffText(),
       customer_name: els.customerName.value.trim(),
       customer_phone: els.customerPhone.value.trim(),
       notes: els.notes.value.trim(),
       distance_km: getDistanceKm(),
       ...extra,
     };
-    if (state.coords) {
-      body.pickup_lat = state.coords.latitude;
-      body.pickup_lng = state.coords.longitude;
+    const pickupCoords = getRequestPickupCoords();
+    if (pickupCoords) {
+      body.pickup_lat = pickupCoords.latitude;
+      body.pickup_lng = pickupCoords.longitude;
+    }
+    if (state.dropoffCoords) {
+      body.dropoff_lat = state.dropoffCoords.latitude;
+      body.dropoff_lng = state.dropoffCoords.longitude;
     }
     return body;
+  }
+
+  function buildMapState() {
+    const pickup = getPickupText();
+    const dropoff = getDropoffText();
+    const focusCoords = state.dropoffCoords || getPreviewPickupCoords();
+
+    if (pickup && dropoff) {
+      return {
+        embed: `https://maps.google.com/maps?saddr=${encodeURIComponent(pickup)}&daddr=${encodeURIComponent(dropoff)}&output=embed`,
+        link: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pickup)}&destination=${encodeURIComponent(dropoff)}&travelmode=driving`,
+        summary: `Previewing the route from ${pickup} to ${dropoff}.`,
+      };
+    }
+
+    if (focusCoords) {
+      return {
+        embed: `https://maps.google.com/maps?q=${focusCoords.latitude},${focusCoords.longitude}&z=15&output=embed`,
+        link: `https://www.google.com/maps?q=${focusCoords.latitude},${focusCoords.longitude}`,
+        summary: pickup ? `Previewing pickup near ${pickup}.` : "Previewing your detected location.",
+      };
+    }
+
+    if (pickup) {
+      return {
+        embed: `https://maps.google.com/maps?q=${encodeURIComponent(pickup)}&z=15&output=embed`,
+        link: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pickup)}`,
+        summary: `Previewing pickup around ${pickup}.`,
+      };
+    }
+
+    return {
+      embed: "https://maps.google.com/maps?q=Nigeria&z=6&output=embed",
+      link: "https://maps.google.com",
+      summary: "Add a pickup and destination to preview the trip.",
+    };
+  }
+
+  function updateRouteHints() {
+    const pickup = getPickupText();
+    const dropoff = getDropoffText();
+
+    if (!pickup) {
+      els.pickupHint.textContent = "Waiting for pickup details.";
+    } else if (getRequestPickupCoords()) {
+      els.pickupHint.textContent = "Pickup location is ready for rider matching.";
+    } else {
+      els.pickupHint.textContent = "Pickup address added. Use estimate to confirm the route.";
+    }
+
+    if (!dropoff) {
+      els.dropoffHint.textContent = "Waiting for destination details.";
+    } else if (state.dropoffCoords) {
+      els.dropoffHint.textContent = "Destination is mapped and ready for pricing.";
+    } else {
+      els.dropoffHint.textContent = "Destination added. The map preview is using the typed address.";
+    }
+  }
+
+  function updateMapPreview() {
+    const mapState = buildMapState();
+    if (els.routeSummary) {
+      els.routeSummary.textContent = mapState.summary;
+    }
+    if (els.mapFrame) {
+      els.mapFrame.src = mapState.embed;
+    }
+    if (els.mapLink) {
+      els.mapLink.href = mapState.link;
+    }
+    if (els.mapPlaceholder) {
+      const showPlaceholder = !getPickupText() && !getDropoffText() && !getPreviewPickupCoords();
+      els.mapPlaceholder.classList.toggle("is-hidden", !showPlaceholder);
+    }
+  }
+
+  async function geocodeAddress(query) {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`);
+    if (!response.ok) {
+      throw new Error("Address lookup is unavailable right now.");
+    }
+    const payload = await response.json();
+    const match = payload && payload[0];
+    if (!match) {
+      return null;
+    }
+    return {
+      latitude: Number(match.lat),
+      longitude: Number(match.lon),
+    };
+  }
+
+  async function reverseGeocode(latitude, longitude) {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`);
+    if (!response.ok) {
+      return null;
+    }
+    const payload = await response.json();
+    return payload?.display_name || null;
+  }
+
+  async function resolveAddress(kind) {
+    const value = kind === "pickup" ? getPickupText() : getDropoffText();
+    if (!value || value.length < 5) {
+      updateRouteHints();
+      updateMapPreview();
+      return;
+    }
+
+    try {
+      const result = await geocodeAddress(value);
+      if (kind === "pickup") {
+        state.pickupCoords = result;
+      } else {
+        state.dropoffCoords = result;
+      }
+    } catch (error) {
+      if (kind === "pickup") {
+        state.pickupCoords = null;
+      } else {
+        state.dropoffCoords = null;
+      }
+    }
+
+    updateRouteHints();
+    updateMapPreview();
+  }
+
+  function queueAddressLookup(kind) {
+    if (state.lookupTimers[kind]) {
+      window.clearTimeout(state.lookupTimers[kind]);
+    }
+    state.lookupTimers[kind] = window.setTimeout(() => {
+      resolveAddress(kind);
+    }, 500);
   }
 
   function renderEstimate(estimate) {
@@ -119,7 +284,7 @@ function initBuyerDeliveryApp(app) {
 
   function renderRiders() {
     if (!state.availableRiders.length) {
-      els.ridersList.innerHTML = '<div class="delivery-empty"><p>No riders found yet. Turn on location or request without assigning one.</p></div>';
+      els.ridersList.innerHTML = '<div class="delivery-empty"><p>No riders found yet. Add a clearer pickup point or use current location for stronger matches.</p></div>';
       return;
     }
     els.ridersList.innerHTML = state.availableRiders
@@ -159,9 +324,10 @@ function initBuyerDeliveryApp(app) {
   async function loadRiders() {
     const params = new URLSearchParams();
     params.set("max_distance_km", String(getDistanceKm()));
-    if (state.coords) {
-      params.set("pickup_lat", String(state.coords.latitude));
-      params.set("pickup_lng", String(state.coords.longitude));
+    const pickupCoords = getRequestPickupCoords();
+    if (pickupCoords) {
+      params.set("pickup_lat", String(pickupCoords.latitude));
+      params.set("pickup_lng", String(pickupCoords.longitude));
     }
     const response = await marketplaceApiRequest(`/api/marketplace/delivery/riders/?${params.toString()}`, { token });
     state.availableRiders = response.riders || [];
@@ -169,6 +335,9 @@ function initBuyerDeliveryApp(app) {
   }
 
   async function estimateDelivery() {
+    if (!getPickupText() || !getDropoffText()) {
+      throw new Error("Enter both pickup and destination before estimating.");
+    }
     const response = await marketplaceApiRequest("/api/marketplace/delivery/estimate/", {
       method: "POST",
       token,
@@ -188,6 +357,12 @@ function initBuyerDeliveryApp(app) {
   }
 
   async function submitDeliveryRequest() {
+    if (!getPickupText()) {
+      throw new Error("Add a pickup address before requesting a rider.");
+    }
+    if (!getDropoffText()) {
+      throw new Error("Add a dropoff address before requesting a rider.");
+    }
     const chosenRider = state.availableRiders[0];
     const response = await marketplaceApiRequest("/api/marketplace/delivery/requests/", {
       method: "POST",
@@ -201,31 +376,55 @@ function initBuyerDeliveryApp(app) {
     marketplaceToast("Delivery request created successfully.");
   }
 
-  function initLocation() {
+  async function initLocation(applyToPickup = false) {
     if (!(navigator && navigator.geolocation)) {
       els.locationStatus.textContent = "Browser location unavailable";
-      return;
+      return false;
     }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        state.coords = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        };
-        els.locationStatus.textContent = "Location detected";
-      },
-      () => {
-        els.locationStatus.textContent = "Location permission denied";
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-    );
+
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          state.browserCoords = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+          els.locationStatus.textContent = "Location detected";
+
+          if (applyToPickup) {
+            state.pickupCoords = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            };
+            if (!getPickupText()) {
+              els.pickup.value = "Current location";
+            }
+            const address = await reverseGeocode(position.coords.latitude, position.coords.longitude).catch(() => null);
+            if (address) {
+              els.pickup.value = address;
+            }
+          }
+
+          updateRouteHints();
+          updateMapPreview();
+          resolve(true);
+        },
+        () => {
+          els.locationStatus.textContent = "Location permission denied";
+          resolve(false);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      );
+    });
   }
 
   els.useCurrentLocation?.addEventListener("click", async () => {
-    initLocation();
     try {
+      await initLocation(true);
       await loadRiders();
-      await estimateDelivery();
+      if (getDropoffText()) {
+        await estimateDelivery();
+      }
     } catch (error) {
       marketplaceToast(error.message);
     }
@@ -257,16 +456,48 @@ function initBuyerDeliveryApp(app) {
   els.refreshButton?.addEventListener("click", async () => {
     try {
       await loadRiders();
-      await estimateDelivery();
+      if (getPickupText() && getDropoffText()) {
+        await estimateDelivery();
+      }
       await loadActiveRequest();
     } catch (error) {
       marketplaceToast(error.message);
     }
   });
 
+  els.pickup?.addEventListener("input", () => {
+    state.pickupCoords = null;
+    updateRouteHints();
+    updateMapPreview();
+    queueAddressLookup("pickup");
+  });
+
+  els.dropoff?.addEventListener("input", () => {
+    state.dropoffCoords = null;
+    updateRouteHints();
+    updateMapPreview();
+    queueAddressLookup("dropoff");
+  });
+
+  els.distance?.addEventListener("change", async () => {
+    if (!getPickupText()) {
+      return;
+    }
+    try {
+      await loadRiders();
+      if (getDropoffText()) {
+        await estimateDelivery();
+      }
+    } catch (error) {
+      marketplaceToast(error.message);
+    }
+  });
+
+  updateRouteHints();
+  updateMapPreview();
+  renderRiders();
+  renderActiveRequest();
   initLocation();
-  loadRiders().catch(() => {});
-  estimateDelivery().catch(() => {});
 }
 
 function initRiderWorkspaceApp(app) {

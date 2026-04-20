@@ -63,9 +63,31 @@
       <div class="marketplace-results-header">
         <div>
           <h2>Customer Portal</h2>
-          <p style="color:var(--muted-foreground);margin-top:0.35rem;">This dashboard is designed for marketplace customers. Place orders, request deliveries, and track your activity here.</p>
+          <p style="color:var(--muted-foreground);margin-top:0.35rem;">Browse shops, plan delivery with a live route preview, and keep orders plus rider activity in one calmer workspace.</p>
         </div>
       </div>
+
+      <section class="card delivery-welcome-card">
+        <div>
+          <span class="badge badge-primary">Simpler Booking Flow</span>
+          <h3>Plan the trip before you request a rider.</h3>
+          <p>Start with pickup, confirm the destination, preview the trip on the map, then send the request when the estimate looks right.</p>
+        </div>
+        <div class="delivery-welcome-steps">
+          <div class="delivery-welcome-step">
+            <strong>1</strong>
+            <span>Choose pickup</span>
+          </div>
+          <div class="delivery-welcome-step">
+            <strong>2</strong>
+            <span>Preview route</span>
+          </div>
+          <div class="delivery-welcome-step">
+            <strong>3</strong>
+            <span>Request rider</span>
+          </div>
+        </div>
+      </section>
 
       <div class="stats-grid" style="margin-bottom:1.5rem;">
         <div class="stat-card card">
@@ -87,9 +109,57 @@
           <div class="delivery-card-header">
             <div>
               <h3>Book Delivery</h3>
-              <p>Use browser location when available, or enter the route manually and estimate the fee instantly.</p>
+              <p>Use your current location or type both addresses manually. The route preview updates as you fill in the trip.</p>
             </div>
             <span id="deliveryLocationStatus" class="delivery-status-pill">Fetching browser location...</span>
+          </div>
+
+          <div class="delivery-route-shell">
+            <div class="delivery-map-card">
+              <div class="delivery-map-card-header">
+                <div>
+                  <h4>Route Preview</h4>
+                  <p id="deliveryRouteSummary">Add a pickup and destination to preview the trip.</p>
+                </div>
+                <a id="deliveryMapLink" class="btn btn-ghost btn-sm" href="https://maps.google.com" target="_blank" rel="noopener noreferrer">
+                  <i data-lucide="navigation"></i>
+                  Open map
+                </a>
+              </div>
+              <div class="delivery-map-frame-wrap">
+                <iframe
+                  id="deliveryMapFrame"
+                  class="delivery-map-frame"
+                  title="Delivery route preview"
+                  loading="lazy"
+                  referrerpolicy="no-referrer-when-downgrade"
+                  src="https://maps.google.com/maps?q=Nigeria&z=6&output=embed"
+                ></iframe>
+                <div id="deliveryMapPlaceholder" class="delivery-map-placeholder">
+                  <i data-lucide="map"></i>
+                  <strong>Your route will appear here.</strong>
+                  <span>Use current location or enter both addresses to preview the trip.</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="delivery-route-insights">
+              <div class="delivery-insight-card">
+                <span class="delivery-insight-label">Pickup status</span>
+                <strong id="deliveryPickupHint">Waiting for pickup details.</strong>
+                <p>Turn on location for faster rider matching, or type the collection point manually.</p>
+              </div>
+              <div class="delivery-insight-card">
+                <span class="delivery-insight-label">Destination status</span>
+                <strong id="deliveryDropoffHint">Waiting for destination details.</strong>
+                <p>Enter the dropoff address so the route and estimate can update.</p>
+              </div>
+              <div class="delivery-insight-card delivery-insight-card-accent">
+                <span class="delivery-insight-label">Booking tip</span>
+                <strong>Clear addresses usually get faster rider matches.</strong>
+                <p>Add a landmark, estate, junction, or shop name in the notes when the place is hard to find.</p>
+              </div>
+            </div>
           </div>
 
           <div class="delivery-form-grid">

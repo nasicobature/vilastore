@@ -3840,6 +3840,59 @@ button {
   padding: 1.25rem;
 }
 
+.delivery-welcome-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  background:
+    radial-gradient(circle at top right, hsla(32, 68%, 41%, 0.12), transparent 30%),
+    linear-gradient(135deg, hsl(34, 70%, 97%), hsl(220, 30%, 99%));
+}
+
+.delivery-welcome-card h3 {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 1.3rem;
+}
+
+.delivery-welcome-card p {
+  max-width: 720px;
+  color: var(--muted-foreground);
+}
+
+.delivery-welcome-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.delivery-welcome-step {
+  min-width: 110px;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: hsla(0, 0%, 100%, 0.85);
+  display: grid;
+  gap: 0.3rem;
+}
+
+.delivery-welcome-step strong {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: grid;
+  place-items: center;
+  font-size: 0.9rem;
+}
+
+.delivery-welcome-step span {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .delivery-card-header {
   display: flex;
   justify-content: space-between;
@@ -3857,6 +3910,118 @@ button {
   margin: 0;
   color: var(--muted-foreground);
   font-size: 0.9rem;
+}
+
+.delivery-route-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.delivery-map-card {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 0.15rem);
+  overflow: hidden;
+  background: var(--background);
+}
+
+.delivery-map-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1rem 0.8rem;
+}
+
+.delivery-map-card-header h4 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.delivery-map-card-header p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+}
+
+.delivery-map-frame-wrap {
+  position: relative;
+  min-height: 320px;
+  background: linear-gradient(135deg, hsl(34, 35%, 92%), hsl(220, 30%, 96%));
+}
+
+.delivery-map-frame {
+  width: 100%;
+  height: 320px;
+  border: 0;
+  display: block;
+}
+
+.delivery-map-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 1.5rem;
+  gap: 0.4rem;
+  background:
+    linear-gradient(180deg, hsla(0, 0%, 100%, 0.88), hsla(0, 0%, 100%, 0.9)),
+    radial-gradient(circle at center, hsla(32, 68%, 41%, 0.08), transparent 45%);
+}
+
+.delivery-map-placeholder i {
+  width: 34px;
+  height: 34px;
+  color: var(--primary);
+}
+
+.delivery-map-placeholder strong {
+  font-size: 1rem;
+}
+
+.delivery-map-placeholder span {
+  max-width: 280px;
+  color: var(--muted-foreground);
+  font-size: 0.84rem;
+}
+
+.delivery-route-insights {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.delivery-insight-card {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 0.1rem);
+  background: var(--background);
+  padding: 1rem;
+}
+
+.delivery-insight-card strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.delivery-insight-card p {
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+}
+
+.delivery-insight-card-accent {
+  background: linear-gradient(135deg, hsla(32, 68%, 41%, 0.08), hsla(34, 70%, 96%, 0.9));
+}
+
+.delivery-insight-label {
+  display: inline-flex;
+  margin-bottom: 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--primary);
 }
 
 .delivery-status-pill,
@@ -4018,9 +4183,18 @@ button {
 }
 
 @media (max-width: 900px) {
+  .delivery-welcome-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .delivery-grid,
   .delivery-form-grid,
   .delivery-estimate-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .delivery-route-shell {
     grid-template-columns: 1fr;
   }
 
