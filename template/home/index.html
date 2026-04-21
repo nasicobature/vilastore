@@ -26,7 +26,6 @@
         <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
         <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
         <a href="{% url 'customer' %}" class="nav-link"><i data-lucide="users"></i><span>Customers</span></a>
-        <a href="{% url 'housing_management' %}" class="nav-link"><i data-lucide="house"></i><span>Housing</span></a>
         <a href="{% url 'settings' %}" class="nav-link"><i data-lucide="settings"></i><span>Settings</span></a>
       </nav>
     </aside>
@@ -76,24 +75,10 @@
         </div>
         <div class="card stat-card">
           <div class="stat-card-header">
-            <span class="stat-card-title">Housing Listings</span>
-            <div class="stat-card-icon primary"><i data-lucide="house"></i></div>
-          </div>
-          <div class="stat-card-value">{{ total_houses }}</div>
-        </div>
-        <div class="card stat-card">
-          <div class="stat-card-header">
             <span class="stat-card-title">Low Stock Items</span>
             <div class="stat-card-icon warning"><i data-lucide="alert-triangle"></i></div>
           </div>
           <div class="stat-card-value">{{ low_stock_count }}</div>
-        </div>
-        <div class="card stat-card">
-          <div class="stat-card-header">
-            <span class="stat-card-title">Rent Expiring Soon</span>
-            <div class="stat-card-icon warning"><i data-lucide="bell-ring"></i></div>
-          </div>
-          <div class="stat-card-value">{{ expiring_rentals }}</div>
         </div>
       </section>
 
