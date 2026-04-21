@@ -1900,27 +1900,75 @@ def _plan_pricing():
     }
 
 
-def _authenticate_with_identifier(request, identifier, password):
+def _accounts_for_identifier(identifier):
     identity = (identifier or "").strip()
-    if not identity or not password:
-        return None
+    if not identity:
+        return []
+
     # Prefer exact match when possible to avoid case-insensitive ambiguity.
-    account_exact = (
+    exact_matches = list(
         User.objects.filter(Q(email=identity) | Q(username=identity))
         .order_by("-is_active", "-id")
-        .first()
     )
-    if account_exact:
-        auth_username = account_exact.username
-        return authenticate(request, username=auth_username, password=password)
+    if exact_matches:
+        return exact_matches
 
-    account = (
+    return list(
         User.objects.filter(Q(email__iexact=identity) | Q(username__iexact=identity))
         .order_by("-is_active", "-id")
-        .first()
     )
-    auth_username = account.username if account else identity
-    return authenticate(request, username=auth_username, password=password)
+
+
+def _valid_accounts_for_credentials(request, identifier, password, account_type=None):
+    identity = (identifier or "").strip()
+    if not identity or not password:
+        return []
+
+    accounts = _accounts_for_identifier(identity)
+    if account_type:
+        accounts = [account for account in accounts if account.account_type == account_type]
+
+    valid_accounts = []
+    seen_ids = set()
+    for account in accounts:
+        authenticated = authenticate(request, username=account.username, password=password)
+        if authenticated and authenticated.id not in seen_ids:
+            valid_accounts.append(authenticated)
+            seen_ids.add(authenticated.id)
+    return valid_accounts
+
+
+def _authenticate_with_identifier(request, identifier, password, account_type=None):
+    valid_accounts = _valid_accounts_for_credentials(request, identifier, password, account_type=account_type)
+    if len(valid_accounts) == 1:
+        return valid_accounts[0]
+
+    identity = (identifier or "").strip()
+    if account_type or _accounts_for_identifier(identity):
+        return None
+    return authenticate(request, username=identity, password=password)
+
+
+def _login_account_type_options(users):
+    seen_types = set()
+    options = []
+    for user in users:
+        account_type = getattr(user, "account_type", User.ACCOUNT_TYPE_SHOP)
+        if account_type in seen_types:
+            continue
+        seen_types.add(account_type)
+        label = "Housing Portal" if account_type == User.ACCOUNT_TYPE_HOUSING else "Shop Portal"
+        description = (
+            "Open your housing management workspace."
+            if account_type == User.ACCOUNT_TYPE_HOUSING
+            else "Open your shop dashboard and sales tools."
+        )
+        options.append({
+            "value": account_type,
+            "label": label,
+            "description": description,
+        })
+    return options
 
 
 def _get_signup_user(request):
@@ -2429,11 +2477,26 @@ def login_view(request):
     if request.user.is_authenticated:
         return redirect(_post_login_redirect_name(request.user))
 
+    login_context = {
+        "prefill_email": "",
+        "selected_account_type": "",
+        "account_type_options": [],
+    }
+
     if request.method == "POST":
         identifier = (request.POST.get("email") or "").strip()
         password = request.POST.get("password") or ""
+        selected_account_type = (request.POST.get("account_type") or "").strip()
+        login_context["prefill_email"] = identifier
+        login_context["selected_account_type"] = selected_account_type
 
-        user = _authenticate_with_identifier(request, identifier, password)
+        valid_accounts = _valid_accounts_for_credentials(
+            request,
+            identifier,
+            password,
+            account_type=selected_account_type or None,
+        )
+        user = valid_accounts[0] if len(valid_accounts) == 1 else None
         if user is not None:
             if not subscription_is_active(user):
                 request.session["pending_payment_user_id"] = user.id
@@ -2443,16 +2506,28 @@ def login_view(request):
             request.session.pop("pending_payment_user_id", None)
             return redirect(_post_login_redirect_name(user))
 
+        if len(valid_accounts) > 1 and not selected_account_type:
+            login_context["account_type_options"] = _login_account_type_options(valid_accounts)
+            messages.error(request, "We found more than one account on these credentials. Choose the portal you want to enter.")
+            return render(request, "auth/login.html", login_context)
+
         pending_user = User.objects.filter(
             Q(email__iexact=identifier) | Q(username__iexact=identifier),
             is_active=False,
-        ).first()
+        )
+        if selected_account_type:
+            pending_user = pending_user.filter(account_type=selected_account_type)
+        pending_user = pending_user.first()
         if pending_user:
             messages.error(request, "Your account setup is not complete yet. Finish signup and verify your email.")
         else:
             messages.error(request, "Invalid email/username or password")
 
-    return render(request, "auth/login.html")
+        matching_accounts = _accounts_for_identifier(identifier)
+        if len(matching_accounts) > 1 and not login_context["account_type_options"]:
+            login_context["account_type_options"] = _login_account_type_options(matching_accounts)
+
+    return render(request, "auth/login.html", login_context)
 
 
 def logout_view(request):
