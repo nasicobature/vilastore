@@ -27,7 +27,12 @@ from .models import (
     DeliveryRider,
     DeliveryRequest,
     DeliveryCompany,
+    HouseInquiry,
+    HouseInquiryMessage,
+    HouseListing,
     Product,
+    RentalPayment,
+    RentalRecord,
     Sale,
     SaleItem,
     ShopBoy,
@@ -50,6 +55,7 @@ from .views import (
     _is_vat_registered,
     _vat_registration_note,
     _generate_product_code,
+    _marketplace_house_queryset,
     VAT_RATE,
     _send_marketplace_reset_code,
     _send_marketplace_verification_code,
@@ -321,6 +327,8 @@ def _serialize_owner(owner):
         "username": owner.username,
         "email": owner.email,
         "business_name": owner.business_name,
+        "account_type": owner.account_type,
+        "account_type_label": owner.get_account_type_display(),
         "phone": owner.phone,
         "is_paid": owner.is_paid,
         "subscription_active_until": (
@@ -603,6 +611,53 @@ def _serialize_shop_profile(request, profile):
     }
 
 
+def _serialize_house_image(request, image):
+    return {
+        "id": image.id,
+        "image_url": _abs_media_url(request, image.image),
+        "caption": image.caption or "",
+        "is_primary": image.is_primary,
+    }
+
+
+def _serialize_house_listing(request, house, include_images=False):
+    data = {
+        "id": house.id,
+        "title": house.title,
+        "description": house.description or "",
+        "listing_mode": house.listing_mode,
+        "listing_mode_label": house.get_listing_mode_display(),
+        "property_type": house.property_type,
+        "property_type_label": house.get_property_type_display(),
+        "price": _money(house.price),
+        "rooms_count": house.rooms_count,
+        "spaces_available": house.spaces_available,
+        "availability_status": house.availability_status,
+        "availability_status_label": house.get_availability_status_display(),
+        "is_available": house.is_available,
+        "owner_name": house.display_owner_name,
+        "owner_phone": house.display_owner_phone or "",
+        "primary_image_url": _abs_media_url(request, house.primary_image.image) if house.primary_image else "",
+    }
+    if include_images:
+        data["images"] = [_serialize_house_image(request, image) for image in house.images.all()]
+    return data
+
+
+def _serialize_owner_house_inquiry(request, inquiry):
+    status_labels = dict(HouseInquiry.STATUS_CHOICES)
+    return {
+        "public_id": str(inquiry.public_id),
+        "status": inquiry.status,
+        "status_label": status_labels.get(inquiry.status, inquiry.status),
+        "buyer_name": inquiry.buyer_name,
+        "buyer_contact": inquiry.buyer_contact,
+        "created_at": inquiry.created_at.isoformat(),
+        "updated_at": inquiry.updated_at.isoformat(),
+        "house": _serialize_house_listing(request, inquiry.house),
+    }
+
+
 def _serialize_order_item(item):
     return {
         "product_id": item.product_id,
@@ -618,6 +673,29 @@ def _serialize_message(message):
         "sender_type": message.sender_type,
         "message": message.message,
         "created_at": message.created_at.isoformat(),
+    }
+
+
+def _serialize_house_inquiry_message(message):
+    return {
+        "sender_type": message.sender_type,
+        "message": message.message,
+        "created_at": message.created_at.isoformat(),
+    }
+
+
+def _serialize_house_inquiry(request, inquiry, include_access_token=False):
+    status_labels = dict(HouseInquiry.STATUS_CHOICES)
+    return {
+        "public_id": str(inquiry.public_id),
+        "access_token": str(inquiry.access_token) if include_access_token else "",
+        "status": inquiry.status,
+        "status_label": status_labels.get(inquiry.status, inquiry.status),
+        "buyer_name": inquiry.buyer_name,
+        "buyer_contact": inquiry.buyer_contact,
+        "created_at": inquiry.created_at.isoformat(),
+        "updated_at": inquiry.updated_at.isoformat(),
+        "house": _serialize_house_listing(request, inquiry.house),
     }
 
 
@@ -1039,6 +1117,107 @@ def api_marketplace_shops(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def api_marketplace_houses(request):
+    q = (request.GET.get("q") or "").strip()
+    username_q = q[1:] if q.startswith("@") else q
+    location = (request.GET.get("location") or "").strip()
+    property_type = (request.GET.get("property_type") or "").strip()
+    listing_mode = (request.GET.get("listing_mode") or "").strip()
+    rooms_min = (request.GET.get("rooms_min") or "").strip()
+    min_price = (request.GET.get("min_price") or "").strip()
+    max_price = (request.GET.get("max_price") or "").strip()
+    available_only = request.GET.get("available") == "1"
+    verified = request.GET.get("verified") == "1"
+    sort = request.GET.get("sort") or "rating"
+
+    houses = _marketplace_house_queryset()
+    if q:
+        houses = houses.filter(
+            Q(title__icontains=q)
+            | Q(description__icontains=q)
+            | Q(owner__business_name__icontains=q)
+            | Q(owner__username__icontains=username_q)
+            | Q(listing_agent__full_name__icontains=q)
+            | Q(listing_agent__username__icontains=username_q)
+        )
+    if location:
+        houses = houses.filter(location__icontains=location)
+    if property_type:
+        houses = houses.filter(property_type=property_type)
+    if listing_mode:
+        houses = houses.filter(listing_mode=listing_mode)
+    if available_only:
+        houses = houses.filter(
+            availability_status__in=[HouseListing.STATUS_AVAILABLE, HouseListing.STATUS_PARTIAL]
+        )
+    if verified:
+        houses = houses.filter(
+            Q(owner__marketplace_profile__is_verified=True)
+            | Q(owner__isnull=True, listing_agent__is_email_verified=True)
+        )
+    if rooms_min:
+        try:
+            houses = houses.filter(rooms_count__gte=int(rooms_min))
+        except Exception:
+            rooms_min = ""
+    if min_price:
+        try:
+            houses = houses.filter(price__gte=Decimal(min_price))
+        except Exception:
+            min_price = ""
+    if max_price:
+        try:
+            houses = houses.filter(price__lte=Decimal(max_price))
+        except Exception:
+            max_price = ""
+
+    if sort == "newest":
+        houses = houses.order_by("-created_at")
+    elif sort == "price_low":
+        houses = houses.order_by("price", "-created_at")
+    elif sort == "price_high":
+        houses = houses.order_by("-price", "-created_at")
+    else:
+        houses = houses.order_by("-created_at")
+
+    house_locations = (
+        _marketplace_house_queryset()
+        .exclude(location="")
+        .values_list("location", flat=True)
+        .distinct()
+    )
+
+    return _json_success({
+        "houses": [_serialize_house_listing(request, house) for house in houses],
+        "locations": sorted(house_locations),
+        "house_types": [{"value": key, "label": label} for key, label in HouseListing.PROPERTY_TYPE_CHOICES],
+        "listing_modes": [{"value": key, "label": label} for key, label in HouseListing.LISTING_MODE_CHOICES],
+        "filters": {
+            "q": q,
+            "location": location,
+            "property_type": property_type,
+            "listing_mode": listing_mode,
+            "rooms_min": rooms_min,
+            "min_price": min_price,
+            "max_price": max_price,
+            "available": available_only,
+            "verified": verified,
+            "sort": sort,
+        },
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_marketplace_house_detail(request, house_id):
+    house = get_object_or_404(_marketplace_house_queryset(), id=house_id)
+    return _json_success({
+        "house": _serialize_house_listing(request, house, include_images=True),
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def api_marketplace_shop_detail(request, username):
     shop_owner = get_object_or_404(User, username=username, is_active=True)
     profile, _ = MarketplaceShopProfile.objects.get_or_create(user=shop_owner)
@@ -1167,6 +1346,41 @@ def api_marketplace_orders(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def api_marketplace_house_inquiries(request):
+    buyer, _ = _get_buyer_from_request(request)
+    if not buyer:
+        return _json_error("Unauthorized.", status=401)
+
+    inquiries = (
+        HouseInquiry.objects.filter(buyer=buyer)
+        .select_related("house")
+        .prefetch_related("house__images")
+        .order_by("-updated_at", "-created_at")
+    )
+    return _json_success({
+        "inquiries": [_serialize_house_inquiry(request, inquiry) for inquiry in inquiries],
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_marketplace_house_inquiry_detail(request, public_id):
+    buyer, _ = _get_buyer_from_request(request)
+    inquiry = get_object_or_404(
+        HouseInquiry.objects.select_related("house", "buyer").prefetch_related("house__images", "messages"),
+        public_id=public_id,
+    )
+    if not buyer or inquiry.buyer_id != buyer.id:
+        return _json_error("Access denied.", status=403)
+
+    return _json_success({
+        "inquiry": _serialize_house_inquiry(request, inquiry),
+        "messages": [_serialize_house_inquiry_message(message) for message in inquiry.messages.all()],
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def api_marketplace_order_detail(request, public_id):
     order = get_object_or_404(
         MarketplaceOrder.objects.select_related("shop_owner").prefetch_related("items__product", "messages"),
@@ -1213,6 +1427,80 @@ def api_marketplace_order_message(request, public_id):
 
     return _json_success({
         "message": _serialize_message(msg),
+    }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_marketplace_house_inquiry_create(request, house_id):
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    buyer, _ = _get_buyer_from_request(request)
+    if not buyer:
+        return _json_error("Unauthorized.", status=401)
+
+    house = get_object_or_404(_marketplace_house_queryset(), id=house_id)
+    if not house.owner_id:
+        return _json_error("This house does not have an owner chat account yet.")
+
+    buyer_name = (data.get("buyer_name") or "").strip()
+    buyer_contact = (data.get("buyer_contact") or "").strip()
+    message_text = (data.get("message") or "").strip()
+
+    if not buyer_name or not buyer_contact:
+        return _json_error("Buyer name and contact are required.")
+
+    inquiry = HouseInquiry.objects.create(
+        house=house,
+        buyer=buyer,
+        owner=house.owner,
+        buyer_name=buyer_name,
+        buyer_contact=buyer_contact,
+    )
+    HouseInquiryMessage.objects.create(
+        inquiry=inquiry,
+        sender_type=HouseInquiryMessage.SENDER_SYSTEM,
+        message="Inquiry created. Continue chatting here to discuss the house details.",
+    )
+    if message_text:
+        HouseInquiryMessage.objects.create(
+            inquiry=inquiry,
+            sender_type=HouseInquiryMessage.SENDER_BUYER,
+            message=message_text,
+        )
+
+    return _json_success({
+        "inquiry": _serialize_house_inquiry(request, inquiry, include_access_token=True),
+        "messages": [_serialize_house_inquiry_message(message) for message in inquiry.messages.all()],
+    }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_marketplace_house_inquiry_message(request, public_id):
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    buyer, _ = _get_buyer_from_request(request)
+    inquiry = get_object_or_404(HouseInquiry, public_id=public_id)
+    if not buyer or inquiry.buyer_id != buyer.id:
+        return _json_error("Access denied.", status=403)
+
+    text = (data.get("message") or "").strip()
+    if not text:
+        return _json_error("Message cannot be empty.")
+
+    message = HouseInquiryMessage.objects.create(
+        inquiry=inquiry,
+        sender_type=HouseInquiryMessage.SENDER_BUYER,
+        message=text,
+    )
+    inquiry.save(update_fields=["updated_at"])
+    return _json_success({
+        "message": _serialize_house_inquiry_message(message),
     }, status=201)
 
 
@@ -2182,6 +2470,55 @@ def api_owner_dashboard(request):
         })
     except Exception as exc:
         return _json_error(f"Dashboard failed: {exc}", status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_housing_dashboard(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+    if owner.account_type != User.ACCOUNT_TYPE_HOUSING:
+        return _json_error("This dashboard is only available for housing accounts.", status=403)
+
+    today = timezone.localdate()
+    houses = (
+        HouseListing.objects.filter(owner=owner, is_active=True)
+        .prefetch_related("images")
+        .order_by("-created_at")
+    )
+    inquiries = (
+        HouseInquiry.objects.filter(owner=owner)
+        .select_related("house", "buyer")
+        .prefetch_related("house__images")
+        .order_by("-updated_at", "-created_at")
+    )
+    rentals = RentalRecord.objects.filter(house__owner=owner)
+    payments = RentalPayment.objects.filter(rental__house__owner=owner)
+
+    upcoming_reminders = rentals.filter(
+        status=RentalRecord.STATUS_ACTIVE,
+        end_date__gte=today,
+        end_date__lte=today + timedelta(days=60),
+    )
+    due_payments = payments.filter(
+        Q(status__in=[RentalPayment.STATUS_PENDING, RentalPayment.STATUS_PARTIAL, RentalPayment.STATUS_OVERDUE])
+        | Q(due_date__lt=today)
+    )
+
+    return _json_success({
+        "profile": _serialize_owner(owner),
+        "stats": {
+            "houses": houses.count(),
+            "available_houses": houses.filter(availability_status=HouseListing.STATUS_AVAILABLE).count(),
+            "occupied_houses": houses.filter(availability_status=HouseListing.STATUS_OCCUPIED).count(),
+            "open_inquiries": inquiries.filter(status=HouseInquiry.STATUS_OPEN).count(),
+            "expiring_rentals": upcoming_reminders.count(),
+            "due_payments": due_payments.count(),
+        },
+        "houses": [_serialize_house_listing(request, house) for house in houses[:8]],
+        "inquiries": [_serialize_owner_house_inquiry(request, inquiry) for inquiry in inquiries[:8]],
+    })
 
 
 @csrf_exempt
