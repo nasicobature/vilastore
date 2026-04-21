@@ -2130,14 +2130,12 @@ def api_mobile_auth_login(request):
         if not owner:
             return _json_error("Invalid email/username or password.", status=401)
 
-        if not subscription_is_active(owner):
-            return _json_error("Subscription payment required.", status=402, code="subscription_required")
-
         token_obj = _issue_auth_token(AuthToken.ROLE_OWNER, owner=owner)
         return _json_success({
             "token": token_obj.token,
             "role": token_obj.role,
             "profile": _serialize_owner(owner),
+            "subscription_required": not subscription_is_active(owner),
             "expires_at": token_obj.expires_at.isoformat() if token_obj.expires_at else None,
         })
 
