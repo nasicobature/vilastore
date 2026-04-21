@@ -19,7 +19,7 @@
           <span>VilaStore</span>
         </a>
         <div class="marketplace-actions">
-          <a href="{% url 'marketplace_account' %}" class="btn btn-ghost">My Orders</a>
+          <a href="{% url 'marketplace_account' %}" class="btn btn-ghost">My Activity</a>
           <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
         </div>
       </div>
@@ -29,22 +29,26 @@
 
   <div
     id="buyerDeliveryApp"
-    class="marketplace-container"
+    class="marketplace-container marketplace-portal-shell"
     data-token="{{ buyer_api_token }}"
     data-request-detail-base="/api/marketplace/delivery/requests/"
   >
-    <aside class="marketplace-sidebar">
-      <div class="filter-section">
-        <h4>Buyer Account</h4>
-        <p style="margin:0 0 0.35rem;font-weight:600;">{{ buyer.email }}</p>
-        <p style="margin:0;color:var(--muted-foreground);">The web home tab now includes the same delivery workflow the mobile app exposes.</p>
+    <aside class="marketplace-sidebar marketplace-portal-sidebar">
+      <div class="marketplace-sidebar-panel">
+        <span class="badge badge-primary">Customer Workspace</span>
+        <h3>{{ buyer.email }}</h3>
+        <p>Shop, chat with sellers, and plan delivery from one cleaner home screen.</p>
       </div>
-      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
-      <div class="filter-section">
+
+      <div class="marketplace-sidebar-panel">
         <h4>Quick Access</h4>
         <div class="filter-list">
           <a href="{% url 'marketplace' %}" class="filter-btn">
-            <span>Browse Shops</span>
+            <span>Browse Marketplace</span>
+            <i data-lucide="arrow-right"></i>
+          </a>
+          <a href="{% url 'marketplace_account' %}" class="filter-btn">
+            <span>Orders and Chats</span>
             <i data-lucide="arrow-right"></i>
           </a>
           <a href="{% url 'marketplace_rider_portal' %}" class="filter-btn">
@@ -52,44 +56,69 @@
             <i data-lucide="arrow-right"></i>
           </a>
           <button type="button" class="filter-btn" data-action="refresh-delivery-home">
-            <span>Refresh Delivery Data</span>
+            <span>Refresh Delivery</span>
             <i data-lucide="refresh-cw"></i>
           </button>
         </div>
       </div>
-    </aside>
 
-    <main class="marketplace-main">
-      <div class="marketplace-results-header">
-        <div>
-          <h2>Customer Portal</h2>
-          <p style="color:var(--muted-foreground);margin-top:0.35rem;">Browse shops, plan delivery with a live route preview, and keep orders plus rider activity in one calmer workspace.</p>
+      <div class="marketplace-sidebar-panel">
+        <h4>Live Snapshot</h4>
+        <div class="marketplace-mini-metrics">
+          <div class="marketplace-mini-metric">
+            <span>Orders</span>
+            <strong>{{ stats.orders_count }}</strong>
+          </div>
+          <div class="marketplace-mini-metric">
+            <span>House Chats</span>
+            <strong>{{ stats.house_inquiries }}</strong>
+          </div>
+          <div class="marketplace-mini-metric">
+            <span>Active Deliveries</span>
+            <strong>{{ stats.active_deliveries }}</strong>
+          </div>
         </div>
       </div>
+    </aside>
 
-      <section class="card delivery-welcome-card">
+    <main class="marketplace-main marketplace-portal-main">
+      <section class="marketplace-hero-panel">
         <div>
-          <span class="badge badge-primary">Simpler Booking Flow</span>
-          <h3>Plan the trip before you request a rider.</h3>
-          <p>Start with pickup, confirm the destination, preview the trip on the map, then send the request when the estimate looks right.</p>
+          <span class="badge badge-primary">Simple Marketplace</span>
+          <h1>Everything a customer needs in one clear place.</h1>
+          <p>Browse shops and houses, track chats, and request delivery with a live map that shows your trip before you book it.</p>
         </div>
-        <div class="delivery-welcome-steps">
-          <div class="delivery-welcome-step">
-            <strong>1</strong>
-            <span>Choose pickup</span>
-          </div>
-          <div class="delivery-welcome-step">
-            <strong>2</strong>
-            <span>Preview route</span>
-          </div>
-          <div class="delivery-welcome-step">
-            <strong>3</strong>
-            <span>Request rider</span>
-          </div>
+        <div class="marketplace-hero-actions">
+          <a href="{% url 'marketplace' %}" class="btn btn-primary"><i data-lucide="store"></i> Explore Marketplace</a>
+          <a href="{% url 'marketplace_account' %}" class="btn btn-outline"><i data-lucide="receipt-text"></i> View Activity</a>
         </div>
       </section>
 
-      <div class="stats-grid" style="margin-bottom:1.5rem;">
+      <section class="marketplace-quick-grid">
+        <article class="marketplace-quick-card">
+          <div class="marketplace-quick-icon"><i data-lucide="shopping-bag"></i></div>
+          <div>
+            <h3>Browse</h3>
+            <p>Find shops, products, and houses without switching screens.</p>
+          </div>
+        </article>
+        <article class="marketplace-quick-card">
+          <div class="marketplace-quick-icon"><i data-lucide="map"></i></div>
+          <div>
+            <h3>Plan Delivery</h3>
+            <p>Preview the route, estimate the fare, and see nearby riders.</p>
+          </div>
+        </article>
+        <article class="marketplace-quick-card">
+          <div class="marketplace-quick-icon"><i data-lucide="messages-square"></i></div>
+          <div>
+            <h3>Keep Conversations</h3>
+            <p>Your orders and house chats stay easy to return to.</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="stats-grid marketplace-stats-grid">
         <div class="stat-card card">
           <div class="stat-card-header"><span class="stat-card-title">Orders</span></div>
           <div class="stat-card-value">{{ stats.orders_count }}</div>
@@ -106,95 +135,16 @@
           <div class="stat-card-header"><span class="stat-card-title">Completed Deliveries</span></div>
           <div class="stat-card-value">{{ stats.completed_deliveries }}</div>
         </div>
-      </div>
+      </section>
 
-      <div class="delivery-grid">
-        <section class="card delivery-card">
-          <div class="delivery-card-header">
-            <div>
-              <h3>Recent House Chats</h3>
-              <p>Continue any conversation you started with a house owner from here.</p>
-            </div>
-          </div>
-          <div class="shop-list shop-list--single">
-            {% for inquiry in recent_house_inquiries %}
-            <div class="card" style="padding:1rem;">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
-                <div>
-                  <strong>{{ inquiry.house.title }}</strong>
-                  <p style="margin:0.25rem 0;color:var(--muted-foreground);">{{ inquiry.house.location }}</p>
-                  <p style="margin:0;color:var(--muted-foreground);">Status: {{ inquiry.get_status_display }}</p>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-weight:600;">&#8358;{{ inquiry.house.price|floatformat:2 }}</div>
-                  <a href="{% url 'marketplace_house_inquiry_chat' inquiry.public_id %}" class="btn btn-outline btn-sm" style="margin-top:0.5rem;">Open Chat</a>
-                </div>
-              </div>
-            </div>
-            {% empty %}
-            <div class="card" style="padding:2rem;text-align:center;">
-              <i data-lucide="messages-square" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
-              <p style="color:var(--muted-foreground);">No house chats yet. Browse houses and message an owner when you find one you like.</p>
-            </div>
-            {% endfor %}
-          </div>
-        </section>
-
-        <section class="card delivery-card">
+      <section class="marketplace-section-grid">
+        <section class="card delivery-card marketplace-delivery-booking">
           <div class="delivery-card-header">
             <div>
               <h3>Book Delivery</h3>
-              <p>Use your current location or type both addresses manually. The route preview updates as you fill in the trip.</p>
+              <p>Fill the trip once, check the map, then request a rider with more confidence.</p>
             </div>
             <span id="deliveryLocationStatus" class="delivery-status-pill">Fetching browser location...</span>
-          </div>
-
-          <div class="delivery-route-shell">
-            <div class="delivery-map-card">
-              <div class="delivery-map-card-header">
-                <div>
-                  <h4>Route Preview</h4>
-                  <p id="deliveryRouteSummary">Add a pickup and destination to preview the trip.</p>
-                </div>
-                <a id="deliveryMapLink" class="btn btn-ghost btn-sm" href="https://maps.google.com" target="_blank" rel="noopener noreferrer">
-                  <i data-lucide="navigation"></i>
-                  Open map
-                </a>
-              </div>
-              <div class="delivery-map-frame-wrap">
-                <iframe
-                  id="deliveryMapFrame"
-                  class="delivery-map-frame"
-                  title="Delivery route preview"
-                  loading="lazy"
-                  referrerpolicy="no-referrer-when-downgrade"
-                  src="https://maps.google.com/maps?q=Nigeria&z=6&output=embed"
-                ></iframe>
-                <div id="deliveryMapPlaceholder" class="delivery-map-placeholder">
-                  <i data-lucide="map"></i>
-                  <strong>Your route will appear here.</strong>
-                  <span>Use current location or enter both addresses to preview the trip.</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="delivery-route-insights">
-              <div class="delivery-insight-card">
-                <span class="delivery-insight-label">Pickup status</span>
-                <strong id="deliveryPickupHint">Waiting for pickup details.</strong>
-                <p>Turn on location for faster rider matching, or type the collection point manually.</p>
-              </div>
-              <div class="delivery-insight-card">
-                <span class="delivery-insight-label">Destination status</span>
-                <strong id="deliveryDropoffHint">Waiting for destination details.</strong>
-                <p>Enter the dropoff address so the route and estimate can update.</p>
-              </div>
-              <div class="delivery-insight-card delivery-insight-card-accent">
-                <span class="delivery-insight-label">Booking tip</span>
-                <strong>Clear addresses usually get faster rider matches.</strong>
-                <p>Add a landmark, estate, junction, or shop name in the notes when the place is hard to find.</p>
-              </div>
-            </div>
           </div>
 
           <div class="delivery-form-grid">
@@ -248,7 +198,7 @@
           <div class="delivery-estimate-grid">
             <div class="delivery-estimate-card">
               <span>Estimated fare</span>
-              <strong id="deliveryPrice">₦0.00</strong>
+              <strong id="deliveryPrice">NGN 0.00</strong>
             </div>
             <div class="delivery-estimate-card">
               <span>Route distance</span>
@@ -263,23 +213,71 @@
           <div id="deliveryPricingBreakdown" class="delivery-breakdown"></div>
         </section>
 
-        <section class="card delivery-card">
+        <section class="card delivery-card marketplace-map-panel">
           <div class="delivery-card-header">
             <div>
+              <h3>Live Map and Nearby Riders</h3>
+              <p>Watch the route preview, then see the riders closest to your pickup area.</p>
+            </div>
+            <a id="deliveryMapLink" class="btn btn-ghost btn-sm" href="https://maps.google.com" target="_blank" rel="noopener noreferrer">
+              <i data-lucide="navigation"></i>
+              Open map
+            </a>
+          </div>
+
+          <div class="delivery-map-card">
+            <div class="delivery-map-card-header">
+              <div>
+                <h4>Route Preview</h4>
+                <p id="deliveryRouteSummary">Add a pickup and destination to preview the trip.</p>
+              </div>
+            </div>
+            <div class="delivery-map-frame-wrap">
+              <iframe
+                id="deliveryMapFrame"
+                class="delivery-map-frame"
+                title="Delivery route preview"
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+                src="https://maps.google.com/maps?q=Nigeria&z=6&output=embed"
+              ></iframe>
+              <div id="deliveryMapPlaceholder" class="delivery-map-placeholder">
+                <i data-lucide="map"></i>
+                <strong>Your route will appear here.</strong>
+                <span>Use current location or enter both addresses to preview the trip.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="delivery-route-insights marketplace-map-insights">
+            <div class="delivery-insight-card">
+              <span class="delivery-insight-label">Pickup status</span>
+              <strong id="deliveryPickupHint">Waiting for pickup details.</strong>
+              <p>Turn on location for faster rider matching, or type the collection point manually.</p>
+            </div>
+            <div class="delivery-insight-card">
+              <span class="delivery-insight-label">Destination status</span>
+              <strong id="deliveryDropoffHint">Waiting for destination details.</strong>
+              <p>Enter the dropoff address so the route and estimate can update.</p>
+            </div>
+          </div>
+
+          <div class="delivery-card-header" style="margin-top:1rem;">
+            <div>
               <h3>Nearby Riders</h3>
-              <p>The list refreshes from the same marketplace delivery APIs used by the mobile app.</p>
+              <p>Matched from the same marketplace delivery APIs used by mobile.</p>
             </div>
           </div>
           <div id="deliveryRidersList" class="delivery-list"></div>
         </section>
-      </div>
+      </section>
 
-      <div class="delivery-grid">
+      <section class="marketplace-section-grid marketplace-secondary-grid">
         <section class="card delivery-card">
           <div class="delivery-card-header">
             <div>
               <h3>Active Delivery</h3>
-              <p>Track the latest request and assigned rider details from web.</p>
+              <p>Track the latest delivery request and assigned rider details.</p>
             </div>
           </div>
           <div id="activeDeliveryCard" class="delivery-empty">
@@ -297,7 +295,7 @@
           <div class="delivery-card-header">
             <div>
               <h3>Recent Orders</h3>
-              <p>Marketplace order history stays visible alongside delivery activity.</p>
+              <p>Recent marketplace purchases stay easy to reopen from here.</p>
             </div>
           </div>
           <div class="shop-list shop-list--single">
@@ -323,7 +321,37 @@
             {% endfor %}
           </div>
         </section>
-      </div>
+      </section>
+
+      <section class="card delivery-card">
+        <div class="delivery-card-header">
+          <div>
+            <h3>Recent House Chats</h3>
+            <p>Continue any conversation you started with a house owner.</p>
+          </div>
+        </div>
+        <div class="shop-list shop-list--single">
+          {% for inquiry in recent_house_inquiries %}
+          <div class="card" style="padding:1rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+              <div>
+                <strong>{{ inquiry.house.title }}</strong>
+                <p style="margin:0.25rem 0;color:var(--muted-foreground);">Status: {{ inquiry.get_status_display }}</p>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-weight:600;">&#8358;{{ inquiry.house.price|floatformat:2 }}</div>
+                <a href="{% url 'marketplace_house_inquiry_chat' inquiry.public_id %}" class="btn btn-outline btn-sm" style="margin-top:0.5rem;">Open Chat</a>
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <div class="card" style="padding:2rem;text-align:center;">
+            <i data-lucide="messages-square" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
+            <p style="color:var(--muted-foreground);">No house chats yet. Browse houses and message an owner when you find one you like.</p>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
     </main>
   </div>
 

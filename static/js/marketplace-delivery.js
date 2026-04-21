@@ -505,6 +505,8 @@ function initRiderWorkspaceApp(app) {
   const state = {
     requests: [],
     companyRiders: [],
+    liveCoords: null,
+    selectedRequestId: "",
   };
 
   const els = {
@@ -518,6 +520,11 @@ function initRiderWorkspaceApp(app) {
     riderRefreshRequestsButton: document.getElementById("riderRefreshRequestsButton"),
     companySaveButton: document.getElementById("companySaveButton"),
     companyAddRiderButton: document.getElementById("companyAddRiderButton"),
+    mapFrame: document.getElementById("riderMapFrame"),
+    mapLink: document.getElementById("riderMapLink"),
+    mapSummary: document.getElementById("riderMapSummary"),
+    mapPlaceholder: document.getElementById("riderMapPlaceholder"),
+    mapHint: document.getElementById("riderMapHint"),
   };
 
   function switchTab(tabId) {
@@ -528,14 +535,70 @@ function initRiderWorkspaceApp(app) {
     els.companyPanel.classList.toggle("is-hidden", tabId !== "company");
   }
 
+  function getSelectedRequest() {
+    return state.requests.find((request) => request.public_id === state.selectedRequestId) || null;
+  }
+
+  function buildRiderMapState() {
+    const selectedRequest = getSelectedRequest();
+    if (selectedRequest) {
+      return {
+        embed: `https://maps.google.com/maps?saddr=${encodeURIComponent(selectedRequest.pickup_address)}&daddr=${encodeURIComponent(selectedRequest.dropoff_address)}&output=embed`,
+        link: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(selectedRequest.pickup_address)}&destination=${encodeURIComponent(selectedRequest.dropoff_address)}&travelmode=driving`,
+        summary: `Previewing route from ${selectedRequest.pickup_address} to ${selectedRequest.dropoff_address}.`,
+        hint: `Selected request is ${selectedRequest.status_label}.`,
+      };
+    }
+
+    if (state.liveCoords) {
+      return {
+        embed: `https://maps.google.com/maps?q=${state.liveCoords.latitude},${state.liveCoords.longitude}&z=15&output=embed`,
+        link: `https://www.google.com/maps?q=${state.liveCoords.latitude},${state.liveCoords.longitude}`,
+        summary: "Previewing your current rider area.",
+        hint: "Live rider location is active.",
+      };
+    }
+
+    return {
+      embed: "https://maps.google.com/maps?q=Nigeria&z=6&output=embed",
+      link: "https://maps.google.com",
+      summary: "Your live rider area will appear here, then you can click a request to inspect its route.",
+      hint: "Waiting for live rider location.",
+    };
+  }
+
+  function updateRiderMap() {
+    const mapState = buildRiderMapState();
+    if (els.mapFrame) {
+      els.mapFrame.src = mapState.embed;
+    }
+    if (els.mapLink) {
+      els.mapLink.href = mapState.link;
+    }
+    if (els.mapSummary) {
+      els.mapSummary.textContent = mapState.summary;
+    }
+    if (els.mapHint) {
+      els.mapHint.textContent = mapState.hint;
+    }
+    if (els.mapPlaceholder) {
+      els.mapPlaceholder.classList.toggle("is-hidden", Boolean(state.liveCoords || getSelectedRequest()));
+    }
+  }
+
   function renderRequests() {
     if (!state.requests.length) {
       els.requestsList.innerHTML = '<div class="delivery-empty"><p>No rider requests available yet.</p></div>';
+      state.selectedRequestId = "";
+      updateRiderMap();
       return;
+    }
+    if (!getSelectedRequest()) {
+      state.selectedRequestId = state.requests[0].public_id;
     }
     els.requestsList.innerHTML = state.requests
       .map((request) => `
-        <article class="delivery-list-item">
+        <article class="delivery-list-item rider-request-card ${state.selectedRequestId === request.public_id ? "is-selected" : ""}" data-request-focus="${request.public_id}">
           <div>
             <strong>${request.pickup_address}</strong>
             <p>To ${request.dropoff_address}</p>
@@ -554,6 +617,16 @@ function initRiderWorkspaceApp(app) {
       `)
       .join("");
 
+    els.requestsList.querySelectorAll("[data-request-focus]").forEach((row) => {
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("button")) {
+          return;
+        }
+        state.selectedRequestId = row.dataset.requestFocus;
+        renderRequests();
+      });
+    });
+
     els.requestsList.querySelectorAll("[data-request-status]").forEach((button) => {
       button.addEventListener("click", async () => {
         try {
@@ -568,6 +641,8 @@ function initRiderWorkspaceApp(app) {
         }
       });
     });
+
+    updateRiderMap();
   }
 
   function renderStatusButton(request, status, label) {
@@ -739,6 +814,10 @@ function initRiderWorkspaceApp(app) {
     navigator.geolocation.watchPosition(
       async (position) => {
         els.locationStatus.textContent = "Location updating";
+        state.liveCoords = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
         try {
           await marketplaceApiRequest("/api/marketplace/delivery/rider/location/", {
             method: "POST",
@@ -750,12 +829,14 @@ function initRiderWorkspaceApp(app) {
             },
           });
           els.locationStatus.textContent = "Live rider location active";
+          updateRiderMap();
         } catch (error) {
           els.locationStatus.textContent = error.message;
         }
       },
       () => {
         els.locationStatus.textContent = "Location permission denied";
+        updateRiderMap();
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
     );
@@ -787,6 +868,7 @@ function initRiderWorkspaceApp(app) {
   });
 
   initLocationUpdates();
+  updateRiderMap();
   loadRequests().catch((error) => {
     els.requestsList.innerHTML = `<div class="delivery-empty"><p>${error.message}</p></div>`;
   });
