@@ -14,27 +14,24 @@
   <div class="app-container">
     <aside class="sidebar">
       <div class="sidebar-logo">
-        <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
-        <h1>VilaStore</h1>
+        <div class="sidebar-logo-icon"><i data-lucide="house"></i></div>
+        <h1>Housing Portal</h1>
       </div>
       <nav class="sidebar-nav">
-        <a href="{% url 'index' %}" class="nav-link"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
-        <a href="{% url 'product' %}" class="nav-link"><i data-lucide="package"></i><span>Products</span></a>
-        <a href="{% url 'inventory' %}" class="nav-link"><i data-lucide="boxes"></i><span>Inventory</span></a>
-        <a href="{% url 'sales-history' %}" class="nav-link"><i data-lucide="receipt"></i><span>Sales History</span></a>
-        <a href="{% url 'loans' %}" class="nav-link"><i data-lucide="credit-card"></i><span>Loans</span></a>
-        <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
-        <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
-        <a href="{% url 'customer' %}" class="nav-link"><i data-lucide="users"></i><span>Customers</span></a>
-        <a href="{% url 'housing_management' %}" class="nav-link active"><i data-lucide="house"></i><span>Housing</span></a>
-        <a href="{% url 'settings' %}" class="nav-link"><i data-lucide="settings"></i><span>Settings</span></a>
+        <a href="#overview" class="nav-link active"><i data-lucide="layout-dashboard"></i><span>Overview</span></a>
+        <a href="#add-listing" class="nav-link"><i data-lucide="building-2"></i><span>Add Listing</span></a>
+        <a href="#rentals" class="nav-link"><i data-lucide="file-plus-2"></i><span>Rentals</span></a>
+        <a href="#payments" class="nav-link"><i data-lucide="wallet-cards"></i><span>Payments</span></a>
+        <a href="#listings" class="nav-link"><i data-lucide="house-plus"></i><span>Listings</span></a>
+        <a href="#reminders" class="nav-link"><i data-lucide="bell-ring"></i><span>Reminders</span></a>
+        <a href="{% url 'logout' %}" class="nav-link"><i data-lucide="log-out"></i><span>Logout</span></a>
       </nav>
     </aside>
 
     <main class="main-content">
-      <header class="page-header">
+      <header class="page-header" id="overview">
         <h1>Housing Management</h1>
-        <p>Manage rental listings, tenants, reminders, and payment records from one place.</p>
+        <p>Manage your house listings, tenants, reminders, and rent payments from one dedicated portal.</p>
       </header>
 
       {% if messages %}
@@ -76,7 +73,7 @@
         </div>
       </section>
 
-      <section class="housing-grid" style="margin-top:1.5rem;">
+      <section class="housing-grid" style="margin-top:1.5rem;" id="add-listing">
         <section class="card">
           <div class="card-header"><h3>Add House Listing</h3></div>
           <form method="POST" action="{% url 'add_house_listing' %}" enctype="multipart/form-data" class="stack-form" style="margin-top:1rem;">
@@ -150,15 +147,11 @@
               <label>House Pictures</label>
               <input type="file" name="images" class="input" accept="image/*" multiple>
             </div>
-            <label class="checkbox-label">
-              <input type="checkbox" name="listed_in_marketplace" checked>
-              <span>Show this house in the marketplace</span>
-            </label>
             <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Save House</button>
           </form>
         </section>
 
-        <section class="card">
+        <section class="card" id="rentals">
           <div class="card-header"><h3>Add Rental Record</h3></div>
           <form method="POST" action="{% url 'add_rental_record' %}" class="stack-form" style="margin-top:1rem;">
             {% csrf_token %}
@@ -240,7 +233,7 @@
           </form>
         </section>
 
-        <section class="card">
+        <section class="card" id="payments">
           <div class="card-header"><h3>Add Payment Record</h3></div>
           <form method="POST" action="{% url 'add_rental_payment' %}" class="stack-form" style="margin-top:1rem;">
             {% csrf_token %}
@@ -286,7 +279,7 @@
         </section>
       </section>
 
-      <section class="card" style="margin-top:1.5rem;">
+      <section class="card" style="margin-top:1.5rem;" id="listings">
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
           <h3>Your House Listings</h3>
           <form method="GET" class="housing-filter-bar">
@@ -341,10 +334,6 @@
                   {% endfor %}
                 </select>
                 <label class="checkbox-label">
-                  <input type="checkbox" name="listed_in_marketplace" {% if house.listed_in_marketplace %}checked{% endif %}>
-                  <span>Marketplace</span>
-                </label>
-                <label class="checkbox-label">
                   <input type="checkbox" name="is_active" {% if house.is_active %}checked{% endif %}>
                   <span>Active</span>
                 </label>
@@ -361,7 +350,7 @@
         </div>
       </section>
 
-      <section class="housing-grid" style="margin-top:1.5rem;">
+      <section class="housing-grid" style="margin-top:1.5rem;" id="reminders">
         <section class="card">
           <div class="card-header"><h3>Rent Expiry Reminders</h3></div>
           <div class="table-container" style="margin-top:1rem;">

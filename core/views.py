@@ -1686,7 +1686,7 @@ def add_house_listing(request):
         spaces_available=spaces_available,
         description=description,
         availability_status=availability_status,
-        listed_in_marketplace=request.POST.get("listed_in_marketplace") == "on",
+        listed_in_marketplace=False,
     )
 
     for index, image in enumerate(request.FILES.getlist("images")):
@@ -1715,9 +1715,8 @@ def update_house_listing(request, house_id):
 
     house.availability_status = availability_status
     house.listing_mode = listing_mode
-    house.listed_in_marketplace = request.POST.get("listed_in_marketplace") == "on"
     house.is_active = request.POST.get("is_active") == "on"
-    house.save(update_fields=["availability_status", "listing_mode", "listed_in_marketplace", "is_active", "updated_at"])
+    house.save(update_fields=["availability_status", "listing_mode", "is_active", "updated_at"])
     messages.success(request, f"{house.title} updated.")
     return redirect("housing_management")
 
