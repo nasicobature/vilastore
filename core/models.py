@@ -915,3 +915,52 @@ class MarketplaceChatMessage(models.Model):
 
     def __str__(self):
         return f"{self.order.public_id} - {self.sender_type}"
+
+
+class HouseInquiry(models.Model):
+    STATUS_OPEN = "open"
+    STATUS_CLOSED = "closed"
+    STATUS_CHOICES = [
+        (STATUS_OPEN, "Open"),
+        (STATUS_CLOSED, "Closed"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    access_token = models.UUIDField(default=uuid.uuid4, editable=False)
+    house = models.ForeignKey(HouseListing, on_delete=models.CASCADE, related_name="inquiries")
+    buyer = models.ForeignKey(MarketplaceBuyer, on_delete=models.SET_NULL, null=True, blank=True, related_name="house_inquiries")
+    owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="house_inquiries")
+    buyer_name = models.CharField(max_length=255)
+    buyer_contact = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-created_at"]
+
+    def __str__(self):
+        return f"House Inquiry {self.public_id}"
+
+
+class HouseInquiryMessage(models.Model):
+    SENDER_BUYER = "buyer"
+    SENDER_SELLER = "seller"
+    SENDER_SYSTEM = "system"
+
+    SENDER_CHOICES = [
+        (SENDER_BUYER, "Buyer"),
+        (SENDER_SELLER, "Seller"),
+        (SENDER_SYSTEM, "System"),
+    ]
+
+    inquiry = models.ForeignKey(HouseInquiry, on_delete=models.CASCADE, related_name="messages")
+    sender_type = models.CharField(max_length=20, choices=SENDER_CHOICES, default=SENDER_BUYER)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.inquiry.public_id} - {self.sender_type}"

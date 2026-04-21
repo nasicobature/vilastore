@@ -30,12 +30,35 @@
   <div class="marketplace-container">
     <main class="marketplace-main" style="grid-column:1/-1;">
       <div class="marketplace-results-header">
-        <h2>My Orders</h2>
+        <h2>My Orders and House Chats</h2>
         <p style="color:var(--muted-foreground);">Signed in as {{ buyer.email }}</p>
       </div>
 
       <div class="card" style="padding:1rem;margin-bottom:1.5rem;">
-        <p style="margin:0;">Your marketplace activity is saved here. Click any order to continue the chat.</p>
+        <p style="margin:0;">Your shop orders and house owner conversations are saved here so you can continue them anytime.</p>
+      </div>
+
+      <div class="shop-list" style="margin-bottom:1.5rem;">
+        {% for inquiry in house_inquiries %}
+        <div class="card" style="padding:1rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+            <div>
+              <strong>{{ inquiry.house.title }}</strong>
+              <p style="margin:0.25rem 0;color:var(--muted-foreground);">{{ inquiry.house.location }}</p>
+              <p style="margin:0;color:var(--muted-foreground);">Status: {{ inquiry.get_status_display }}</p>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:600;">&#8358;{{ inquiry.house.price|floatformat:2 }}</div>
+              <a href="{% url 'marketplace_house_inquiry_chat' inquiry.public_id %}" class="btn btn-outline btn-sm" style="margin-top:0.5rem;">Open Chat</a>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="card" style="padding:2rem;text-align:center;">
+          <i data-lucide="messages-square" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
+          <p style="color:var(--muted-foreground);">No house chats yet. Open a house and message the owner when you are ready.</p>
+        </div>
+        {% endfor %}
       </div>
 
       <div class="shop-list">

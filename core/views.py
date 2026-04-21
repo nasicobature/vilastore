@@ -22,6 +22,8 @@ from .models import (
     MarketplaceOrder,
     MarketplaceOrderItem,
     MarketplaceChatMessage,
+    HouseInquiry,
+    HouseInquiryMessage,
     MarketplaceBuyer,
     MarketplaceBuyerToken,
     DeliveryRequest,
@@ -1577,6 +1579,7 @@ def housing_management(request):
     valid_sections = {
         "overview",
         "add-listing",
+        "inquiries",
         "rentals",
         "payments",
         "listings",
@@ -1587,7 +1590,7 @@ def housing_management(request):
 
     houses = (
         HouseListing.objects.filter(owner=request.user)
-        .prefetch_related("images")
+        .prefetch_related("images", "inquiries")
         .select_related("managed_by_agent")
         .order_by("-created_at")
     )
@@ -1621,10 +1624,17 @@ def housing_management(request):
         Q(status__in=[RentalPayment.STATUS_PENDING, RentalPayment.STATUS_PARTIAL, RentalPayment.STATUS_OVERDUE]) |
         Q(due_date__lt=today)
     )
+    inquiries = (
+        HouseInquiry.objects.filter(owner=request.user)
+        .select_related("house", "buyer")
+        .prefetch_related("messages")
+        .order_by("-updated_at", "-created_at")
+    )
 
     return render(request, "home/housing.html", {
         "active_section": active_section,
         "houses": houses,
+        "inquiries": inquiries[:12],
         "tenants": tenants,
         "rentals": rentals[:12],
         "payments": payments[:12],
@@ -1643,6 +1653,7 @@ def housing_management(request):
             "available_houses": HouseListing.objects.filter(owner=request.user, availability_status=HouseListing.STATUS_AVAILABLE, is_active=True).count(),
             "occupied_houses": HouseListing.objects.filter(owner=request.user, availability_status=HouseListing.STATUS_OCCUPIED, is_active=True).count(),
             "expiring_rentals": upcoming_reminders.count(),
+            "marketplace_inquiries": inquiries.filter(status=HouseInquiry.STATUS_OPEN).count(),
         },
     })
 
@@ -1698,7 +1709,7 @@ def add_house_listing(request):
         spaces_available=spaces_available,
         description=description,
         availability_status=availability_status,
-        listed_in_marketplace=False,
+        listed_in_marketplace=request.POST.get("listed_in_marketplace") == "on",
     )
 
     for index, image in enumerate(request.FILES.getlist("images")):
@@ -1727,8 +1738,9 @@ def update_house_listing(request, house_id):
 
     house.availability_status = availability_status
     house.listing_mode = listing_mode
+    house.listed_in_marketplace = request.POST.get("listed_in_marketplace") == "on"
     house.is_active = request.POST.get("is_active") == "on"
-    house.save(update_fields=["availability_status", "listing_mode", "is_active", "updated_at"])
+    house.save(update_fields=["availability_status", "listing_mode", "listed_in_marketplace", "is_active", "updated_at"])
     messages.success(request, f"{house.title} updated.")
     return redirect("housing_management")
 
@@ -4207,6 +4219,24 @@ def _order_access_context(request, order):
     return is_seller, is_buyer
 
 
+def _house_inquiry_access_context(request, inquiry):
+    is_seller = False
+    if request.user.is_authenticated and inquiry.owner_id and request.user.id == inquiry.owner_id:
+        is_seller = True
+
+    agent = _get_agent_session(request)
+    if agent and inquiry.house_id:
+        if inquiry.house.listing_agent_id == agent.id or inquiry.house.managed_by_agent_id == agent.id:
+            is_seller = True
+
+    buyer = _get_marketplace_buyer(request)
+    is_buyer = bool(buyer and inquiry.buyer_id == buyer.id)
+    access_token = request.GET.get("access") or request.POST.get("access") or ""
+    if not is_buyer:
+        is_buyer = str(inquiry.access_token) == access_token
+    return is_seller, is_buyer
+
+
 # =============================
 # Marketplace Views
 # =============================
@@ -4632,10 +4662,16 @@ def marketplace_account(request):
         .select_related("shop_owner")
         .order_by("-created_at")
     )
+    house_inquiries = (
+        HouseInquiry.objects.filter(buyer=buyer)
+        .select_related("house", "owner")
+        .order_by("-updated_at", "-created_at")
+    )
 
     return render(request, "shopboy/marketplace-account.html", {
         "buyer": buyer,
         "orders": orders,
+        "house_inquiries": house_inquiries,
         "marketplace_portal_role": "rider" if _is_marketplace_rider_account(buyer) else "customer",
         "marketplace_active_tab": "marketplace",
     })
@@ -4660,6 +4696,11 @@ def marketplace_home(request):
         .select_related("shop_owner")
         .order_by("-created_at")
     )
+    house_inquiries = (
+        HouseInquiry.objects.filter(buyer=buyer)
+        .select_related("house", "owner")
+        .order_by("-updated_at", "-created_at")
+    )
     delivery_requests = (
         DeliveryRequest.objects.filter(buyer=buyer)
         .select_related("rider", "rider__buyer")
@@ -4676,9 +4717,11 @@ def marketplace_home(request):
         "buyer_api_token": buyer_token.token,
         "marketplace_portal_role": "customer",
         "recent_orders": orders[:5],
+        "recent_house_inquiries": house_inquiries[:5],
         "active_delivery": active_delivery,
         "stats": {
             "orders_count": orders.count(),
+            "house_inquiries": house_inquiries.count(),
             "active_deliveries": delivery_requests.exclude(
                 status__in=[DeliveryRequest.STATUS_DELIVERED, DeliveryRequest.STATUS_CANCELLED]
             ).count(),
@@ -4731,6 +4774,8 @@ def marketplace(request):
     category = (request.GET.get("category") or "").strip()
     location = (request.GET.get("location") or "").strip()
     property_type = (request.GET.get("property_type") or "").strip()
+    listing_mode = (request.GET.get("listing_mode") or "").strip()
+    rooms_min = (request.GET.get("rooms_min") or "").strip()
     min_price = (request.GET.get("min_price") or "").strip()
     max_price = (request.GET.get("max_price") or "").strip()
     available_only = request.GET.get("available") == "1"
@@ -4800,6 +4845,8 @@ def marketplace(request):
         houses = houses.filter(location__icontains=location)
     if property_type:
         houses = houses.filter(property_type=property_type)
+    if listing_mode:
+        houses = houses.filter(listing_mode=listing_mode)
     if available_only:
         houses = houses.filter(
             availability_status__in=[HouseListing.STATUS_AVAILABLE, HouseListing.STATUS_PARTIAL]
@@ -4811,6 +4858,13 @@ def marketplace(request):
         )
 
     min_price_value = None
+    rooms_min_value = None
+    if rooms_min:
+        try:
+            rooms_min_value = int(rooms_min)
+            houses = houses.filter(rooms_count__gte=rooms_min_value)
+        except Exception:
+            rooms_min = ""
     if min_price:
         try:
             min_price_value = Decimal(min_price)
@@ -4850,6 +4904,7 @@ def marketplace(request):
     )
     all_locations = sorted({*locations, *house_locations})
     house_types = [choice for choice in HouseListing.PROPERTY_TYPE_CHOICES]
+    listing_modes = [choice for choice in HouseListing.LISTING_MODE_CHOICES]
 
     return render(request, "shopboy/marketplace.html", {
         "buyer": buyer,
@@ -4859,11 +4914,14 @@ def marketplace(request):
         "categories": categories,
         "locations": all_locations,
         "house_types": house_types,
+        "listing_modes": listing_modes,
         "filters": {
             "q": q,
             "category": category,
             "location": location,
             "property_type": property_type,
+            "listing_mode": listing_mode,
+            "rooms_min": rooms_min,
             "min_price": min_price,
             "max_price": max_price,
             "available": available_only,
@@ -4893,6 +4951,49 @@ def marketplace_house_detail(request, house_id):
         "active_rental": active_rental,
         "marketplace_active_tab": "marketplace",
     })
+
+
+@require_POST
+def marketplace_create_house_inquiry(request, house_id):
+    house = get_object_or_404(_marketplace_house_queryset(), id=house_id)
+    buyer = _get_marketplace_buyer(request)
+    if not buyer:
+        messages.error(request, "Please sign in to contact the house owner.")
+        return redirect(f"{reverse('marketplace_login')}?next={reverse('marketplace_house_detail', kwargs={'house_id': house.id})}")
+
+    buyer_name = (request.POST.get("buyer_name") or "").strip()
+    buyer_contact = (request.POST.get("buyer_contact") or "").strip()
+    inquiry_message = (request.POST.get("message") or "").strip()
+
+    if not buyer_name or not buyer_contact:
+        messages.error(request, "Your name and contact are required before you can start a chat.")
+        return redirect("marketplace_house_detail", house_id=house.id)
+
+    if not house.owner_id:
+        messages.error(request, "This house does not have an owner chat account yet.")
+        return redirect("marketplace_house_detail", house_id=house.id)
+
+    inquiry = HouseInquiry.objects.create(
+        house=house,
+        buyer=buyer,
+        owner=house.owner,
+        buyer_name=buyer_name,
+        buyer_contact=buyer_contact,
+    )
+    HouseInquiryMessage.objects.create(
+        inquiry=inquiry,
+        sender_type=HouseInquiryMessage.SENDER_SYSTEM,
+        message="Inquiry created. Continue chatting here to discuss the house details.",
+    )
+    if inquiry_message:
+        HouseInquiryMessage.objects.create(
+            inquiry=inquiry,
+            sender_type=HouseInquiryMessage.SENDER_BUYER,
+            message=inquiry_message,
+        )
+
+    url = reverse("marketplace_house_inquiry_chat", kwargs={"public_id": inquiry.public_id})
+    return redirect(f"{url}?access={inquiry.access_token}")
 
 
 def marketplace_shop(request, username):
@@ -5033,6 +5134,56 @@ def marketplace_add_message(request, public_id):
         sender_type=sender_type,
         message=text,
     )
+
+    return JsonResponse({
+        "success": True,
+        "message": {
+            "sender_type": msg.sender_type,
+            "message": msg.message,
+            "created_at": msg.created_at.isoformat(),
+        }
+    })
+
+
+@ensure_csrf_cookie
+def marketplace_house_inquiry_chat(request, public_id):
+    inquiry = get_object_or_404(
+        HouseInquiry.objects.select_related("house", "owner", "buyer", "house__listing_agent", "house__managed_by_agent")
+        .prefetch_related("messages", "house__images"),
+        public_id=public_id,
+    )
+    is_seller, is_buyer = _house_inquiry_access_context(request, inquiry)
+    if not (is_seller or is_buyer):
+        return HttpResponseForbidden("You do not have access to this inquiry.")
+
+    return render(request, "shopboy/house-inquiry-chat.html", {
+        "inquiry": inquiry,
+        "chat_messages": inquiry.messages.all(),
+        "is_seller": is_seller,
+        "access_token": str(inquiry.access_token) if is_buyer else "",
+        "seller_label": inquiry.house.display_owner_name,
+        "seller_phone": inquiry.house.display_owner_phone,
+    })
+
+
+@require_POST
+def marketplace_add_house_inquiry_message(request, public_id):
+    inquiry = get_object_or_404(HouseInquiry.objects.select_related("house"), public_id=public_id)
+    is_seller, is_buyer = _house_inquiry_access_context(request, inquiry)
+    if not (is_seller or is_buyer):
+        return JsonResponse({"success": False, "error": "Access denied"}, status=403)
+
+    text = (request.POST.get("message") or "").strip()
+    if not text:
+        return JsonResponse({"success": False, "error": "Message cannot be empty"}, status=400)
+
+    sender_type = HouseInquiryMessage.SENDER_SELLER if is_seller else HouseInquiryMessage.SENDER_BUYER
+    msg = HouseInquiryMessage.objects.create(
+        inquiry=inquiry,
+        sender_type=sender_type,
+        message=text,
+    )
+    inquiry.save(update_fields=["updated_at"])
 
     return JsonResponse({
         "success": True,

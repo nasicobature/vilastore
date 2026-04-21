@@ -95,6 +95,24 @@
         <p style="margin-top:1rem;color:var(--muted-foreground);">Managed by agent: {{ house.managed_by_agent.full_name }}</p>
         {% endif %}
       </div>
+
+      <div class="card marketplace-shop-card">
+        <h4>Chat About This House</h4>
+        {% if not house.owner %}
+        <p style="margin-top:0.75rem;color:var(--muted-foreground);">Owner chat is not available for this listing yet.</p>
+        {% elif buyer %}
+        <form method="POST" action="{% url 'marketplace_create_house_inquiry' house.id %}" class="stack-form" style="margin-top:1rem;">
+          {% csrf_token %}
+          <input type="text" name="buyer_name" class="input" placeholder="Your full name" required>
+          <input type="text" name="buyer_contact" class="input" placeholder="Phone or WhatsApp number" value="{{ buyer.phone }}" required>
+          <textarea name="message" class="input" rows="4" placeholder="Ask about rent, inspection, availability, payment plan, or any details you need."></textarea>
+          <button type="submit" class="btn btn-primary btn-full"><i data-lucide="messages-square"></i> Start Chat With Owner</button>
+        </form>
+        {% else %}
+        <p style="margin-top:0.75rem;color:var(--muted-foreground);">Sign in to ask about this house, inspection, rent terms, and availability.</p>
+        <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_house_detail' house.id %}" class="btn btn-primary btn-full" style="margin-top:1rem;">Sign In To Chat</a>
+        {% endif %}
+      </div>
     </aside>
 
     <main class="marketplace-main">

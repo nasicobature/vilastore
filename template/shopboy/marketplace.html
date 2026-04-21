@@ -25,6 +25,7 @@
             <input type="hidden" name="category" id="categoryInput" value="{{ filters.category }}">
             <input type="hidden" name="location" id="locationInput" value="{{ filters.location }}">
             <input type="hidden" name="property_type" id="propertyTypeInput" value="{{ filters.property_type }}">
+            <input type="hidden" name="listing_mode" id="listingModeInput" value="{{ filters.listing_mode }}">
           </form>
         </div>
         <div class="marketplace-actions">
@@ -67,6 +68,16 @@
       </div>
       <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
       <div class="filter-section">
+        <h4>Listing Mode</h4>
+        <div class="filter-list">
+          <button class="filter-btn {% if not filters.listing_mode %}active{% endif %}" data-filter="listing_mode" data-value="">All Listings</button>
+          {% for value, label in listing_modes %}
+          <button class="filter-btn {% if filters.listing_mode == value %}active{% endif %}" data-filter="listing_mode" data-value="{{ value }}">{{ label }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <div class="filter-section">
         <h4>Location</h4>
         <div id="locationFilters" class="filter-list">
           <button class="filter-btn {% if not filters.location %}active{% endif %}" data-filter="location" data-value="">All Locations</button>
@@ -79,6 +90,7 @@
       <div class="filter-section">
         <h4>Price Range</h4>
         <div class="stack-form">
+          <input type="number" class="input" form="filterForm" name="rooms_min" placeholder="Minimum rooms" value="{{ filters.rooms_min }}" min="1" step="1">
           <input type="number" class="input" form="filterForm" name="min_price" id="minPriceField" placeholder="Min price" value="{{ filters.min_price }}" min="0" step="0.01">
           <input type="number" class="input" form="filterForm" name="max_price" id="maxPriceField" placeholder="Max price" value="{{ filters.max_price }}" min="0" step="0.01">
         </div>
@@ -88,7 +100,7 @@
         <h4>Filters</h4>
         <label class="checkbox-label">
           <input type="checkbox" name="verified" value="1" form="filterForm" {% if filters.verified %}checked{% endif %}>
-          <span>Verified shops only</span>
+          <span>Verified owners only</span>
         </label>
         <label class="checkbox-label" style="margin-top:0.75rem;">
           <input type="checkbox" name="available" value="1" form="filterForm" {% if filters.available %}checked{% endif %}>
@@ -126,13 +138,13 @@
 
       <div class="marketplace-results-header">
         <h2 id="resultsCount">{{ houses|length }} house{{ houses|length|pluralize }} and {{ profiles|length }} shop{{ profiles|length|pluralize }} found</h2>
-        <button class="btn btn-ghost" id="clearFiltersBtn" style="display:{% if filters.q or filters.category or filters.location or filters.property_type or filters.min_price or filters.max_price or filters.available or filters.verified %}flex{% else %}none{% endif %};" type="button">
+        <button class="btn btn-ghost" id="clearFiltersBtn" style="display:{% if filters.q or filters.category or filters.location or filters.property_type or filters.listing_mode or filters.rooms_min or filters.min_price or filters.max_price or filters.available or filters.verified %}flex{% else %}none{% endif %};" type="button">
           <i data-lucide="x"></i> Clear filters
         </button>
       </div>
       <section style="margin-bottom:1.5rem;">
         <div class="marketplace-results-header">
-          <h2>Rental Houses</h2>
+          <h2>Houses</h2>
         </div>
         <div class="housing-market-grid">
           {% for house in houses %}

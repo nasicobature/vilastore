@@ -95,6 +95,10 @@
           <div class="stat-card-value">{{ stats.orders_count }}</div>
         </div>
         <div class="stat-card card">
+          <div class="stat-card-header"><span class="stat-card-title">House Chats</span></div>
+          <div class="stat-card-value">{{ stats.house_inquiries }}</div>
+        </div>
+        <div class="stat-card card">
           <div class="stat-card-header"><span class="stat-card-title">Active Deliveries</span></div>
           <div class="stat-card-value">{{ stats.active_deliveries }}</div>
         </div>
@@ -105,6 +109,37 @@
       </div>
 
       <div class="delivery-grid">
+        <section class="card delivery-card">
+          <div class="delivery-card-header">
+            <div>
+              <h3>Recent House Chats</h3>
+              <p>Continue any conversation you started with a house owner from here.</p>
+            </div>
+          </div>
+          <div class="shop-list shop-list--single">
+            {% for inquiry in recent_house_inquiries %}
+            <div class="card" style="padding:1rem;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+                <div>
+                  <strong>{{ inquiry.house.title }}</strong>
+                  <p style="margin:0.25rem 0;color:var(--muted-foreground);">{{ inquiry.house.location }}</p>
+                  <p style="margin:0;color:var(--muted-foreground);">Status: {{ inquiry.get_status_display }}</p>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-weight:600;">&#8358;{{ inquiry.house.price|floatformat:2 }}</div>
+                  <a href="{% url 'marketplace_house_inquiry_chat' inquiry.public_id %}" class="btn btn-outline btn-sm" style="margin-top:0.5rem;">Open Chat</a>
+                </div>
+              </div>
+            </div>
+            {% empty %}
+            <div class="card" style="padding:2rem;text-align:center;">
+              <i data-lucide="messages-square" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
+              <p style="color:var(--muted-foreground);">No house chats yet. Browse houses and message an owner when you find one you like.</p>
+            </div>
+            {% endfor %}
+          </div>
+        </section>
+
         <section class="card delivery-card">
           <div class="delivery-card-header">
             <div>

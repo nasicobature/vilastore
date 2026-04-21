@@ -20,6 +20,7 @@
       <nav class="sidebar-nav">
         <a href="{% url 'housing_management' %}?section=overview" class="nav-link {% if active_section == 'overview' %}active{% endif %}"><i data-lucide="layout-dashboard"></i><span>Overview</span></a>
         <a href="{% url 'housing_management' %}?section=add-listing" class="nav-link {% if active_section == 'add-listing' %}active{% endif %}"><i data-lucide="building-2"></i><span>Add Listing</span></a>
+        <a href="{% url 'housing_management' %}?section=inquiries" class="nav-link {% if active_section == 'inquiries' %}active{% endif %}"><i data-lucide="messages-square"></i><span>Inquiries</span></a>
         <a href="{% url 'housing_management' %}?section=rentals" class="nav-link {% if active_section == 'rentals' %}active{% endif %}"><i data-lucide="file-plus-2"></i><span>Rentals</span></a>
         <a href="{% url 'housing_management' %}?section=payments" class="nav-link {% if active_section == 'payments' %}active{% endif %}"><i data-lucide="wallet-cards"></i><span>Payments</span></a>
         <a href="{% url 'housing_management' %}?section=listings" class="nav-link {% if active_section == 'listings' %}active{% endif %}"><i data-lucide="house-plus"></i><span>Listings</span></a>
@@ -35,6 +36,8 @@
         <p>Use the housing workspace to jump into listings, rental records, reminders, and payment tracking.</p>
         {% elif active_section == "add-listing" %}
         <p>Create and organize house listings with all the details needed for your housing operation.</p>
+        {% elif active_section == "inquiries" %}
+        <p>Reply to marketplace buyers, answer inspection questions, and keep house conversations in one place.</p>
         {% elif active_section == "rentals" %}
         <p>Capture tenancy agreements, tenant details, due dates, and current rental status in one section.</p>
         {% elif active_section == "payments" %}
@@ -83,6 +86,13 @@
           </div>
           <div class="stat-card-value">{{ stats.expiring_rentals }}</div>
         </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Open Inquiries</span>
+            <div class="stat-card-icon primary"><i data-lucide="messages-square"></i></div>
+          </div>
+          <div class="stat-card-value">{{ stats.marketplace_inquiries }}</div>
+        </div>
       </section>
 
       {% if active_section == "overview" %}
@@ -95,6 +105,13 @@
                 <div class="housing-listing-top"><h3>Add Listing</h3></div>
                 <p class="shop-card-desc">Create new properties with title, price, rooms, status, agent, and photos.</p>
                 <a href="{% url 'housing_management' %}?section=add-listing" class="btn btn-outline">Open Section</a>
+              </div>
+            </article>
+            <article class="housing-listing-card">
+              <div class="housing-listing-body">
+                <div class="housing-listing-top"><h3>Marketplace Inquiries</h3></div>
+                <p class="shop-card-desc">See which buyers are asking about rent, inspection, location, and payment terms.</p>
+                <a href="{% url 'housing_management' %}?section=inquiries" class="btn btn-outline">Open Section</a>
               </div>
             </article>
             <article class="housing-listing-card">
@@ -205,9 +222,45 @@
               <label>House Pictures</label>
               <input type="file" name="images" class="input" accept="image/*" multiple>
             </div>
+            <label class="checkbox-label">
+              <input type="checkbox" name="listed_in_marketplace" checked>
+              <span>Show this house in the marketplace</span>
+            </label>
             <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Save House</button>
           </form>
         </section>
+      </section>
+      {% endif %}
+
+      {% if active_section == "inquiries" %}
+      <section class="card" style="margin-top:1.5rem;">
+        <div class="card-header"><h3>Marketplace House Inquiries</h3></div>
+        <div class="housing-listings" style="margin-top:1rem;">
+          {% for inquiry in inquiries %}
+          <article class="housing-listing-card">
+            <div class="housing-listing-body">
+              <div class="housing-listing-top">
+                <div>
+                  <h3>{{ inquiry.house.title }}</h3>
+                  <p style="color:var(--muted-foreground);margin:0.35rem 0 0;">{{ inquiry.buyer_name }} · {{ inquiry.buyer_contact }}</p>
+                </div>
+                <span class="badge badge-primary">{{ inquiry.get_status_display }}</span>
+              </div>
+              <p class="shop-card-desc">{{ inquiry.house.location }}</p>
+              <div class="shop-card-meta">
+                <span><i data-lucide="wallet" style="width:14px;height:14px;"></i> {{ inquiry.house.price|floatformat:2 }}</span>
+                <span><i data-lucide="clock-3" style="width:14px;height:14px;"></i> {{ inquiry.updated_at|date:"M d, Y H:i" }}</span>
+              </div>
+              <a href="{% url 'marketplace_house_inquiry_chat' inquiry.public_id %}" class="btn btn-outline btn-sm" style="margin-top:1rem;">Open Chat</a>
+            </div>
+          </article>
+          {% empty %}
+          <div class="empty-state">
+            <i data-lucide="messages-square"></i>
+            <p>No marketplace inquiries yet.</p>
+          </div>
+          {% endfor %}
+        </div>
       </section>
       {% endif %}
 
@@ -442,6 +495,7 @@
                 <span><i data-lucide="bed-double" style="width:14px;height:14px;"></i> {{ house.rooms_count }} room{{ house.rooms_count|pluralize }}</span>
                 <span><i data-lucide="layout-grid" style="width:14px;height:14px;"></i> {{ house.spaces_available }} space{{ house.spaces_available|pluralize }}</span>
                 <span><i data-lucide="image" style="width:14px;height:14px;"></i> {{ house.images.count }} photo{{ house.images.count|pluralize }}</span>
+                <span><i data-lucide="messages-square" style="width:14px;height:14px;"></i> {{ house.inquiries.count }} chat{{ house.inquiries.count|pluralize }}</span>
               </div>
               <form method="POST" action="{% url 'update_house_listing' house.id %}" class="housing-inline-form">
                 {% csrf_token %}
@@ -456,11 +510,18 @@
                   {% endfor %}
                 </select>
                 <label class="checkbox-label">
+                  <input type="checkbox" name="listed_in_marketplace" {% if house.listed_in_marketplace %}checked{% endif %}>
+                  <span>Marketplace</span>
+                </label>
+                <label class="checkbox-label">
                   <input type="checkbox" name="is_active" {% if house.is_active %}checked{% endif %}>
                   <span>Active</span>
                 </label>
                 <button type="submit" class="btn btn-outline btn-sm">Update</button>
               </form>
+              {% if house.inquiries.exists %}
+              <a href="{% url 'housing_management' %}?section=inquiries" class="btn btn-ghost btn-sm" style="margin-top:0.75rem;">View Buyer Chats</a>
+              {% endif %}
             </div>
           </article>
           {% empty %}
