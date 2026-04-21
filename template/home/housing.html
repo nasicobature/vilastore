@@ -18,20 +18,32 @@
         <h1>Housing Portal</h1>
       </div>
       <nav class="sidebar-nav">
-        <a href="#overview" class="nav-link active"><i data-lucide="layout-dashboard"></i><span>Overview</span></a>
-        <a href="#add-listing" class="nav-link"><i data-lucide="building-2"></i><span>Add Listing</span></a>
-        <a href="#rentals" class="nav-link"><i data-lucide="file-plus-2"></i><span>Rentals</span></a>
-        <a href="#payments" class="nav-link"><i data-lucide="wallet-cards"></i><span>Payments</span></a>
-        <a href="#listings" class="nav-link"><i data-lucide="house-plus"></i><span>Listings</span></a>
-        <a href="#reminders" class="nav-link"><i data-lucide="bell-ring"></i><span>Reminders</span></a>
+        <a href="{% url 'housing_management' %}?section=overview" class="nav-link {% if active_section == 'overview' %}active{% endif %}"><i data-lucide="layout-dashboard"></i><span>Overview</span></a>
+        <a href="{% url 'housing_management' %}?section=add-listing" class="nav-link {% if active_section == 'add-listing' %}active{% endif %}"><i data-lucide="building-2"></i><span>Add Listing</span></a>
+        <a href="{% url 'housing_management' %}?section=rentals" class="nav-link {% if active_section == 'rentals' %}active{% endif %}"><i data-lucide="file-plus-2"></i><span>Rentals</span></a>
+        <a href="{% url 'housing_management' %}?section=payments" class="nav-link {% if active_section == 'payments' %}active{% endif %}"><i data-lucide="wallet-cards"></i><span>Payments</span></a>
+        <a href="{% url 'housing_management' %}?section=listings" class="nav-link {% if active_section == 'listings' %}active{% endif %}"><i data-lucide="house-plus"></i><span>Listings</span></a>
+        <a href="{% url 'housing_management' %}?section=reminders" class="nav-link {% if active_section == 'reminders' %}active{% endif %}"><i data-lucide="bell-ring"></i><span>Reminders</span></a>
         <a href="{% url 'logout' %}" class="nav-link"><i data-lucide="log-out"></i><span>Logout</span></a>
       </nav>
     </aside>
 
     <main class="main-content">
-      <header class="page-header" id="overview">
+      <header class="page-header">
         <h1>Housing Management</h1>
-        <p>Manage your house listings, tenants, reminders, and rent payments from one dedicated portal.</p>
+        {% if active_section == "overview" %}
+        <p>Use the housing workspace to jump into listings, rental records, reminders, and payment tracking.</p>
+        {% elif active_section == "add-listing" %}
+        <p>Create and organize house listings with all the details needed for your housing operation.</p>
+        {% elif active_section == "rentals" %}
+        <p>Capture tenancy agreements, tenant details, due dates, and current rental status in one section.</p>
+        {% elif active_section == "payments" %}
+        <p>Track rent collections, payment due dates, and outstanding balances from the payments workspace.</p>
+        {% elif active_section == "listings" %}
+        <p>Review, filter, and update every property listing from your dedicated listings section.</p>
+        {% elif active_section == "reminders" %}
+        <p>Monitor expiring rents, recent rental activity, and the full payment tracker from one reminder hub.</p>
+        {% endif %}
       </header>
 
       {% if messages %}
@@ -73,7 +85,53 @@
         </div>
       </section>
 
-      <section class="housing-grid" style="margin-top:1.5rem;" id="add-listing">
+      {% if active_section == "overview" %}
+      <section class="housing-grid" style="margin-top:1.5rem;">
+        <section class="card">
+          <div class="card-header"><h3>Workspace Sections</h3></div>
+          <div class="housing-listings" style="margin-top:1rem;">
+            <article class="housing-listing-card">
+              <div class="housing-listing-body">
+                <div class="housing-listing-top"><h3>Add Listing</h3></div>
+                <p class="shop-card-desc">Create new properties with title, price, rooms, status, agent, and photos.</p>
+                <a href="{% url 'housing_management' %}?section=add-listing" class="btn btn-outline">Open Section</a>
+              </div>
+            </article>
+            <article class="housing-listing-card">
+              <div class="housing-listing-body">
+                <div class="housing-listing-top"><h3>Rental Records</h3></div>
+                <p class="shop-card-desc">Save tenant agreements, lease dates, monthly rent, and payment status.</p>
+                <a href="{% url 'housing_management' %}?section=rentals" class="btn btn-outline">Open Section</a>
+              </div>
+            </article>
+            <article class="housing-listing-card">
+              <div class="housing-listing-body">
+                <div class="housing-listing-top"><h3>Payments</h3></div>
+                <p class="shop-card-desc">Log rent payments and follow due dates and payment history.</p>
+                <a href="{% url 'housing_management' %}?section=payments" class="btn btn-outline">Open Section</a>
+              </div>
+            </article>
+            <article class="housing-listing-card">
+              <div class="housing-listing-body">
+                <div class="housing-listing-top"><h3>Listings</h3></div>
+                <p class="shop-card-desc">Filter and update availability, listing mode, and active status for properties.</p>
+                <a href="{% url 'housing_management' %}?section=listings" class="btn btn-outline">Open Section</a>
+              </div>
+            </article>
+            <article class="housing-listing-card">
+              <div class="housing-listing-body">
+                <div class="housing-listing-top"><h3>Reminders</h3></div>
+                <p class="shop-card-desc">Review expiring rent records, recent rentals, and payment tracker tables.</p>
+                <a href="{% url 'housing_management' %}?section=reminders" class="btn btn-outline">Open Section</a>
+              </div>
+            </article>
+          </div>
+        </section>
+      </section>
+      {% endif %}
+
+      {% if active_section == "add-listing" %}
+      <section class="housing-grid" style="margin-top:1.5rem;">
         <section class="card">
           <div class="card-header"><h3>Add House Listing</h3></div>
           <form method="POST" action="{% url 'add_house_listing' %}" enctype="multipart/form-data" class="stack-form" style="margin-top:1rem;">
@@ -150,8 +208,12 @@
             <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Save House</button>
           </form>
         </section>
+      </section>
+      {% endif %}
 
-        <section class="card" id="rentals">
+      {% if active_section == "rentals" %}
+      <section class="housing-grid" style="margin-top:1.5rem;">
+        <section class="card">
           <div class="card-header"><h3>Add Rental Record</h3></div>
           <form method="POST" action="{% url 'add_rental_record' %}" class="stack-form" style="margin-top:1rem;">
             {% csrf_token %}
@@ -232,8 +294,39 @@
             <button type="submit" class="btn btn-primary"><i data-lucide="file-plus-2"></i> Save Rental</button>
           </form>
         </section>
+        <section class="card">
+          <div class="card-header"><h3>Recent Rental Records</h3></div>
+          <div class="table-container" style="margin-top:1rem;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Tenant</th>
+                  <th>House</th>
+                  <th>Due Date</th>
+                  <th>Payment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for rental in rentals %}
+                <tr>
+                  <td>{{ rental.tenant_name }}</td>
+                  <td>{{ rental.house.title }}</td>
+                  <td>{{ rental.next_due_date|date:"M d, Y"|default:"-" }}</td>
+                  <td><span class="badge badge-primary">{{ rental.get_payment_status_display }}</span></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="empty-state"><p>No rental records yet.</p></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+      {% endif %}
 
-        <section class="card" id="payments">
+      {% if active_section == "payments" %}
+      <section class="housing-grid" style="margin-top:1.5rem;">
+        <section class="card">
           <div class="card-header"><h3>Add Payment Record</h3></div>
           <form method="POST" action="{% url 'add_rental_payment' %}" class="stack-form" style="margin-top:1rem;">
             {% csrf_token %}
@@ -277,9 +370,38 @@
             <button type="submit" class="btn btn-primary"><i data-lucide="wallet-cards"></i> Save Payment</button>
           </form>
         </section>
+        <section class="card">
+          <div class="card-header"><h3>Payment Tracker</h3></div>
+          <div class="table-container" style="margin-top:1rem;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Rental</th>
+                  <th>Amount</th>
+                  <th>Due</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for payment in payments %}
+                <tr>
+                  <td>{{ payment.rental.tenant_name }} / {{ payment.rental.house.title }}</td>
+                  <td>{{ payment.amount|floatformat:2 }}</td>
+                  <td>{{ payment.due_date|date:"M d, Y" }}</td>
+                  <td><span class="badge {% if payment.status == 'paid' %}badge-success{% else %}badge-warning{% endif %}">{{ payment.get_status_display }}</span></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="empty-state"><p>No payment records yet.</p></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </section>
+      {% endif %}
 
-      <section class="card" style="margin-top:1.5rem;" id="listings">
+      {% if active_section == "listings" %}
+      <section class="card" style="margin-top:1.5rem;">
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
           <h3>Your House Listings</h3>
           <form method="GET" class="housing-filter-bar">
@@ -349,8 +471,10 @@
           {% endfor %}
         </div>
       </section>
+      {% endif %}
 
-      <section class="housing-grid" style="margin-top:1.5rem;" id="reminders">
+      {% if active_section == "reminders" %}
+      <section class="housing-grid" style="margin-top:1.5rem;">
         <section class="card">
           <div class="card-header"><h3>Rent Expiry Reminders</h3></div>
           <div class="table-container" style="margin-top:1rem;">
@@ -389,35 +513,6 @@
             </table>
           </div>
         </section>
-
-        <section class="card">
-          <div class="card-header"><h3>Recent Rental Records</h3></div>
-          <div class="table-container" style="margin-top:1rem;">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Tenant</th>
-                  <th>House</th>
-                  <th>Due Date</th>
-                  <th>Payment</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for rental in rentals %}
-                <tr>
-                  <td>{{ rental.tenant_name }}</td>
-                  <td>{{ rental.house.title }}</td>
-                  <td>{{ rental.next_due_date|date:"M d, Y"|default:"-" }}</td>
-                  <td><span class="badge badge-primary">{{ rental.get_payment_status_display }}</span></td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="4" class="empty-state"><p>No rental records yet.</p></td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
         <section class="card">
           <div class="card-header"><h3>Payment Tracker</h3></div>
           <div class="table-container" style="margin-top:1rem;">
@@ -446,6 +541,7 @@
           </div>
         </section>
       </section>
+      {% endif %}
     </main>
   </div>
 

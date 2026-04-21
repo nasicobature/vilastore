@@ -1573,6 +1573,17 @@ def delete_shopboy(request, pk):
 def housing_management(request):
     q = (request.GET.get("q") or "").strip()
     status_filter = (request.GET.get("status") or "").strip()
+    active_section = (request.GET.get("section") or "overview").strip()
+    valid_sections = {
+        "overview",
+        "add-listing",
+        "rentals",
+        "payments",
+        "listings",
+        "reminders",
+    }
+    if active_section not in valid_sections:
+        active_section = "overview"
 
     houses = (
         HouseListing.objects.filter(owner=request.user)
@@ -1612,6 +1623,7 @@ def housing_management(request):
     )
 
     return render(request, "home/housing.html", {
+        "active_section": active_section,
         "houses": houses,
         "tenants": tenants,
         "rentals": rentals[:12],
