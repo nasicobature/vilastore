@@ -144,7 +144,10 @@
       </div>
       <section style="margin-bottom:1.5rem;">
         <div class="marketplace-results-header">
-          <h2>Houses</h2>
+          <div>
+            <h2>Houses</h2>
+            <p class="marketplace-house-section-note">Cleaner property cards, private addresses, and faster browsing.</p>
+          </div>
         </div>
         <div class="housing-market-grid">
           {% for house in houses %}
@@ -159,25 +162,37 @@
               {% endif %}
             </div>
             <div class="house-market-card-body">
+              <div class="house-market-card-chip-row">
+                <span class="house-market-chip">{{ house.get_listing_mode_display }}</span>
+                <span class="house-market-chip">{{ house.get_property_type_display }}</span>
+              </div>
               <div class="housing-market-card-top">
                 <div>
                   <h3>{{ house.title }}</h3>
-                  <p>{{ house.location }}</p>
+                  <p class="house-market-card-subtitle">Address shared privately after owner response.</p>
                 </div>
                 <span class="badge {% if house.is_available %}badge-success{% else %}badge-warning{% endif %}">
                   {{ house.get_availability_status_display }}
                 </span>
               </div>
               <p class="shop-card-desc">{{ house.description|default:"No description yet." }}</p>
-              <div class="shop-card-meta">
-                <span><i data-lucide="badge-dollar-sign" style="width:14px;height:14px;"></i> {{ house.get_listing_mode_display }}</span>
-                <span><i data-lucide="wallet" style="width:14px;height:14px;"></i> {{ house.price|floatformat:2 }}</span>
-                <span><i data-lucide="bed-double" style="width:14px;height:14px;"></i> {{ house.rooms_count }} room{{ house.rooms_count|pluralize }}</span>
-                <span><i data-lucide="layout-grid" style="width:14px;height:14px;"></i> {{ house.spaces_available }} space{{ house.spaces_available|pluralize }}</span>
+              <div class="house-market-stats">
+                <div class="house-market-stat">
+                  <span class="house-market-stat-label">Price</span>
+                  <strong>{{ house.price|floatformat:2 }}</strong>
+                </div>
+                <div class="house-market-stat">
+                  <span class="house-market-stat-label">Rooms</span>
+                  <strong>{{ house.rooms_count }}</strong>
+                </div>
+                <div class="house-market-stat">
+                  <span class="house-market-stat-label">Spaces</span>
+                  <strong>{{ house.spaces_available }}</strong>
+                </div>
               </div>
-              <div class="shop-card-meta">
-                <span><i data-lucide="building-2" style="width:14px;height:14px;"></i> {{ house.get_property_type_display }}</span>
-                <span><i data-lucide="store" style="width:14px;height:14px;"></i> {{ house.display_owner_name }}</span>
+              <div class="house-market-card-footer">
+                <span class="house-market-owner"><i data-lucide="store" style="width:14px;height:14px;"></i> {{ house.display_owner_name }}</span>
+                <span class="house-market-link">View details <i data-lucide="arrow-right" style="width:14px;height:14px;"></i></span>
               </div>
             </div>
           </a>

@@ -61,16 +61,34 @@
           </div>
         </div>
         <p class="marketplace-shop-description">{{ house.description|default:"No description yet." }}</p>
-        <div class="marketplace-shop-meta">
-          <span><i data-lucide="map-pin"></i> {{ house.location }}</span>
+        <div class="marketplace-shop-meta marketplace-house-meta-grid">
           <span><i data-lucide="wallet"></i> {{ house.price|floatformat:2 }}</span>
           <span><i data-lucide="bed-double"></i> {{ house.rooms_count }} room{{ house.rooms_count|pluralize }}</span>
           <span><i data-lucide="layout-grid"></i> {{ house.spaces_available }} space{{ house.spaces_available|pluralize }}</span>
+          <span><i data-lucide="shield"></i> Address shared after direct chat</span>
         </div>
       </div>
 
       <div class="card marketplace-shop-card">
-        <h4>Availability</h4>
+        <h4>Listing Snapshot</h4>
+        <div class="house-detail-panel-grid">
+          <div class="house-detail-panel-item">
+            <span>Status</span>
+            <strong>{{ house.get_availability_status_display }}</strong>
+          </div>
+          <div class="house-detail-panel-item">
+            <span>Type</span>
+            <strong>{{ house.get_property_type_display }}</strong>
+          </div>
+          <div class="house-detail-panel-item">
+            <span>Mode</span>
+            <strong>{{ house.get_listing_mode_display }}</strong>
+          </div>
+          <div class="house-detail-panel-item">
+            <span>Owner</span>
+            <strong>{{ house.display_owner_name }}</strong>
+          </div>
+        </div>
         <p style="margin:0.5rem 0 0;">
           <span class="badge {% if house.is_available %}badge-success{% else %}badge-warning{% endif %}">
             {{ house.get_availability_status_display }}
@@ -87,7 +105,7 @@
         <h4>Owner Contact</h4>
         <p style="margin:0.5rem 0 0;">{{ house.display_owner_name }}</p>
         <p style="margin:0.5rem 0 0;color:var(--muted-foreground);">{{ house.display_owner_phone|default:"Phone not provided" }}</p>
-        <p style="margin:0.5rem 0 0;color:var(--muted-foreground);">{{ house.display_owner_address|default:"Address not provided" }}</p>
+        <p style="margin:0.5rem 0 0;color:var(--muted-foreground);">Exact house address is shared privately during chat.</p>
         {% if house_agent %}
         <p style="margin-top:1rem;color:var(--muted-foreground);">Property agent: {{ house_agent.full_name }}</p>
         {% endif %}
@@ -116,6 +134,14 @@
     </aside>
 
     <main class="marketplace-main">
+      <section class="card house-detail-hero-card" style="margin-bottom:1rem;">
+        <div>
+          <span class="badge badge-primary">Private Address</span>
+          <h2 style="margin:0.75rem 0 0.4rem;">Browse the property first, then request the exact address in chat.</h2>
+          <p style="color:var(--muted-foreground);margin:0;">This keeps the marketplace cleaner and more privacy-friendly while still letting serious buyers contact the owner.</p>
+        </div>
+      </section>
+
       <div class="marketplace-results-header">
         <div>
           <h2>House Gallery</h2>
@@ -131,7 +157,7 @@
           </div>
           <div class="house-market-card-body">
             <h3>{{ house.title }}</h3>
-            <p>{{ image.caption|default:house.location }}</p>
+            <p>{{ image.caption|default:"Photo preview" }}</p>
           </div>
         </article>
         {% empty %}
