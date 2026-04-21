@@ -676,7 +676,7 @@ class MarketplaceBuyerToken(models.Model):
 
 
 class DeliveryRider(models.Model):
-    id = models.AutoField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
 
     ID_TYPE_NIN = "nin"
     ID_TYPE_VOTER = "voter"
@@ -743,7 +743,7 @@ class DeliveryRider(models.Model):
 
 
 class DeliveryCompany(models.Model):
-    id = models.AutoField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
 
     owner = models.OneToOneField(MarketplaceBuyer, on_delete=models.CASCADE, related_name="delivery_company")
     company_name = models.CharField(max_length=200)
@@ -765,7 +765,7 @@ class DeliveryCompany(models.Model):
 
 
 class DeliveryRequest(models.Model):
-    id = models.AutoField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
 
     STATUS_REQUESTED = "requested"
     STATUS_RIDER_SELECTED = "rider_selected"
