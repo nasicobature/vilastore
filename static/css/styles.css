@@ -3158,6 +3158,20 @@ button {
     linear-gradient(135deg, rgba(243, 247, 255, 0.98), rgba(249, 252, 255, 0.98));
 }
 
+.marketplace-browse-shell {
+  align-items: start;
+}
+
+.marketplace-browse-sidebar .filter-section + hr {
+  margin-top: 1rem;
+}
+
+.marketplace-browse-hero {
+  background:
+    radial-gradient(circle at top right, rgba(244, 192, 105, 0.2), transparent 34%),
+    linear-gradient(135deg, rgba(255, 248, 236, 0.98), rgba(247, 249, 252, 0.98));
+}
+
 /* Shop List / Grid */
 .shop-list {
   display: grid;

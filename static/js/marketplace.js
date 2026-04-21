@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const categoryInput = document.getElementById('categoryInput');
   const locationInput = document.getElementById('locationInput');
   const propertyTypeInput = document.getElementById('propertyTypeInput');
+  const listingModeInput = document.getElementById('listingModeInput');
   const clearBtn = document.getElementById('clearFiltersBtn');
 
   document.querySelectorAll('[data-filter="category"]').forEach(function (btn) {
@@ -31,12 +32,24 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
+  document.querySelectorAll('[data-filter="listing_mode"]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (listingModeInput) {
+        listingModeInput.value = btn.getAttribute('data-value') || '';
+      }
+      form.submit();
+    });
+  });
+
   if (clearBtn) {
     clearBtn.addEventListener('click', function () {
       document.getElementById('shopSearch').value = '';
       categoryInput.value = '';
       locationInput.value = '';
       propertyTypeInput.value = '';
+      if (listingModeInput) listingModeInput.value = '';
+      const roomsMin = form.querySelector('input[name="rooms_min"]');
+      if (roomsMin) roomsMin.value = '';
       const minPrice = document.getElementById('minPriceField');
       const maxPrice = document.getElementById('maxPriceField');
       if (minPrice) minPrice.value = '';
@@ -52,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   form.addEventListener('change', function (e) {
-    if (e.target && (e.target.name === 'verified' || e.target.name === 'available' || e.target.name === 'sort' || e.target.name === 'min_price' || e.target.name === 'max_price')) {
+    if (e.target && (e.target.name === 'verified' || e.target.name === 'available' || e.target.name === 'sort' || e.target.name === 'min_price' || e.target.name === 'max_price' || e.target.name === 'rooms_min')) {
       form.submit();
     }
   });

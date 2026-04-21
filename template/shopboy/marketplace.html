@@ -45,8 +45,14 @@
     </div>
   </header>
 
-  <div class="marketplace-container">
-    <aside class="marketplace-sidebar">
+  <div class="marketplace-container marketplace-portal-shell marketplace-browse-shell">
+    <aside class="marketplace-sidebar marketplace-portal-sidebar marketplace-browse-sidebar">
+      <div class="marketplace-sidebar-panel">
+        <span class="badge badge-primary">Browse Marketplace</span>
+        <h3>Find shops, houses, and delivery access faster.</h3>
+        <p>Use the filters to narrow the marketplace quickly, then open the customer or rider portal when you are ready to act.</p>
+      </div>
+
       <div class="filter-section">
         <h4>Categories</h4>
         <div id="categoryFilters" class="filter-list">
@@ -120,24 +126,51 @@
       </div>
     </aside>
 
-    <main class="marketplace-main">
-      <section class="card marketplace-role-hero">
+    <main class="marketplace-main marketplace-portal-main">
+      <section class="marketplace-hero-panel marketplace-browse-hero">
         <div>
           <span class="badge badge-primary">Shared Access</span>
-          <h2 style="margin:0.75rem 0 0.5rem;">One login, different portals for customers and delivery riders.</h2>
-          <p style="color:var(--muted-foreground);max-width:700px;">
-            Customers land in the customer portal after sign in. Riders land in the rider portal, and new riders can start registration directly from this landing page.
+          <h1>Browse the marketplace with less noise and clearer next steps.</h1>
+          <p>
+            Explore houses and shops in one place, then move into the customer portal for orders and delivery or the rider portal for delivery work.
           </p>
         </div>
-        <div class="marketplace-role-actions">
+        <div class="marketplace-hero-actions">
           <a href="{% url 'marketplace_login' %}" class="btn btn-primary">Customer Sign In</a>
           <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline">Delivery Rider Sign In</a>
           <a href="{% url 'marketplace_signup' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-ghost">Create Rider Account</a>
         </div>
       </section>
 
+      <section class="marketplace-quick-grid">
+        <article class="marketplace-quick-card">
+          <div class="marketplace-quick-icon"><i data-lucide="house"></i></div>
+          <div>
+            <h3>{{ houses|length }} Houses</h3>
+            <p>Private-address listings with cleaner cards and direct owner chat.</p>
+          </div>
+        </article>
+        <article class="marketplace-quick-card">
+          <div class="marketplace-quick-icon"><i data-lucide="store"></i></div>
+          <div>
+            <h3>{{ profiles|length }} Shops</h3>
+            <p>Browse verified sellers, check products, and open order chat fast.</p>
+          </div>
+        </article>
+        <article class="marketplace-quick-card">
+          <div class="marketplace-quick-icon"><i data-lucide="map"></i></div>
+          <div>
+            <h3>{{ locations|length }} Areas</h3>
+            <p>Use location, price, room, and listing filters to narrow results faster.</p>
+          </div>
+        </article>
+      </section>
+
       <div class="marketplace-results-header">
-        <h2 id="resultsCount">{{ houses|length }} house{{ houses|length|pluralize }} and {{ profiles|length }} shop{{ profiles|length|pluralize }} found</h2>
+        <div>
+          <h2 id="resultsCount">{{ houses|length }} house{{ houses|length|pluralize }} and {{ profiles|length }} shop{{ profiles|length|pluralize }} found</h2>
+          <p class="marketplace-house-section-note">Results update with every filter so it is easier to focus on what matters.</p>
+        </div>
         <button class="btn btn-ghost" id="clearFiltersBtn" style="display:{% if filters.q or filters.category or filters.location or filters.property_type or filters.listing_mode or filters.rooms_min or filters.min_price or filters.max_price or filters.available or filters.verified %}flex{% else %}none{% endif %};" type="button">
           <i data-lucide="x"></i> Clear filters
         </button>
