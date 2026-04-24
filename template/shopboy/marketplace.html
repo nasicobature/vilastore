@@ -36,7 +36,7 @@
           <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
           {% else %}
           <a href="{% url 'marketplace_login' %}" class="btn btn-ghost">Sign In</a>
-          <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline">Register as Rider</a>
+          <a href="{% url 'marketplace_rider_signup' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline">Register as Rider</a>
           <a href="{% url 'marketplace_signup' %}" class="btn btn-primary"><i data-lucide="user"></i> Create Account</a>
           {% endif %}
         </div>
@@ -138,7 +138,7 @@
         <div class="marketplace-hero-actions">
           <a href="{% url 'marketplace_login' %}" class="btn btn-primary">Customer Sign In</a>
           <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline">Delivery Rider Sign In</a>
-          <a href="{% url 'marketplace_signup' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-ghost">Create Rider Account</a>
+          <a href="{% url 'marketplace_rider_signup' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-ghost">Create Rider Account</a>
         </div>
       </section>
 
@@ -197,12 +197,12 @@
             <div class="house-market-card-body">
               <div class="house-market-card-chip-row">
                 <span class="house-market-chip">{{ house.get_listing_mode_display }}</span>
-                <span class="house-market-chip">{{ house.get_property_type_display }}</span>
+                <span class="house-market-chip house-market-chip-neutral">{{ house.profile_type_label }}</span>
               </div>
               <div class="housing-market-card-top">
                 <div>
                   <h3>{{ house.title }}</h3>
-                  <p class="house-market-card-subtitle">Address shared privately after owner response.</p>
+                  <p class="house-market-card-subtitle">{{ house.area_label }} · Address shared privately after owner response.</p>
                 </div>
                 <span class="badge {% if house.is_available %}badge-success{% else %}badge-warning{% endif %}">
                   {{ house.get_availability_status_display }}
@@ -212,20 +212,30 @@
               <div class="house-market-stats">
                 <div class="house-market-stat">
                   <span class="house-market-stat-label">Price</span>
-                  <strong>{{ house.price|floatformat:2 }}</strong>
+                  <strong>NGN {{ house.price|floatformat:2 }}</strong>
                 </div>
                 <div class="house-market-stat">
-                  <span class="house-market-stat-label">Rooms</span>
-                  <strong>{{ house.rooms_count }}</strong>
+                  <span class="house-market-stat-label">Type</span>
+                  <strong>{{ house.profile_type_label }}</strong>
                 </div>
                 <div class="house-market-stat">
-                  <span class="house-market-stat-label">Spaces</span>
-                  <strong>{{ house.spaces_available }}</strong>
+                  <span class="house-market-stat-label">Units</span>
+                  <strong>{{ house.units_summary }}</strong>
                 </div>
+              </div>
+              <div class="house-market-card-agent">
+                <span class="house-market-agent-label">Agent</span>
+                <strong>
+                  {% if house.marketplace_agent %}
+                  {{ house.marketplace_agent.full_name }}
+                  {% else %}
+                  {{ house.display_owner_name }}
+                  {% endif %}
+                </strong>
               </div>
               <div class="house-market-card-footer">
                 <span class="house-market-owner"><i data-lucide="store" style="width:14px;height:14px;"></i> {{ house.display_owner_name }}</span>
-                <span class="house-market-link">View details <i data-lucide="arrow-right" style="width:14px;height:14px;"></i></span>
+                <span class="house-market-link">Open profile <i data-lucide="arrow-right" style="width:14px;height:14px;"></i></span>
               </div>
             </div>
           </a>

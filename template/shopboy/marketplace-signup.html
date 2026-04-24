@@ -29,7 +29,7 @@
       <div class="auth-form-container">
         <div class="auth-form-header">
           <h2>Create Shared Account</h2>
-          <p>Start as a customer or continue into rider registration from the landing page.</p>
+          <p>Create a normal marketplace account here. Delivery riders should use the rider registration button below.</p>
         </div>
 
         {% if messages %}
@@ -84,6 +84,10 @@
           <a href="{% url 'marketplace_login' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="btn btn-outline btn-full">
             <i data-lucide="log-in"></i>
             Sign In
+          </a>
+          <a href="{% url 'marketplace_rider_signup' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="btn btn-ghost btn-full" style="margin-top:0.75rem;">
+            <i data-lucide="bike"></i>
+            Delivery Rider Registration
           </a>
         </div>
       </div>

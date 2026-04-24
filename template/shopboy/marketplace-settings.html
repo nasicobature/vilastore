@@ -64,14 +64,14 @@
             <span>Customer Portal</span>
             <i data-lucide="arrow-right"></i>
           </a>
-          <button type="button" class="filter-btn" data-rider-tab="personal">
-            <span>Personal Rider</span>
-            <i data-lucide="user"></i>
-          </button>
-          <button type="button" class="filter-btn" data-rider-tab="company">
-            <span>Company Tools</span>
-            <i data-lucide="building-2"></i>
-          </button>
+          <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="filter-btn">
+            <span>Rider Sign In</span>
+            <i data-lucide="log-in"></i>
+          </a>
+          <a href="{% url 'marketplace_rider_signup' %}?next={% url 'marketplace_rider_portal' %}" class="filter-btn">
+            <span>Rider Registration</span>
+            <i data-lucide="user-plus"></i>
+          </a>
         </div>
       </div>
     </aside>
@@ -80,12 +80,12 @@
       <section class="marketplace-hero-panel marketplace-rider-hero">
         <div>
           <span class="badge badge-primary">Clear Rider Portal</span>
-          <h1>Deliveries, route view, and rider management in one simple workspace.</h1>
-          <p>Watch nearby requests on the map, update live rider location, and switch between personal rider tools and company controls without getting lost.</p>
+          <h1>Deliveries and live route view in one simpler rider workspace.</h1>
+          <p>Registration starts from the shared login and registration area. This portal now focuses on active delivery work and request handling.</p>
         </div>
         <div class="marketplace-hero-actions">
-          <button type="button" class="btn btn-primary" data-rider-tab="personal"><i data-lucide="bike"></i> Personal Rider</button>
-          <button type="button" class="btn btn-outline" data-rider-tab="company"><i data-lucide="building-2"></i> Company Tools</button>
+          <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-primary"><i data-lucide="log-in"></i> Rider Sign In</a>
+          <a href="{% url 'marketplace_rider_signup' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline"><i data-lucide="user-plus"></i> Rider Registration</a>
         </div>
       </section>
 
@@ -174,130 +174,23 @@
       <section class="card delivery-card rider-tab-shell">
         <div class="delivery-card-header">
           <div>
-            <h3>Rider Tools</h3>
-            <p>Switch between your personal rider profile and company fleet tools.</p>
+            <h3>Rider Access</h3>
+            <p>Registration now starts from the main marketplace login and registration area, not inside this portal.</p>
           </div>
         </div>
-        <div class="delivery-tab-row">
-          <button type="button" class="delivery-tab active" data-rider-tab="personal">Personal Rider</button>
-          <button type="button" class="delivery-tab" data-rider-tab="company">Company Rider</button>
-        </div>
-      </section>
-
-      <section id="riderPersonalPanel" class="card delivery-card rider-form-panel">
-        <div class="delivery-card-header">
-          <div>
-            <h3>Personal Rider Registration</h3>
-            <p>Keep your rider identity, vehicle details, documents, and payout info in one place.</p>
+        <div class="delivery-empty" style="padding:1.25rem 0 0;">
+          <p>Use the main authentication area to create a rider account.</p>
+          <div class="delivery-actions" style="margin-top:1rem;">
+            <a href="{% url 'marketplace_rider_signup' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-primary">
+              <i data-lucide="user-plus"></i>
+              Delivery Rider Registration
+            </a>
+            <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline">
+              <i data-lucide="log-in"></i>
+              Sign In to Rider Portal
+            </a>
           </div>
         </div>
-        <div class="delivery-form-grid">
-          <label class="delivery-field"><span>Full name</span><input id="riderFullName" class="input" type="text" value="{{ rider_profile.full_name|default:'' }}"></label>
-          <label class="delivery-field"><span>Phone</span><input id="riderPhone" class="input" type="text" value="{{ rider_profile.phone|default:'' }}"></label>
-          <label class="delivery-field"><span>Email</span><input id="riderEmail" class="input" type="email" value="{{ rider_profile.email|default:'' }}"></label>
-          <label class="delivery-field"><span>Home address</span><input id="riderHomeAddress" class="input" type="text" value="{{ rider_profile.home_address|default:'' }}"></label>
-          <label class="delivery-field">
-            <span>ID type</span>
-            <select id="riderIdType" class="input">
-              <option value="nin" {% if rider_profile.id_type == 'nin' or not rider_profile %}selected{% endif %}>National ID (NIN)</option>
-              <option value="voter" {% if rider_profile.id_type == 'voter' %}selected{% endif %}>Voter's Card</option>
-              <option value="driver" {% if rider_profile.id_type == 'driver' %}selected{% endif %}>Driver's License</option>
-            </select>
-          </label>
-          <label class="delivery-field"><span>ID number</span><input id="riderIdNumber" class="input" type="text" value="{{ rider_profile.id_number|default:'' }}"></label>
-          <label class="delivery-field">
-            <span>Vehicle type</span>
-            <select id="riderVehicleType" class="input">
-              <option value="bike" {% if rider_profile.vehicle_type == 'bike' or not rider_profile %}selected{% endif %}>Bike</option>
-              <option value="car" {% if rider_profile.vehicle_type == 'car' %}selected{% endif %}>Car</option>
-              <option value="tricycle" {% if rider_profile.vehicle_type == 'tricycle' %}selected{% endif %}>Tricycle</option>
-            </select>
-          </label>
-          <label class="delivery-field"><span>Plate number</span><input id="riderPlateNumber" class="input" type="text" value="{{ rider_profile.plate_number|default:'' }}"></label>
-          <label class="delivery-field"><span>Vehicle color</span><input id="riderVehicleColor" class="input" type="text" value="{{ rider_profile.vehicle_color|default:'' }}"></label>
-          <label class="delivery-field"><span>Vehicle model</span><input id="riderVehicleModel" class="input" type="text" value="{{ rider_profile.vehicle_model|default:'' }}"></label>
-          <label class="delivery-field"><span>City</span><input id="riderCity" class="input" type="text" value="{{ rider_profile.city|default:'' }}"></label>
-          <label class="delivery-field"><span>Operating areas</span><textarea id="riderOperatingAreas" class="input" rows="3">{{ rider_profile.operating_areas|default:'' }}</textarea></label>
-          <label class="delivery-field"><span>Bank name</span><input id="riderBankName" class="input" type="text" value="{{ rider_profile.bank_name|default:'' }}"></label>
-          <label class="delivery-field"><span>Account number</span><input id="riderAccountNumber" class="input" type="text" value="{{ rider_profile.account_number|default:'' }}"></label>
-          <label class="delivery-field"><span>Account name</span><input id="riderAccountName" class="input" type="text" value="{{ rider_profile.account_name|default:'' }}"></label>
-          <label class="delivery-field"><span>Profile photo</span><input id="riderProfilePhoto" class="input" type="file" accept="image/*"></label>
-          <label class="delivery-field"><span>Vehicle photo</span><input id="riderVehiclePhoto" class="input" type="file" accept="image/*"></label>
-          <label class="delivery-field"><span>Plate photo</span><input id="riderPlatePhoto" class="input" type="file" accept="image/*"></label>
-          <label class="delivery-field"><span>ID document</span><input id="riderIdDocument" class="input" type="file" accept="image/*"></label>
-        </div>
-        <div class="delivery-check-row">
-          <label><input id="riderAllowDirectCall" type="checkbox" {% if rider_profile.allow_direct_call or not rider_profile %}checked{% endif %}> Allow direct calls</label>
-          <label><input id="riderTermsAccepted" type="checkbox" {% if rider_profile.terms_accepted %}checked{% endif %}> I accept the rider terms</label>
-        </div>
-        <div class="delivery-actions">
-          <button type="button" class="btn btn-primary" id="riderRegisterButton">
-            <i data-lucide="badge-check"></i>
-            Save Rider Profile
-          </button>
-          <button type="button" class="btn btn-outline" id="riderRefreshRequestsButton">
-            <i data-lucide="refresh-cw"></i>
-            Refresh Requests
-          </button>
-        </div>
-      </section>
-
-      <section id="riderCompanyPanel" class="card delivery-card rider-form-panel is-hidden">
-        <div class="delivery-card-header">
-          <div>
-            <h3>Company Rider Management</h3>
-            <p>Create a company profile, add riders, and manage your fleet in a cleaner setup.</p>
-          </div>
-        </div>
-        <div class="delivery-form-grid">
-          <label class="delivery-field"><span>Company name</span><input id="companyName" class="input" type="text" value="{{ delivery_company.company_name|default:'' }}"></label>
-          <label class="delivery-field"><span>Phone</span><input id="companyPhone" class="input" type="text" value="{{ delivery_company.phone|default:'' }}"></label>
-          <label class="delivery-field"><span>Email</span><input id="companyEmail" class="input" type="email" value="{{ delivery_company.email|default:'' }}"></label>
-          <label class="delivery-field"><span>Address</span><input id="companyAddress" class="input" type="text" value="{{ delivery_company.address|default:'' }}"></label>
-          <label class="delivery-field"><span>City</span><input id="companyCity" class="input" type="text" value="{{ delivery_company.city|default:'' }}"></label>
-          <label class="delivery-field"><span>Operating areas</span><textarea id="companyAreas" class="input" rows="3">{{ delivery_company.operating_areas|default:'' }}</textarea></label>
-          <label class="delivery-field"><span>Bank name</span><input id="companyBankName" class="input" type="text" value="{{ delivery_company.bank_name|default:'' }}"></label>
-          <label class="delivery-field"><span>Account number</span><input id="companyAccountNumber" class="input" type="text" value="{{ delivery_company.account_number|default:'' }}"></label>
-          <label class="delivery-field"><span>Account name</span><input id="companyAccountName" class="input" type="text" value="{{ delivery_company.account_name|default:'' }}"></label>
-        </div>
-        <div class="delivery-check-row">
-          <label><input id="companyTermsAccepted" type="checkbox" {% if delivery_company.terms_accepted %}checked{% endif %}> I accept the company rider terms</label>
-        </div>
-        <div class="delivery-actions">
-          <button type="button" class="btn btn-primary" id="companySaveButton">
-            <i data-lucide="building"></i>
-            Save Company Profile
-          </button>
-        </div>
-
-        <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0;">
-
-        <div class="delivery-card-header">
-          <div>
-            <h3>Add Company Rider</h3>
-            <p>Create rider accounts directly from the web workspace.</p>
-          </div>
-        </div>
-        <div class="delivery-form-grid">
-          <label class="delivery-field"><span>Full name</span><input id="companyRiderName" class="input" type="text"></label>
-          <label class="delivery-field"><span>Phone</span><input id="companyRiderPhone" class="input" type="text"></label>
-          <label class="delivery-field"><span>Email</span><input id="companyRiderEmail" class="input" type="email"></label>
-          <label class="delivery-field"><span>Password</span><input id="companyRiderPassword" class="input" type="password"></label>
-        </div>
-        <div class="delivery-actions">
-          <button type="button" class="btn btn-secondary" id="companyAddRiderButton">
-            <i data-lucide="user-plus"></i>
-            Add Rider
-          </button>
-        </div>
-
-        <div class="delivery-card-header" style="margin-top:1.5rem;">
-          <div>
-            <h3>Company Riders</h3>
-            <p>Approve or remove riders from your fleet.</p>
-          </div>
-        </div>
-        <div id="companyRidersList" class="delivery-list"></div>
       </section>
 
       <section class="card delivery-card" style="margin-top:1.5rem;">

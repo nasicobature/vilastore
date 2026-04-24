@@ -81,6 +81,10 @@
             <i data-lucide="user-plus"></i>
             Create Account
           </a>
+          <a href="{% url 'marketplace_rider_signup' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="btn btn-ghost btn-full" style="margin-top:0.75rem;">
+            <i data-lucide="bike"></i>
+            Register as Delivery Rider
+          </a>
         </div>
       </div>
     </div>

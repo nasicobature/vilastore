@@ -531,8 +531,12 @@ function initRiderWorkspaceApp(app) {
     els.tabs.forEach((tab) => {
       tab.classList.toggle("active", tab.dataset.riderTab === tabId);
     });
-    els.personalPanel.classList.toggle("is-hidden", tabId !== "personal");
-    els.companyPanel.classList.toggle("is-hidden", tabId !== "company");
+    if (els.personalPanel) {
+      els.personalPanel.classList.toggle("is-hidden", tabId !== "personal");
+    }
+    if (els.companyPanel) {
+      els.companyPanel.classList.toggle("is-hidden", tabId !== "company");
+    }
   }
 
   function getSelectedRequest() {
@@ -653,6 +657,9 @@ function initRiderWorkspaceApp(app) {
   }
 
   function renderCompanyRiders() {
+    if (!els.companyRidersList) {
+      return;
+    }
     if (!state.companyRiders.length) {
       els.companyRidersList.innerHTML = '<div class="delivery-empty"><p>No company riders yet.</p></div>';
       return;
@@ -712,6 +719,9 @@ function initRiderWorkspaceApp(app) {
   }
 
   async function loadCompanyRiders() {
+    if (!els.companyRidersList) {
+      return;
+    }
     const response = await marketplaceApiRequest("/api/marketplace/delivery/company/riders/", { token });
     state.companyRiders = response.riders || [];
     renderCompanyRiders();
@@ -872,7 +882,9 @@ function initRiderWorkspaceApp(app) {
   loadRequests().catch((error) => {
     els.requestsList.innerHTML = `<div class="delivery-empty"><p>${error.message}</p></div>`;
   });
-  loadCompanyRiders().catch((error) => {
-    els.companyRidersList.innerHTML = `<div class="delivery-empty"><p>${error.message}</p></div>`;
-  });
+  if (els.companyRidersList) {
+    loadCompanyRiders().catch((error) => {
+      els.companyRidersList.innerHTML = `<div class="delivery-empty"><p>${error.message}</p></div>`;
+    });
+  }
 }
