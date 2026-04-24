@@ -22,7 +22,6 @@
           <form method="get" id="filterForm" class="search-box">
             <i data-lucide="search"></i>
             <input type="text" class="input" placeholder="Search houses, shops, locations, or @username..." name="q" id="shopSearch" value="{{ filters.q }}">
-            <input type="hidden" name="category" id="categoryInput" value="{{ filters.category }}">
             <input type="hidden" name="location" id="locationInput" value="{{ filters.location }}">
             <input type="hidden" name="property_type" id="propertyTypeInput" value="{{ filters.property_type }}">
             <input type="hidden" name="listing_mode" id="listingModeInput" value="{{ filters.listing_mode }}">
@@ -53,16 +52,6 @@
         <p>Use the filters to narrow the marketplace quickly, then open the customer or rider portal when you are ready to act.</p>
       </div>
 
-      <div class="filter-section">
-        <h4>Categories</h4>
-        <div id="categoryFilters" class="filter-list">
-          <button class="filter-btn {% if not filters.category %}active{% endif %}" data-filter="category" data-value="">All</button>
-          {% for cat in categories %}
-          <button class="filter-btn {% if filters.category == cat %}active{% endif %}" data-filter="category" data-value="{{ cat }}">{{ cat }}</button>
-          {% endfor %}
-        </div>
-      </div>
-      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
       <div class="filter-section">
         <h4>House Type</h4>
         <div class="filter-list">
@@ -171,7 +160,7 @@
           <h2 id="resultsCount">{{ houses|length }} house{{ houses|length|pluralize }} and {{ profiles|length }} shop{{ profiles|length|pluralize }} found</h2>
           <p class="marketplace-house-section-note">Results update with every filter so it is easier to focus on what matters.</p>
         </div>
-        <button class="btn btn-ghost" id="clearFiltersBtn" style="display:{% if filters.q or filters.category or filters.location or filters.property_type or filters.listing_mode or filters.rooms_min or filters.min_price or filters.max_price or filters.available or filters.verified %}flex{% else %}none{% endif %};" type="button">
+        <button class="btn btn-ghost" id="clearFiltersBtn" style="display:{% if filters.q or filters.location or filters.property_type or filters.listing_mode or filters.rooms_min or filters.min_price or filters.max_price or filters.available or filters.verified %}flex{% else %}none{% endif %};" type="button">
           <i data-lucide="x"></i> Clear filters
         </button>
       </div>
@@ -287,9 +276,6 @@
                 </div>
                 <p style="font-size:0.875rem;color:var(--muted-foreground);">@{{ profile.user.username }}</p>
               </div>
-              {% if profile.category %}
-              <span class="badge badge-primary">{{ profile.category }}</span>
-              {% endif %}
             </div>
             <p class="shop-card-desc">{{ profile.description|default:"No description yet." }}</p>
             <div class="shop-card-products">
