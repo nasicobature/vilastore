@@ -5,59 +5,38 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   const form = document.getElementById('filterForm');
-  const locationInput = document.getElementById('locationInput');
-  const propertyTypeInput = document.getElementById('propertyTypeInput');
-  const listingModeInput = document.getElementById('listingModeInput');
   const clearBtn = document.getElementById('clearFiltersBtn');
-
-  document.querySelectorAll('[data-filter="location"]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      locationInput.value = btn.getAttribute('data-value') || '';
-      form.submit();
-    });
-  });
-
-  document.querySelectorAll('[data-filter="property_type"]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      propertyTypeInput.value = btn.getAttribute('data-value') || '';
-      form.submit();
-    });
-  });
-
-  document.querySelectorAll('[data-filter="listing_mode"]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      if (listingModeInput) {
-        listingModeInput.value = btn.getAttribute('data-value') || '';
-      }
-      form.submit();
-    });
-  });
 
   if (clearBtn) {
     clearBtn.addEventListener('click', function () {
       document.getElementById('shopSearch').value = '';
-      locationInput.value = '';
-      propertyTypeInput.value = '';
+      const locationInput = document.querySelector('[name="location"][form="filterForm"]');
+      const propertyTypeInput = document.querySelector('[name="property_type"][form="filterForm"]');
+      const listingModeInput = document.querySelector('[name="listing_mode"][form="filterForm"]');
+      if (locationInput) locationInput.value = '';
+      if (propertyTypeInput) propertyTypeInput.value = '';
       if (listingModeInput) listingModeInput.value = '';
-      const roomsMin = form.querySelector('input[name="rooms_min"]');
+      const roomsMin = document.querySelector('input[name="rooms_min"][form="filterForm"]');
       if (roomsMin) roomsMin.value = '';
       const minPrice = document.getElementById('minPriceField');
       const maxPrice = document.getElementById('maxPriceField');
       if (minPrice) minPrice.value = '';
       if (maxPrice) maxPrice.value = '';
-      const verified = form.querySelector('input[name="verified"]');
+      const verified = document.querySelector('input[name="verified"][form="filterForm"]');
       if (verified) verified.checked = false;
-      const available = form.querySelector('input[name="available"]');
+      const available = document.querySelector('input[name="available"][form="filterForm"]');
       if (available) available.checked = false;
-      const sort = form.querySelector('select[name="sort"]');
+      const sort = document.querySelector('select[name="sort"][form="filterForm"]');
       if (sort) sort.value = 'rating';
       form.submit();
     });
   }
 
-  form.addEventListener('change', function (e) {
-    if (e.target && (e.target.name === 'verified' || e.target.name === 'available' || e.target.name === 'sort' || e.target.name === 'min_price' || e.target.name === 'max_price' || e.target.name === 'rooms_min')) {
-      form.submit();
-    }
+  document.querySelectorAll('[form="filterForm"]').forEach(function (control) {
+    control.addEventListener('change', function (e) {
+      if (e.target && e.target.name !== 'q') {
+        form.submit();
+      }
+    });
   });
 });

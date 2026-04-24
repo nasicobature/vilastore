@@ -3172,6 +3172,96 @@ button {
     linear-gradient(135deg, rgba(255, 248, 236, 0.98), rgba(247, 249, 252, 0.98));
 }
 
+.marketplace-house-search-panel {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 1.25rem;
+  background:
+    radial-gradient(circle at top right, rgba(244, 192, 105, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 250, 242, 0.98));
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.05);
+}
+
+.marketplace-house-search-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.marketplace-house-search-head h2 {
+  margin: 0.55rem 0 0.35rem;
+  font-size: 1.4rem;
+}
+
+.marketplace-house-search-head p {
+  margin: 0;
+  color: var(--muted-foreground);
+  max-width: 760px;
+}
+
+.marketplace-house-search-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.marketplace-house-search-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.marketplace-search-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.marketplace-search-field span {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+
+.marketplace-search-field-wide {
+  grid-column: span 3;
+}
+
+.marketplace-search-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.marketplace-check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--foreground);
+}
+
+.marketplace-check-pill input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.marketplace-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  min-height: 1.5rem;
+}
+
 /* Shop List / Grid */
 .shop-list {
   display: grid;
@@ -3637,6 +3727,83 @@ button {
   background: rgba(15, 23, 42, 0.04);
 }
 
+.marketplace-house-profile-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 249, 240, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.marketplace-house-cover {
+  position: relative;
+  height: 210px;
+}
+
+.marketplace-house-cover-overlay {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.marketplace-house-avatar-ring {
+  border-radius: 24px;
+}
+
+.marketplace-house-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.marketplace-house-contact-block {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.marketplace-house-contact-block span {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+  margin-bottom: 0.25rem;
+}
+
+.marketplace-house-contact-block strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.marketplace-house-contact-block p,
+.marketplace-house-footnote {
+  margin: 0.3rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.marketplace-house-privacy-note {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 0.75rem;
+  padding: 0.95rem;
+  border: 1px solid rgba(176, 110, 33, 0.2);
+  border-radius: 16px;
+  background: rgba(176, 110, 33, 0.06);
+}
+
+.marketplace-house-privacy-note i {
+  color: #8a5417;
+}
+
+.marketplace-house-privacy-note p {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.87rem;
+  line-height: 1.55;
+}
+
 .house-detail-panel-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3668,6 +3835,112 @@ button {
   background:
     radial-gradient(circle at top right, rgba(244, 192, 105, 0.18), transparent 32%),
     linear-gradient(135deg, rgba(255, 249, 240, 0.95), rgba(245, 247, 250, 0.95));
+}
+
+.marketplace-house-headline-card {
+  display: grid;
+  grid-template-columns: 1.7fr minmax(220px, 0.7fr);
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.marketplace-house-headline-card h2 {
+  margin: 0.75rem 0 0.45rem;
+}
+
+.marketplace-house-headline-card p {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+
+.marketplace-house-hero-price {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  padding: 1rem;
+}
+
+.marketplace-house-hero-price span,
+.marketplace-house-hero-price small {
+  display: block;
+  color: var(--muted-foreground);
+}
+
+.marketplace-house-hero-price strong {
+  display: block;
+  margin: 0.45rem 0;
+  font-size: 1.45rem;
+}
+
+.marketplace-house-gallery-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.marketplace-house-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.marketplace-house-gallery-card {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+}
+
+.marketplace-house-gallery-media {
+  min-height: 210px;
+  background: linear-gradient(135deg, rgba(70, 114, 255, 0.08), rgba(7, 163, 125, 0.1));
+}
+
+.marketplace-house-gallery-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.marketplace-house-gallery-body {
+  padding: 1rem;
+}
+
+.marketplace-house-gallery-body h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.98rem;
+}
+
+.marketplace-house-gallery-body p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+}
+
+.marketplace-house-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.marketplace-house-insight-card {
+  padding: 1.1rem;
+}
+
+.marketplace-house-insight-card h3 {
+  margin-bottom: 0.85rem;
+}
+
+.marketplace-house-bullets {
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--muted-foreground);
+  display: grid;
+  gap: 0.5rem;
 }
 
 .marketplace-selected-items {
@@ -4431,6 +4704,22 @@ button {
     justify-content: flex-start;
   }
 
+  .marketplace-house-search-head {
+    flex-direction: column;
+  }
+
+  .marketplace-house-search-actions {
+    justify-content: flex-start;
+  }
+
+  .marketplace-house-search-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .marketplace-search-field-wide {
+    grid-column: span 1;
+  }
+
   .delivery-welcome-card {
     flex-direction: column;
     align-items: flex-start;
@@ -4665,6 +4954,11 @@ button {
   font-weight: 600;
 }
 
+.house-market-chip-neutral {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--foreground);
+}
+
 .house-market-card-subtitle {
   margin: 0.35rem 0 0;
   color: var(--muted-foreground);
@@ -4687,6 +4981,21 @@ button {
 .house-market-stat-label {
   display: block;
   margin-bottom: 0.3rem;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.house-market-card-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border-top: 1px dashed rgba(15, 23, 42, 0.08);
+  padding-top: 0.75rem;
+}
+
+.house-market-agent-label {
   color: var(--muted-foreground);
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -4720,7 +5029,9 @@ button {
   }
 
   .house-market-stats,
-  .house-detail-panel-grid {
+  .house-detail-panel-grid,
+  .marketplace-house-insight-grid,
+  .marketplace-house-headline-card {
     grid-template-columns: 1fr;
   }
 }
