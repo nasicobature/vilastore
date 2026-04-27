@@ -2486,19 +2486,31 @@ def housing_signup(request):
 
 
 def login_view(request):
+    preferred_account_type = (request.GET.get("account_type") or "").strip()
+    if preferred_account_type not in {
+        User.ACCOUNT_TYPE_SHOP,
+        User.ACCOUNT_TYPE_HOUSING,
+    }:
+        preferred_account_type = ""
+
     if request.user.is_authenticated:
-        return redirect(_post_login_redirect_name(request.user))
+        current_account_type = getattr(request.user, "account_type", User.ACCOUNT_TYPE_SHOP)
+        if preferred_account_type and preferred_account_type != current_account_type:
+            logout(request)
+            messages.info(request, f"Signed out of your {current_account_type} account. Sign in to continue to the {preferred_account_type} portal.")
+        else:
+            return redirect(_post_login_redirect_name(request.user))
 
     login_context = {
         "prefill_email": "",
-        "selected_account_type": "",
+        "selected_account_type": preferred_account_type,
         "account_type_options": [],
     }
 
     if request.method == "POST":
         identifier = (request.POST.get("email") or "").strip()
         password = request.POST.get("password") or ""
-        selected_account_type = (request.POST.get("account_type") or "").strip()
+        selected_account_type = (request.POST.get("account_type") or preferred_account_type).strip()
         login_context["prefill_email"] = identifier
         login_context["selected_account_type"] = selected_account_type
 

@@ -51,6 +51,9 @@
         
         <form method="POST" action="{% url 'login' %}" class="auth-form">
           {% csrf_token %}
+          {% if selected_account_type and not account_type_options %}
+          <input type="hidden" name="account_type" value="{{ selected_account_type }}">
+          {% endif %}
           <div class="form-group">
             <label for="email">Email or Username</label>
             <div class="input-with-icon">

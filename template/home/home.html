@@ -252,7 +252,7 @@
         <p>Register as a house owner or agent, then manage rental listings, tenants, payments, availability, and reminders from the web dashboard.</p>
         <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
           <a href="{% url 'housing_signup' %}" class="portal-btn"><i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register Housing</a>
-          <a href="{% url 'login' %}" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
+          <a href="{% url 'login' %}?account_type=housing" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
             <i data-lucide="log-in" style="width:18px;height:18px;"></i> Housing Login
           </a>
         </div>
