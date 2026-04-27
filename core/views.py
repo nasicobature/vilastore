@@ -51,7 +51,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.shortcuts import redirect, get_object_or_404
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from datetime import datetime
 from django.contrib.auth.hashers import make_password
@@ -4794,6 +4794,13 @@ def marketplace(request):
     verified = request.GET.get("verified") == "1"
     sort = request.GET.get("sort") or "rating"
 
+    valid_property_types = {choice[0]: choice[1] for choice in HouseListing.PROPERTY_TYPE_CHOICES}
+    valid_listing_modes = {choice[0]: choice[1] for choice in HouseListing.LISTING_MODE_CHOICES}
+    if property_type and property_type not in valid_property_types:
+        property_type = ""
+    if listing_mode and listing_mode not in valid_listing_modes:
+        listing_mode = ""
+
     _ensure_marketplace_profiles()
 
     profiles = (
@@ -4870,26 +4877,45 @@ def marketplace(request):
         )
 
     min_price_value = None
+    max_price_value = None
     rooms_min_value = None
     if rooms_min:
         try:
             rooms_min_value = int(rooms_min)
-            houses = houses.filter(rooms_count__gte=rooms_min_value)
+            if rooms_min_value > 0:
+                houses = houses.filter(rooms_count__gte=rooms_min_value)
+            else:
+                rooms_min = ""
         except Exception:
             rooms_min = ""
     if min_price:
         try:
             min_price_value = Decimal(min_price)
-            houses = houses.filter(price__gte=min_price_value)
-        except Exception:
+            if min_price_value < 0:
+                min_price = ""
+                min_price_value = None
+        except (InvalidOperation, ValueError):
             min_price = ""
-    max_price_value = None
+            min_price_value = None
     if max_price:
         try:
             max_price_value = Decimal(max_price)
-            houses = houses.filter(price__lte=max_price_value)
-        except Exception:
+            if max_price_value < 0:
+                max_price = ""
+                max_price_value = None
+        except (InvalidOperation, ValueError):
             max_price = ""
+            max_price_value = None
+
+    if min_price_value is not None and max_price_value is not None and min_price_value > max_price_value:
+        min_price_value, max_price_value = max_price_value, min_price_value
+        min_price = format(min_price_value, "f")
+        max_price = format(max_price_value, "f")
+
+    if min_price_value is not None:
+        houses = houses.filter(price__gte=min_price_value)
+    if max_price_value is not None:
+        houses = houses.filter(price__lte=max_price_value)
 
     if sort == "newest":
         houses = houses.order_by("-created_at")
@@ -4932,7 +4958,9 @@ def marketplace(request):
             "category": category,
             "location": location,
             "property_type": property_type,
+            "property_type_label": valid_property_types.get(property_type, ""),
             "listing_mode": listing_mode,
+            "listing_mode_label": valid_listing_modes.get(listing_mode, ""),
             "rooms_min": rooms_min,
             "min_price": min_price,
             "max_price": max_price,
@@ -4963,6 +4991,97 @@ def marketplace_house_detail(request, house_id):
         "active_rental": active_rental,
         "marketplace_active_tab": "marketplace",
     })
+
+
+def _render_marketplace_housing_profile(
+    request,
+    *,
+    houses,
+    profile_title,
+    profile_subtitle,
+    profile_description,
+    profile_location,
+    cover_image_url="",
+    avatar_image_url="",
+    verification_label="",
+    profile_username="",
+):
+    buyer = _get_marketplace_buyer(request)
+    houses = houses.prefetch_related("images", "rentals")
+    available_count = sum(1 for house in houses if house.is_available)
+
+    return render(request, "shopboy/marketplace-housing-profile.html", {
+        "buyer": buyer,
+        "profile_title": profile_title,
+        "profile_subtitle": profile_subtitle,
+        "profile_description": profile_description,
+        "profile_location": profile_location,
+        "cover_image_url": cover_image_url,
+        "avatar_image_url": avatar_image_url,
+        "verification_label": verification_label,
+        "profile_username": profile_username,
+        "houses": houses,
+        "available_count": available_count,
+        "marketplace_active_tab": "marketplace",
+    })
+
+
+def marketplace_housing_profile(request, username):
+    owner = get_object_or_404(
+        User,
+        username=username,
+        is_active=True,
+        account_type=User.ACCOUNT_TYPE_HOUSING,
+    )
+    profile, _ = MarketplaceShopProfile.objects.get_or_create(user=owner)
+    houses = _marketplace_house_queryset().filter(owner=owner).order_by(
+        Case(
+            When(availability_status=HouseListing.STATUS_AVAILABLE, then=0),
+            When(availability_status=HouseListing.STATUS_PARTIAL, then=1),
+            default=2,
+            output_field=IntegerField(),
+        ),
+        "-created_at",
+    )
+
+    return _render_marketplace_housing_profile(
+        request,
+        houses=houses,
+        profile_title=owner.business_name or owner.username,
+        profile_subtitle=f"@{owner.username}",
+        profile_description=profile.description or "Browse every live house under this housing profile.",
+        profile_location=profile.location or owner.state or owner.country or "Location on request",
+        cover_image_url=profile.cover_image.url if profile.cover_image else "",
+        avatar_image_url=owner.profile_image.url if owner.profile_image else "",
+        verification_label="Verified housing profile" if profile.is_verified else "",
+        profile_username=owner.username,
+    )
+
+
+def marketplace_housing_agent_profile(request, username):
+    agent = get_object_or_404(Agent, username=username, is_active=True)
+    houses = _marketplace_house_queryset().filter(
+        Q(listing_agent=agent) | Q(managed_by_agent=agent)
+    ).distinct().order_by(
+        Case(
+            When(availability_status=HouseListing.STATUS_AVAILABLE, then=0),
+            When(availability_status=HouseListing.STATUS_PARTIAL, then=1),
+            default=2,
+            output_field=IntegerField(),
+        ),
+        "-created_at",
+    )
+
+    return _render_marketplace_housing_profile(
+        request,
+        houses=houses,
+        profile_title=agent.full_name,
+        profile_subtitle=f"@{agent.username}",
+        profile_description="Browse every live house currently listed or managed by this housing agent.",
+        profile_location=houses[0].area_label if houses else "Location on request",
+        verification_label="Verified housing agent" if agent.is_email_verified else "",
+        profile_username=agent.username,
+    )
 
 
 @require_POST

@@ -100,12 +100,21 @@
         <div class="marketplace-house-search-grid">
           <label class="marketplace-search-field">
             <span>Location</span>
-            <select name="location" class="input" form="filterForm">
-              <option value="">All locations</option>
+            <input
+              type="text"
+              name="location"
+              class="input"
+              form="filterForm"
+              list="marketplaceLocationSuggestions"
+              placeholder="Type any location or area"
+              value="{{ filters.location }}"
+            >
+            <small class="marketplace-search-field-help">Type your own area or choose one of the suggestions below.</small>
+            <datalist id="marketplaceLocationSuggestions">
               {% for loc in locations %}
-              <option value="{{ loc }}" {% if filters.location == loc %}selected{% endif %}>{{ loc }}</option>
+              <option value="{{ loc }}">
               {% endfor %}
-            </select>
+            </datalist>
           </label>
           <label class="marketplace-search-field">
             <span>House type</span>
@@ -168,10 +177,10 @@
           <span class="house-market-chip">Area: {{ filters.location }}</span>
           {% endif %}
           {% if filters.property_type %}
-          <span class="house-market-chip">Type selected</span>
+          <span class="house-market-chip">Type: {{ filters.property_type_label|default:filters.property_type }}</span>
           {% endif %}
           {% if filters.listing_mode %}
-          <span class="house-market-chip">Listing selected</span>
+          <span class="house-market-chip">Listing: {{ filters.listing_mode_label|default:filters.listing_mode }}</span>
           {% endif %}
           {% if filters.rooms_min %}
           <span class="house-market-chip">Min rooms: {{ filters.rooms_min }}</span>
@@ -230,7 +239,7 @@
         </div>
         <div class="housing-market-grid">
           {% for house in houses %}
-          <a href="{% url 'marketplace_house_detail' house.id %}" class="house-market-card">
+          <a href="{% if house.owner %}{% url 'marketplace_housing_profile' house.owner.username %}{% elif house.marketplace_agent %}{% url 'marketplace_housing_agent_profile' house.marketplace_agent.username %}{% else %}{% url 'marketplace_house_detail' house.id %}{% endif %}" class="house-market-card">
             <div class="house-market-card-media">
               {% if house.primary_image %}
               <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}">
@@ -281,7 +290,7 @@
               </div>
               <div class="house-market-card-footer">
                 <span class="house-market-owner"><i data-lucide="store" style="width:14px;height:14px;"></i> {{ house.display_owner_name }}</span>
-                <span class="house-market-link">Open profile <i data-lucide="arrow-right" style="width:14px;height:14px;"></i></span>
+                <span class="house-market-link">Open housing profile <i data-lucide="arrow-right" style="width:14px;height:14px;"></i></span>
               </div>
             </div>
           </a>
