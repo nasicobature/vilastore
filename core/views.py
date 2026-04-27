@@ -4781,6 +4781,9 @@ def marketplace_rider_portal(request):
 
 def marketplace(request):
     buyer = _get_marketplace_buyer(request)
+    active_tab = (request.GET.get("tab") or "houses").strip().lower()
+    if active_tab not in {"houses", "shops"}:
+        active_tab = "houses"
     q = (request.GET.get("q") or "").strip()
     username_q = q[1:] if q.startswith("@") else q
     category = (request.GET.get("category") or "").strip()
@@ -4946,6 +4949,8 @@ def marketplace(request):
 
     return render(request, "shopboy/marketplace.html", {
         "buyer": buyer,
+        "active_tab": active_tab,
+        "active_result_count": houses.count() if active_tab == "houses" else profiles.count(),
         "marketplace_portal_role": "rider" if _is_marketplace_rider_account(buyer) else "customer",
         "profiles": profiles,
         "houses": houses,

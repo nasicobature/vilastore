@@ -18,21 +18,12 @@
           <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
           <span>VilaStore</span>
         </a>
-        <div class="marketplace-search">
-          <form method="get" id="filterForm" class="search-box">
-            <i data-lucide="search"></i>
-            <input type="text" class="input" placeholder="Search the marketplace..." name="q" id="shopSearch" value="{{ filters.q }}">
-          </form>
-        </div>
         <div class="marketplace-actions">
           {% if buyer %}
-          <a href="{% if marketplace_portal_role == 'rider' %}{% url 'marketplace_rider_portal' %}{% else %}{% url 'marketplace_home' %}{% endif %}" class="btn btn-ghost">
-            {% if marketplace_portal_role == 'rider' %}Rider Portal{% else %}Customer Portal{% endif %}
-          </a>
+          <a href="{% url 'marketplace_home' %}" class="btn btn-ghost">My Account</a>
           <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
           {% else %}
           <a href="{% url 'marketplace_login' %}" class="btn btn-ghost">Sign In</a>
-          <a href="{% url 'marketplace_rider_signup' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline">Register as Rider</a>
           <a href="{% url 'marketplace_signup' %}" class="btn btn-primary"><i data-lucide="user"></i> Create Account</a>
           {% endif %}
         </div>
@@ -41,344 +32,399 @@
     </div>
   </header>
 
-  <div class="marketplace-container marketplace-portal-shell marketplace-browse-shell">
-    <aside class="marketplace-sidebar marketplace-portal-sidebar marketplace-browse-sidebar">
-      <div class="marketplace-sidebar-panel">
-        <span class="badge badge-primary">House Search</span>
-        <h3>Search homes with less clutter.</h3>
-        <p>Use the structured fields to narrow homes by area, type, listing mode, rooms, price, and availability in one place.</p>
-      </div>
-      <div class="marketplace-mini-metrics">
-        <div class="marketplace-mini-metric">
-          <span>Homes visible</span>
-          <strong>{{ houses|length }}</strong>
-        </div>
-        <div class="marketplace-mini-metric">
-          <span>Search areas</span>
-          <strong>{{ locations|length }}</strong>
-        </div>
-        <div class="marketplace-mini-metric">
-          <span>Marketplace shops</span>
-          <strong>{{ profiles|length }}</strong>
-        </div>
-      </div>
-    </aside>
+  <form method="get" id="filterForm">
+    <input type="hidden" name="tab" value="{{ active_tab }}">
 
-    <main class="marketplace-main marketplace-portal-main">
-      <section class="marketplace-hero-panel marketplace-browse-hero">
-        <div>
-          <span class="badge badge-primary">Shared Access</span>
-          <h1>Browse the marketplace with less noise and clearer next steps.</h1>
-          <p>
-            Explore houses and shops in one place, then move into the customer portal for orders and delivery or the rider portal for delivery work.
-          </p>
-        </div>
-        <div class="marketplace-hero-actions">
-          <a href="{% url 'marketplace_login' %}" class="btn btn-primary">Customer Sign In</a>
-          <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-outline">Delivery Rider Sign In</a>
-          <a href="{% url 'marketplace_rider_signup' %}?next={% url 'marketplace_rider_portal' %}" class="btn btn-ghost">Create Rider Account</a>
-        </div>
-      </section>
-
-      <section class="marketplace-house-search-panel">
-        <div class="marketplace-house-search-head">
-          <div>
-            <span class="badge badge-primary">Refine House Search</span>
-            <h2>Find the right home faster.</h2>
-            <p>Choose area, home type, listing mode, rooms, and price range from a single cleaner search panel.</p>
+    <div class="marketplace-container marketplace-browse-shell-simple">
+      <main class="marketplace-main marketplace-browse-main-simple">
+        <section class="marketplace-simple-hero">
+          <div class="marketplace-simple-hero-copy">
+            <span class="badge badge-primary">Marketplace</span>
+            <h1>Find homes and shops without the noise.</h1>
+            <p>Search once, switch between houses and shops, then open the exact profile you want.</p>
           </div>
-          <div class="marketplace-house-search-actions">
-            <button type="submit" form="filterForm" class="btn btn-primary">
-              <i data-lucide="search"></i> Search houses
-            </button>
-            <button class="btn btn-ghost" id="clearFiltersBtn" type="button">
-              <i data-lucide="x"></i> Clear filters
-            </button>
-          </div>
-        </div>
-
-        <div class="marketplace-house-search-grid">
-          <label class="marketplace-search-field">
-            <span>Location</span>
-            <input
-              type="text"
-              name="location"
-              class="input"
-              form="filterForm"
-              list="marketplaceLocationSuggestions"
-              placeholder="Type any location or area"
-              value="{{ filters.location }}"
-            >
-            <small class="marketplace-search-field-help">Type your own area or choose one of the suggestions below.</small>
-            <datalist id="marketplaceLocationSuggestions">
-              {% for loc in locations %}
-              <option value="{{ loc }}">
-              {% endfor %}
-            </datalist>
-          </label>
-          <label class="marketplace-search-field">
-            <span>House type</span>
-            <select name="property_type" class="input" form="filterForm">
-              <option value="">All house types</option>
-              {% for value, label in house_types %}
-              <option value="{{ value }}" {% if filters.property_type == value %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label class="marketplace-search-field">
-            <span>Listing mode</span>
-            <select name="listing_mode" class="input" form="filterForm">
-              <option value="">All listings</option>
-              {% for value, label in listing_modes %}
-              <option value="{{ value }}" {% if filters.listing_mode == value %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label class="marketplace-search-field">
-            <span>Minimum rooms</span>
-            <input type="number" class="input" form="filterForm" name="rooms_min" placeholder="Any" value="{{ filters.rooms_min }}" min="1" step="1">
-          </label>
-          <label class="marketplace-search-field">
-            <span>Minimum price</span>
-            <input type="number" class="input" form="filterForm" name="min_price" id="minPriceField" placeholder="No minimum" value="{{ filters.min_price }}" min="0" step="0.01">
-          </label>
-          <label class="marketplace-search-field">
-            <span>Maximum price</span>
-            <input type="number" class="input" form="filterForm" name="max_price" id="maxPriceField" placeholder="No maximum" value="{{ filters.max_price }}" min="0" step="0.01">
-          </label>
-          <label class="marketplace-search-field marketplace-search-field-wide">
-            <span>Sort results</span>
-            <select name="sort" class="input" form="filterForm">
-              <option value="rating" {% if filters.sort == "rating" %}selected{% endif %}>Highest Rating</option>
-              <option value="sales" {% if filters.sort == "sales" %}selected{% endif %}>Most Sales</option>
-              <option value="newest" {% if filters.sort == "newest" %}selected{% endif %}>Newest</option>
-              <option value="price_low" {% if filters.sort == "price_low" %}selected{% endif %}>Lowest House Price</option>
-              <option value="price_high" {% if filters.sort == "price_high" %}selected{% endif %}>Highest House Price</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="marketplace-search-checks">
-          <label class="marketplace-check-pill">
-            <input type="checkbox" name="verified" value="1" form="filterForm" {% if filters.verified %}checked{% endif %}>
-            <span>Verified owners only</span>
-          </label>
-          <label class="marketplace-check-pill">
-            <input type="checkbox" name="available" value="1" form="filterForm" {% if filters.available %}checked{% endif %}>
-            <span>Available houses only</span>
-          </label>
-        </div>
-
-        <div class="marketplace-active-filters">
-          {% if filters.q %}
-          <span class="house-market-chip">Search: {{ filters.q }}</span>
-          {% endif %}
-          {% if filters.location %}
-          <span class="house-market-chip">Area: {{ filters.location }}</span>
-          {% endif %}
-          {% if filters.property_type %}
-          <span class="house-market-chip">Type: {{ filters.property_type_label|default:filters.property_type }}</span>
-          {% endif %}
-          {% if filters.listing_mode %}
-          <span class="house-market-chip">Listing: {{ filters.listing_mode_label|default:filters.listing_mode }}</span>
-          {% endif %}
-          {% if filters.rooms_min %}
-          <span class="house-market-chip">Min rooms: {{ filters.rooms_min }}</span>
-          {% endif %}
-          {% if filters.min_price %}
-          <span class="house-market-chip">Min price: {{ filters.min_price }}</span>
-          {% endif %}
-          {% if filters.max_price %}
-          <span class="house-market-chip">Max price: {{ filters.max_price }}</span>
-          {% endif %}
-          {% if filters.verified %}
-          <span class="house-market-chip">Verified only</span>
-          {% endif %}
-          {% if filters.available %}
-          <span class="house-market-chip">Available only</span>
-          {% endif %}
-        </div>
-      </section>
-
-      <section class="marketplace-quick-grid">
-        <article class="marketplace-quick-card">
-          <div class="marketplace-quick-icon"><i data-lucide="house"></i></div>
-          <div>
-            <h3>{{ houses|length }} Houses</h3>
-            <p>Private-address listings with cleaner cards and direct owner chat.</p>
-          </div>
-        </article>
-        <article class="marketplace-quick-card">
-          <div class="marketplace-quick-icon"><i data-lucide="store"></i></div>
-          <div>
-            <h3>{{ profiles|length }} Shops</h3>
-            <p>Browse verified sellers, check products, and open order chat fast.</p>
-          </div>
-        </article>
-        <article class="marketplace-quick-card">
-          <div class="marketplace-quick-icon"><i data-lucide="map"></i></div>
-          <div>
-            <h3>{{ locations|length }} Areas</h3>
-            <p>Use location, price, room, and listing filters to narrow results faster.</p>
-          </div>
-        </article>
-      </section>
-
-      <div class="marketplace-results-header">
-        <div>
-          <h2 id="resultsCount">{{ houses|length }} house{{ houses|length|pluralize }} and {{ profiles|length }} shop{{ profiles|length|pluralize }} found</h2>
-          <p class="marketplace-house-section-note">Results update with every filter so it is easier to focus on what matters.</p>
-        </div>
-      </div>
-      <section style="margin-bottom:1.5rem;">
-        <div class="marketplace-results-header">
-          <div>
-            <h2>Houses</h2>
-            <p class="marketplace-house-section-note">Cleaner property cards, private addresses, and faster browsing.</p>
-          </div>
-        </div>
-        <div class="housing-market-grid">
-          {% for house in houses %}
-          <a href="{% if house.owner %}{% url 'marketplace_housing_profile' house.owner.username %}{% elif house.marketplace_agent %}{% url 'marketplace_housing_agent_profile' house.marketplace_agent.username %}{% else %}{% url 'marketplace_house_detail' house.id %}{% endif %}" class="house-market-card">
-            <div class="house-market-card-media">
-              {% if house.primary_image %}
-              <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}">
-              {% elif house.owner and house.owner.profile_image %}
-              <img src="{{ house.owner.profile_image.url }}" alt="{{ house.title }}">
-              {% else %}
-              <div class="housing-listing-fallback"><i data-lucide="house"></i></div>
-              {% endif %}
-            </div>
-            <div class="house-market-card-body">
-              <div class="house-market-card-chip-row">
-                <span class="house-market-chip">{{ house.get_listing_mode_display }}</span>
-                <span class="house-market-chip house-market-chip-neutral">{{ house.profile_type_label }}</span>
+          <div class="marketplace-simple-search">
+            <label class="marketplace-search-stack" for="shopSearch">
+              <span>Search</span>
+              <div class="search-box marketplace-search-box-wide">
+                <i data-lucide="search"></i>
+                <input type="text" class="input" placeholder="Search by house title, shop name, username, product, or area" name="q" id="shopSearch" value="{{ filters.q }}">
               </div>
-              <div class="housing-market-card-top">
+            </label>
+            <div class="marketplace-simple-search-actions">
+              <button type="submit" class="btn btn-primary">
+                <i data-lucide="search"></i> Search
+              </button>
+              <button class="btn btn-ghost" id="clearFiltersBtn" type="button">
+                <i data-lucide="x"></i> Clear
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="marketplace-tab-shell">
+          <div class="marketplace-tab-row">
+            <a href="{% url 'marketplace' %}?tab=houses" class="marketplace-tab {% if active_tab == 'houses' %}active{% endif %}">
+              <i data-lucide="house"></i>
+              <span>Houses</span>
+              <strong>{{ houses|length }}</strong>
+            </a>
+            <a href="{% url 'marketplace' %}?tab=shops" class="marketplace-tab {% if active_tab == 'shops' %}active{% endif %}">
+              <i data-lucide="store"></i>
+              <span>Shops</span>
+              <strong>{{ profiles|length }}</strong>
+            </a>
+          </div>
+        </section>
+
+        <section class="marketplace-simple-summary">
+          <div>
+            <h2>
+              {% if active_tab == 'houses' %}
+              {{ active_result_count }} house{{ active_result_count|pluralize }} found
+              {% else %}
+              {{ active_result_count }} shop{{ active_result_count|pluralize }} found
+              {% endif %}
+            </h2>
+            <p>
+              {% if active_tab == 'houses' %}
+              Browse verified housing profiles, compare price and availability, and open the full housing profile before chat.
+              {% else %}
+              Browse shop profiles, preview products, and jump straight into the store page when you are ready.
+              {% endif %}
+            </p>
+          </div>
+          <div class="marketplace-simple-metrics">
+            <div class="marketplace-simple-metric">
+              <span>Houses</span>
+              <strong>{{ houses|length }}</strong>
+            </div>
+            <div class="marketplace-simple-metric">
+              <span>Shops</span>
+              <strong>{{ profiles|length }}</strong>
+            </div>
+            <div class="marketplace-simple-metric">
+              <span>Areas</span>
+              <strong>{{ locations|length }}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="marketplace-simple-layout">
+          <aside class="marketplace-simple-sidebar">
+            <div class="marketplace-filter-card">
+              <div class="marketplace-filter-card-head">
                 <div>
-                  <h3>{{ house.title }}</h3>
-                  <p class="house-market-card-subtitle">{{ house.area_label }} · Address shared privately after owner response.</p>
-                </div>
-                <span class="badge {% if house.is_available %}badge-success{% else %}badge-warning{% endif %}">
-                  {{ house.get_availability_status_display }}
-                </span>
-              </div>
-              <p class="shop-card-desc">{{ house.description|default:"No description yet." }}</p>
-              <div class="house-market-stats">
-                <div class="house-market-stat">
-                  <span class="house-market-stat-label">Price</span>
-                  <strong>NGN {{ house.price|floatformat:2 }}</strong>
-                </div>
-                <div class="house-market-stat">
-                  <span class="house-market-stat-label">Type</span>
-                  <strong>{{ house.profile_type_label }}</strong>
-                </div>
-                <div class="house-market-stat">
-                  <span class="house-market-stat-label">Units</span>
-                  <strong>{{ house.units_summary }}</strong>
+                  <span class="badge badge-primary">Filters</span>
+                  <h3>{% if active_tab == 'houses' %}Refine Houses{% else %}Refine Shops{% endif %}</h3>
                 </div>
               </div>
-              <div class="house-market-card-agent">
-                <span class="house-market-agent-label">Agent</span>
-                <strong>
-                  {% if house.marketplace_agent %}
-                  {{ house.marketplace_agent.full_name }}
-                  {% else %}
-                  {{ house.display_owner_name }}
-                  {% endif %}
-                </strong>
+
+              {% if active_tab == 'houses' %}
+              <div class="marketplace-house-search-grid marketplace-house-search-grid-simple">
+                <label class="marketplace-search-field">
+                  <span>Location</span>
+                  <input
+                    type="text"
+                    name="location"
+                    class="input"
+                    list="marketplaceLocationSuggestions"
+                    placeholder="Type any location or area"
+                    value="{{ filters.location }}"
+                  >
+                  <datalist id="marketplaceLocationSuggestions">
+                    {% for loc in locations %}
+                    <option value="{{ loc }}">
+                    {% endfor %}
+                  </datalist>
+                </label>
+                <label class="marketplace-search-field">
+                  <span>House Type</span>
+                  <select name="property_type" class="input">
+                    <option value="">All house types</option>
+                    {% for value, label in house_types %}
+                    <option value="{{ value }}" {% if filters.property_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label class="marketplace-search-field">
+                  <span>Listing Mode</span>
+                  <select name="listing_mode" class="input">
+                    <option value="">All listings</option>
+                    {% for value, label in listing_modes %}
+                    <option value="{{ value }}" {% if filters.listing_mode == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label class="marketplace-search-field">
+                  <span>Minimum Rooms</span>
+                  <input type="number" class="input" name="rooms_min" placeholder="Any" value="{{ filters.rooms_min }}" min="1" step="1">
+                </label>
+                <label class="marketplace-search-field">
+                  <span>Minimum Price</span>
+                  <input type="number" class="input" name="min_price" id="minPriceField" placeholder="No minimum" value="{{ filters.min_price }}" min="0" step="0.01">
+                </label>
+                <label class="marketplace-search-field">
+                  <span>Maximum Price</span>
+                  <input type="number" class="input" name="max_price" id="maxPriceField" placeholder="No maximum" value="{{ filters.max_price }}" min="0" step="0.01">
+                </label>
+                <label class="marketplace-search-field">
+                  <span>Sort</span>
+                  <select name="sort" class="input" data-default-sort="rating">
+                    <option value="rating" {% if filters.sort == "rating" %}selected{% endif %}>Recommended</option>
+                    <option value="newest" {% if filters.sort == "newest" %}selected{% endif %}>Newest</option>
+                    <option value="price_low" {% if filters.sort == "price_low" %}selected{% endif %}>Lowest price</option>
+                    <option value="price_high" {% if filters.sort == "price_high" %}selected{% endif %}>Highest price</option>
+                  </select>
+                </label>
               </div>
-              <div class="house-market-card-footer">
-                <span class="house-market-owner"><i data-lucide="store" style="width:14px;height:14px;"></i> {{ house.display_owner_name }}</span>
-                <span class="house-market-link">Open housing profile <i data-lucide="arrow-right" style="width:14px;height:14px;"></i></span>
+
+              <div class="marketplace-search-checks marketplace-search-checks-simple">
+                <label class="marketplace-check-pill">
+                  <input type="checkbox" name="verified" value="1" {% if filters.verified %}checked{% endif %}>
+                  <span>Verified owners only</span>
+                </label>
+                <label class="marketplace-check-pill">
+                  <input type="checkbox" name="available" value="1" {% if filters.available %}checked{% endif %}>
+                  <span>Available houses only</span>
+                </label>
               </div>
-            </div>
-          </a>
-          {% empty %}
-          <div class="card" style="padding:2rem;">
-            <h3>No houses found</h3>
-            <p style="color:var(--muted-foreground);">Try changing the location, type, or price filters.</p>
-          </div>
-          {% endfor %}
-        </div>
-      </section>
-      <section>
-        <div class="marketplace-results-header">
-          <h2>Shops</h2>
-        </div>
-      <div id="shopList" class="shop-list">
-        {% for profile in profiles %}
-        <a href="{% url 'marketplace_shop' profile.user.username %}" class="shop-card">
-          <div class="shop-card-image">
-            <div class="shop-card-media-frame">
-              {% if profile.cover_image %}
-                <img src="{{ profile.cover_image.url }}" alt="{{ profile.user.business_name }}">
-              {% elif profile.user.profile_image %}
-                <img src="{{ profile.user.profile_image.url }}" alt="{{ profile.user.business_name }}">
               {% else %}
-                <div class="shop-card-image-fallback"></div>
+              <div class="marketplace-house-search-grid marketplace-house-search-grid-simple">
+                <label class="marketplace-search-field">
+                  <span>Category</span>
+                  <select name="category" class="input">
+                    <option value="">All categories</option>
+                    {% for item in categories %}
+                    <option value="{{ item }}" {% if filters.category == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label class="marketplace-search-field">
+                  <span>Location</span>
+                  <input
+                    type="text"
+                    name="location"
+                    class="input"
+                    list="marketplaceLocationSuggestions"
+                    placeholder="Type any location or area"
+                    value="{{ filters.location }}"
+                  >
+                  <datalist id="marketplaceLocationSuggestions">
+                    {% for loc in locations %}
+                    <option value="{{ loc }}">
+                    {% endfor %}
+                  </datalist>
+                </label>
+                <label class="marketplace-search-field">
+                  <span>Sort</span>
+                  <select name="sort" class="input" data-default-sort="rating">
+                    <option value="rating" {% if filters.sort == "rating" %}selected{% endif %}>Highest rating</option>
+                    <option value="sales" {% if filters.sort == "sales" %}selected{% endif %}>Most sales</option>
+                    <option value="newest" {% if filters.sort == "newest" %}selected{% endif %}>Newest</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="marketplace-search-checks marketplace-search-checks-simple">
+                <label class="marketplace-check-pill">
+                  <input type="checkbox" name="verified" value="1" {% if filters.verified %}checked{% endif %}>
+                  <span>Verified shops only</span>
+                </label>
+              </div>
               {% endif %}
+
+              <div class="marketplace-active-filters marketplace-active-filters-simple">
+                {% if filters.q %}
+                <span class="house-market-chip">Search: {{ filters.q }}</span>
+                {% endif %}
+                {% if filters.category and active_tab == 'shops' %}
+                <span class="house-market-chip">Category: {{ filters.category }}</span>
+                {% endif %}
+                {% if filters.location %}
+                <span class="house-market-chip">Area: {{ filters.location }}</span>
+                {% endif %}
+                {% if filters.property_type and active_tab == 'houses' %}
+                <span class="house-market-chip">Type: {{ filters.property_type_label|default:filters.property_type }}</span>
+                {% endif %}
+                {% if filters.listing_mode and active_tab == 'houses' %}
+                <span class="house-market-chip">Listing: {{ filters.listing_mode_label|default:filters.listing_mode }}</span>
+                {% endif %}
+                {% if filters.rooms_min and active_tab == 'houses' %}
+                <span class="house-market-chip">Min rooms: {{ filters.rooms_min }}</span>
+                {% endif %}
+                {% if filters.min_price and active_tab == 'houses' %}
+                <span class="house-market-chip">Min price: {{ filters.min_price }}</span>
+                {% endif %}
+                {% if filters.max_price and active_tab == 'houses' %}
+                <span class="house-market-chip">Max price: {{ filters.max_price }}</span>
+                {% endif %}
+                {% if filters.verified %}
+                <span class="house-market-chip">Verified only</span>
+                {% endif %}
+                {% if filters.available and active_tab == 'houses' %}
+                <span class="house-market-chip">Available only</span>
+                {% endif %}
+              </div>
             </div>
-            <div class="shop-card-logo-ring">
-              {% if profile.logo %}
-                <img src="{{ profile.logo.url }}" alt="{{ profile.user.business_name }}" class="shop-card-logo">
-              {% elif profile.user.profile_image %}
-                <img src="{{ profile.user.profile_image.url }}" alt="{{ profile.user.business_name }}" class="shop-card-logo">
-              {% else %}
-                <div class="shop-card-logo shop-card-logo-fallback">
-                  <i data-lucide="store"></i>
-                </div>
-              {% endif %}
-            </div>
-          </div>
-          <div class="shop-card-content">
-            <div class="shop-card-header">
+          </aside>
+
+          <section class="marketplace-simple-results">
+            {% if active_tab == 'houses' %}
+            <div class="marketplace-results-header">
               <div>
-                <div style="display:flex;align-items:center;gap:0.5rem;">
-                  <h3>{{ profile.user.business_name|default:profile.user.username }}</h3>
-                  {% if profile.is_verified %}
-                  <i data-lucide="badge-check" style="width:18px;height:18px;color:var(--primary);"></i>
-                  {% endif %}
-                </div>
-                <p style="font-size:0.875rem;color:var(--muted-foreground);">@{{ profile.user.username }}</p>
+                <h2>House Results</h2>
+                <p class="marketplace-house-section-note">Open a housing profile to see every house under that owner or agent.</p>
               </div>
             </div>
-            <p class="shop-card-desc">{{ profile.description|default:"No description yet." }}</p>
-            <div class="shop-card-products">
-              {% for product in profile.user.product_set.all|slice:":4" %}
-                <span class="shop-product-pill">
-                  {% if product.image %}
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}">
+            <div class="housing-market-grid">
+              {% for house in houses %}
+              <a href="{% if house.owner %}{% url 'marketplace_housing_profile' house.owner.username %}{% elif house.marketplace_agent %}{% url 'marketplace_housing_agent_profile' house.marketplace_agent.username %}{% else %}{% url 'marketplace_house_detail' house.id %}{% endif %}" class="house-market-card">
+                <div class="house-market-card-media">
+                  {% if house.primary_image %}
+                  <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}">
+                  {% elif house.owner and house.owner.profile_image %}
+                  <img src="{{ house.owner.profile_image.url }}" alt="{{ house.title }}">
                   {% else %}
-                    <i data-lucide="package"></i>
+                  <div class="housing-listing-fallback"><i data-lucide="house"></i></div>
                   {% endif %}
-                  <span>{{ product.name }}</span>
-                </span>
+                </div>
+                <div class="house-market-card-body">
+                  <div class="house-market-card-chip-row">
+                    <span class="house-market-chip">{{ house.get_listing_mode_display }}</span>
+                    <span class="house-market-chip house-market-chip-neutral">{{ house.profile_type_label }}</span>
+                  </div>
+                  <div class="housing-market-card-top">
+                    <div>
+                      <h3>{{ house.title }}</h3>
+                      <p class="house-market-card-subtitle">{{ house.area_label }} · Address shared privately after owner response.</p>
+                    </div>
+                    <span class="badge {% if house.is_available %}badge-success{% else %}badge-warning{% endif %}">
+                      {{ house.get_availability_status_display }}
+                    </span>
+                  </div>
+                  <p class="shop-card-desc">{{ house.description|default:"No description yet." }}</p>
+                  <div class="house-market-stats">
+                    <div class="house-market-stat">
+                      <span class="house-market-stat-label">Price</span>
+                      <strong>NGN {{ house.price|floatformat:2 }}</strong>
+                    </div>
+                    <div class="house-market-stat">
+                      <span class="house-market-stat-label">Type</span>
+                      <strong>{{ house.profile_type_label }}</strong>
+                    </div>
+                    <div class="house-market-stat">
+                      <span class="house-market-stat-label">Units</span>
+                      <strong>{{ house.units_summary }}</strong>
+                    </div>
+                  </div>
+                  <div class="house-market-card-agent">
+                    <span class="house-market-agent-label">Profile</span>
+                    <strong>
+                      {% if house.marketplace_agent %}
+                      {{ house.marketplace_agent.full_name }}
+                      {% else %}
+                      {{ house.display_owner_name }}
+                      {% endif %}
+                    </strong>
+                  </div>
+                  <div class="house-market-card-footer">
+                    <span class="house-market-owner"><i data-lucide="store" style="width:14px;height:14px;"></i> {{ house.display_owner_name }}</span>
+                    <span class="house-market-link">Open housing profile <i data-lucide="arrow-right" style="width:14px;height:14px;"></i></span>
+                  </div>
+                </div>
+              </a>
               {% empty %}
-                <span class="shop-product-pill">
-                  <i data-lucide="package"></i>
-                  <span>No products yet</span>
-                </span>
+              <div class="card marketplace-empty-state">
+                <i data-lucide="house" style="width:42px;height:42px;"></i>
+                <h3>No houses found</h3>
+                <p>Try changing the location, price, availability, or house type.</p>
+              </div>
               {% endfor %}
             </div>
-            <div class="shop-card-meta">
-              <span><i data-lucide="star" style="width:14px;height:14px;color:gold;"></i> {{ profile.rating }}</span>
-              <span><i data-lucide="shopping-bag" style="width:14px;height:14px;"></i> {{ profile.sales_count|default:0 }} sales</span>
-              <span><i data-lucide="map-pin" style="width:14px;height:14px;"></i> {{ profile.location|default:"-" }}</span>
+            {% else %}
+            <div class="marketplace-results-header">
+              <div>
+                <h2>Shop Results</h2>
+                <p class="marketplace-house-section-note">Open any shop to browse products and place an order.</p>
+              </div>
             </div>
-          </div>
-        </a>
-        {% empty %}
-        <div class="card" style="text-align:center;padding:3rem;">
-          <i data-lucide="store" style="width:48px;height:48px;margin:0 auto 1rem;display:block;color:var(--muted-foreground);"></i>
-          <h3>No shops found</h3>
-          <p style="color:var(--muted-foreground);">Try adjusting your filters</p>
-        </div>
-        {% endfor %}
-      </div>
-      </section>
-    </main>
-  </div>
+            <div id="shopList" class="shop-list shop-list--single">
+              {% for profile in profiles %}
+              <a href="{% url 'marketplace_shop' profile.user.username %}" class="shop-card">
+                <div class="shop-card-image">
+                  <div class="shop-card-media-frame">
+                    {% if profile.cover_image %}
+                      <img src="{{ profile.cover_image.url }}" alt="{{ profile.user.business_name }}">
+                    {% elif profile.user.profile_image %}
+                      <img src="{{ profile.user.profile_image.url }}" alt="{{ profile.user.business_name }}">
+                    {% else %}
+                      <div class="shop-card-image-fallback"></div>
+                    {% endif %}
+                  </div>
+                  <div class="shop-card-logo-ring">
+                    {% if profile.logo %}
+                      <img src="{{ profile.logo.url }}" alt="{{ profile.user.business_name }}" class="shop-card-logo">
+                    {% elif profile.user.profile_image %}
+                      <img src="{{ profile.user.profile_image.url }}" alt="{{ profile.user.business_name }}" class="shop-card-logo">
+                    {% else %}
+                      <div class="shop-card-logo shop-card-logo-fallback">
+                        <i data-lucide="store"></i>
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="shop-card-content">
+                  <div class="shop-card-header">
+                    <div>
+                      <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <h3>{{ profile.user.business_name|default:profile.user.username }}</h3>
+                        {% if profile.is_verified %}
+                        <i data-lucide="badge-check" style="width:18px;height:18px;color:var(--primary);"></i>
+                        {% endif %}
+                      </div>
+                      <p style="font-size:0.875rem;color:var(--muted-foreground);">@{{ profile.user.username }}</p>
+                    </div>
+                  </div>
+                  <p class="shop-card-desc">{{ profile.description|default:"No description yet." }}</p>
+                  <div class="shop-card-products">
+                    {% for product in profile.user.product_set.all|slice:":4" %}
+                      <span class="shop-product-pill">
+                        {% if product.image %}
+                          <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                        {% else %}
+                          <i data-lucide="package"></i>
+                        {% endif %}
+                        <span>{{ product.name }}</span>
+                      </span>
+                    {% empty %}
+                      <span class="shop-product-pill">
+                        <i data-lucide="package"></i>
+                        <span>No products yet</span>
+                      </span>
+                    {% endfor %}
+                  </div>
+                  <div class="shop-card-meta">
+                    <span><i data-lucide="star" style="width:14px;height:14px;color:gold;"></i> {{ profile.rating }}</span>
+                    <span><i data-lucide="shopping-bag" style="width:14px;height:14px;"></i> {{ profile.sales_count|default:0 }} sales</span>
+                    <span><i data-lucide="map-pin" style="width:14px;height:14px;"></i> {{ profile.location|default:"-" }}</span>
+                  </div>
+                </div>
+              </a>
+              {% empty %}
+              <div class="card marketplace-empty-state">
+                <i data-lucide="store" style="width:42px;height:42px;"></i>
+                <h3>No shops found</h3>
+                <p>Try changing the category, location, or search text.</p>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </section>
+        </section>
+      </main>
+    </div>
+  </form>
 
   <div id="toastContainer" class="toast-container"></div>
   <script src="{% static 'js/marketplace.js' %}"></script>

@@ -6,33 +6,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const form = document.getElementById('filterForm');
   const clearBtn = document.getElementById('clearFiltersBtn');
+  const controls = form ? Array.from(form.querySelectorAll('input, select, textarea')) : [];
 
   if (clearBtn) {
     clearBtn.addEventListener('click', function () {
       document.getElementById('shopSearch').value = '';
-      const locationInput = document.querySelector('[name="location"][form="filterForm"]');
-      const propertyTypeInput = document.querySelector('[name="property_type"][form="filterForm"]');
-      const listingModeInput = document.querySelector('[name="listing_mode"][form="filterForm"]');
+      const locationInput = form.querySelector('[name="location"]');
+      const categoryInput = form.querySelector('[name="category"]');
+      const propertyTypeInput = form.querySelector('[name="property_type"]');
+      const listingModeInput = form.querySelector('[name="listing_mode"]');
       if (locationInput) locationInput.value = '';
+      if (categoryInput) categoryInput.value = '';
       if (propertyTypeInput) propertyTypeInput.value = '';
       if (listingModeInput) listingModeInput.value = '';
-      const roomsMin = document.querySelector('input[name="rooms_min"][form="filterForm"]');
+      const roomsMin = form.querySelector('input[name="rooms_min"]');
       if (roomsMin) roomsMin.value = '';
       const minPrice = document.getElementById('minPriceField');
       const maxPrice = document.getElementById('maxPriceField');
       if (minPrice) minPrice.value = '';
       if (maxPrice) maxPrice.value = '';
-      const verified = document.querySelector('input[name="verified"][form="filterForm"]');
+      const verified = form.querySelector('input[name="verified"]');
       if (verified) verified.checked = false;
-      const available = document.querySelector('input[name="available"][form="filterForm"]');
+      const available = form.querySelector('input[name="available"]');
       if (available) available.checked = false;
-      const sort = document.querySelector('select[name="sort"][form="filterForm"]');
-      if (sort) sort.value = 'rating';
+      const sort = form.querySelector('select[name="sort"]');
+      if (sort) sort.value = sort.dataset.defaultSort || 'rating';
       form.submit();
     });
   }
 
-  document.querySelectorAll('[form="filterForm"]').forEach(function (control) {
+  controls.forEach(function (control) {
     control.addEventListener('change', function (e) {
       if (e.target && e.target.name !== 'q') {
         form.submit();
