@@ -108,6 +108,30 @@
         </div>
       </section>
 
+      <section class="marketplace-support-strip" aria-label="Support and safety shortcuts">
+        <a href="{% url 'marketplace_account' %}" class="marketplace-support-card">
+          <div class="marketplace-support-card-icon"><i data-lucide="life-buoy"></i></div>
+          <div>
+            <h3>Support</h3>
+            <p>Open your marketplace activity, chats, and order history when you need help.</p>
+          </div>
+        </a>
+        <a href="#riderAccessSection" class="marketplace-support-card">
+          <div class="marketplace-support-card-icon"><i data-lucide="shield-check"></i></div>
+          <div>
+            <h3>Safety</h3>
+            <p>Review rider access, verification status, and the safer workflow for delivery jobs.</p>
+          </div>
+        </a>
+        <a href="{% if rider_profile or delivery_company %}#riderRequestsSection{% else %}{% url 'marketplace_rider_signup' %}?next={% url 'marketplace_rider_portal' %}{% endif %}" class="marketplace-support-card marketplace-support-card-accent">
+          <div class="marketplace-support-card-icon"><i data-lucide="coins"></i></div>
+          <div>
+            <h3>Earn with VilaStore</h3>
+            <p>{% if rider_profile or delivery_company %}Jump into rider requests and keep earning from active deliveries.{% else %}Finish rider setup and start earning from marketplace delivery requests.{% endif %}</p>
+          </div>
+        </a>
+      </section>
+
       <section class="marketplace-section-grid rider-ops-grid">
         <section class="card delivery-card marketplace-map-panel">
           <div class="delivery-card-header">
@@ -171,7 +195,7 @@
         </section>
       </section>
 
-      <section class="card delivery-card rider-tab-shell">
+      <section id="riderAccessSection" class="card delivery-card rider-tab-shell">
         <div class="delivery-card-header">
           <div>
             <h3>Rider Access</h3>
@@ -193,7 +217,7 @@
         </div>
       </section>
 
-      <section class="card delivery-card" style="margin-top:1.5rem;">
+      <section id="riderRequestsSection" class="card delivery-card" style="margin-top:1.5rem;">
         <div class="delivery-card-header">
           <div>
             <h3>Recent Delivery Requests</h3>

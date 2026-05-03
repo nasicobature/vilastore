@@ -213,11 +213,12 @@
           <div id="deliveryPricingBreakdown" class="delivery-breakdown"></div>
         </section>
 
-        <section class="card delivery-card marketplace-map-panel">
+        <section class="card delivery-card marketplace-map-panel marketplace-map-panel-bolt">
           <div class="delivery-card-header">
             <div>
+              <span class="badge badge-primary">Live Ride Panel</span>
               <h3>Live Map and Nearby Riders</h3>
-              <p>Watch the route preview, then see the riders closest to your pickup area.</p>
+              <p>Watch the route, check ride readiness, and scan nearby riders from one stronger panel.</p>
             </div>
             <a id="deliveryMapLink" class="btn btn-ghost btn-sm" href="https://maps.google.com" target="_blank" rel="noopener noreferrer">
               <i data-lucide="navigation"></i>
@@ -241,6 +242,16 @@
                 referrerpolicy="no-referrer-when-downgrade"
                 src="https://maps.google.com/maps?q=Nigeria&z=6&output=embed"
               ></iframe>
+              <div class="delivery-map-floating-bar">
+                <div class="delivery-floating-pill">
+                  <i data-lucide="route"></i>
+                  <span id="deliveryMapStageLabel">Waiting for route details</span>
+                </div>
+                <div class="delivery-floating-pill delivery-floating-pill-dark">
+                  <i data-lucide="bike"></i>
+                  <span id="deliveryMapRiderCount">0 riders nearby</span>
+                </div>
+              </div>
               <div id="deliveryMapPlaceholder" class="delivery-map-placeholder">
                 <i data-lucide="map"></i>
                 <strong>Your route will appear here.</strong>
@@ -249,8 +260,8 @@
             </div>
           </div>
 
-          <div class="delivery-route-insights marketplace-map-insights">
-            <div class="delivery-insight-card">
+          <div class="delivery-route-insights marketplace-map-insights delivery-route-insights-bolt">
+            <div class="delivery-insight-card delivery-insight-card-accent">
               <span class="delivery-insight-label">Pickup status</span>
               <strong id="deliveryPickupHint">Waiting for pickup details.</strong>
               <p>Turn on location for faster rider matching, or type the collection point manually.</p>
@@ -267,6 +278,7 @@
               <h3>Nearby Riders</h3>
               <p>Matched from the same marketplace delivery APIs used by mobile.</p>
             </div>
+            <span id="deliveryRidersBadge" class="delivery-mini-pill">0 nearby</span>
           </div>
           <div id="deliveryRidersList" class="delivery-list"></div>
         </section>

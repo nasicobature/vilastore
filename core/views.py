@@ -16,6 +16,7 @@ from .models import (
     Expense,
     Customer,
     Investor,
+    ShopBranch,
     ShopBoy,
     MarketplaceShopProfile,
     MarketplaceSettings,
@@ -1475,12 +1476,47 @@ def delete_customer(request, pk):
 
 @login_required
 def settings(request):
-    shopboys = ShopBoy.objects.filter(user=request.user).order_by("-id")
+    branches = list(ShopBranch.objects.filter(user=request.user).order_by("name", "id"))
+    if request.user.is_shop_account and not branches:
+        branches = [
+            ShopBranch.objects.create(
+                user=request.user,
+                name=(request.user.business_name or request.user.username or "Main Shop").strip(),
+                phone=request.user.phone or "",
+                address=request.user.address or "Main address",
+                city="",
+                state=request.user.state or "",
+                is_default=True,
+            )
+        ]
+    shopboys = ShopBoy.objects.filter(user=request.user).select_related("branch").order_by("-id")
     marketplace_settings = _get_marketplace_settings(request.user)
+    marketplace_profile, _ = MarketplaceShopProfile.objects.get_or_create(user=request.user)
     _ensure_shop_code(request.user)
+    branch_summaries = []
+    total_branch_revenue = Decimal("0.00")
+    for branch in branches:
+        sales_count = Sale.objects.filter(user=request.user, branch=branch).count()
+        branch_revenue = Sale.objects.filter(user=request.user, branch=branch).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+        branch_summaries.append({
+            "branch": branch,
+            "sales_count": sales_count,
+            "revenue": branch_revenue,
+            "active_staff": ShopBoy.objects.filter(user=request.user, branch=branch, is_active=True).count(),
+        })
+        total_branch_revenue += branch_revenue
+    best_branch = max(branch_summaries, key=lambda item: item["revenue"], default=None)
     return render(request, 'home/settings.html', {
         "shopboys": shopboys,
+        "branches": branches,
+        "branch_summaries": branch_summaries,
+        "branch_count": len(branches),
+        "total_branch_revenue": total_branch_revenue,
+        "best_branch": best_branch,
         "marketplace_settings": marketplace_settings,
+        "marketplace_profile": marketplace_profile,
+        "active_shopboy_count": shopboys.filter(is_active=True).count(),
+        "marketplace_ready_shopboy_count": shopboys.filter(is_active=True, can_use_marketplace=True).count(),
     })
 
 
@@ -1530,6 +1566,8 @@ def add_shopboy(request):
     full_name = (request.POST.get("full_name") or "").strip()
     username = (request.POST.get("username") or "").strip()
     password = (request.POST.get("password") or "").strip()
+    role = (request.POST.get("role") or ShopBoy.ROLE_STAFF).strip().lower()
+    branch_id = (request.POST.get("branch_id") or "").strip()
     can_use_marketplace = request.POST.get("can_use_marketplace") == "on"
 
     if not full_name or not username or not password:
@@ -1540,15 +1578,82 @@ def add_shopboy(request):
         messages.error(request, "Shop boy username already exists.")
         return redirect("settings")
 
+    valid_roles = {choice[0] for choice in ShopBoy.ROLE_CHOICES}
+    if role not in valid_roles:
+        role = ShopBoy.ROLE_STAFF
+    branch = None
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
+        if not branch:
+            messages.error(request, "Selected branch is not available.")
+            return redirect("settings")
+
     ShopBoy.objects.create(
         user=request.user,
+        branch=branch,
         full_name=full_name,
         username=username,
         password=make_password(password),
+        role=role,
         can_use_marketplace=can_use_marketplace,
         is_active=True,
     )
     messages.success(request, "Shop boy added.")
+    return redirect("settings")
+
+
+@login_required
+@require_POST
+def add_branch(request):
+    name = (request.POST.get("name") or "").strip()
+    address = (request.POST.get("address") or "").strip()
+    if not name or not address:
+        messages.error(request, "Branch name and address are required.")
+        return redirect("settings")
+
+    ShopBranch.objects.create(
+        user=request.user,
+        name=name,
+        phone=(request.POST.get("phone") or "").strip(),
+        address=address,
+        city=(request.POST.get("city") or "").strip(),
+        state=(request.POST.get("state") or request.user.state or "").strip(),
+        is_default=request.POST.get("is_default") == "on",
+        is_active=True,
+    )
+    messages.success(request, "Branch added.")
+    return redirect("settings")
+
+
+@login_required
+@require_POST
+def set_default_branch(request, pk):
+    branch = get_object_or_404(ShopBranch, pk=pk, user=request.user)
+    branch.is_default = True
+    branch.save()
+    messages.success(request, f"{branch.name} is now your default branch.")
+    return redirect("settings")
+
+
+@login_required
+@require_POST
+def delete_branch(request, pk):
+    branch = get_object_or_404(ShopBranch, pk=pk, user=request.user)
+    remaining = ShopBranch.objects.filter(user=request.user).exclude(pk=pk).order_by("-is_default", "id")
+    fallback = remaining.first()
+    if not fallback:
+        messages.error(request, "At least one branch must remain.")
+        return redirect("settings")
+    ShopBoy.objects.filter(user=request.user, branch=branch).update(branch=fallback)
+    Sale.objects.filter(user=request.user, branch=branch).update(branch=fallback)
+    Expense.objects.filter(user=request.user, branch=branch).update(branch=fallback)
+    MarketplaceOrder.objects.filter(shop_owner=request.user, branch=branch).update(branch=fallback)
+    DeliveryRequest.objects.filter(branch=branch).update(branch=fallback)
+    branch.delete()
+    if not ShopBranch.objects.filter(user=request.user, is_default=True).exists():
+        fallback.is_default = True
+        fallback.save(update_fields=["is_default"])
+    messages.success(request, "Branch deleted.")
     return redirect("settings")
 
 
@@ -5478,6 +5583,8 @@ def update_marketplace_assignment(request):
     settings_obj = _get_marketplace_settings(request.user)
     shopboy_id = request.POST.get("assigned_shopboy") or None
     assigned = None
+    is_enabled_raw = request.POST.get("marketplace_enabled")
+    settings_obj.is_enabled = is_enabled_raw == "on"
     if shopboy_id:
         assigned = ShopBoy.objects.filter(id=shopboy_id, user=request.user, is_active=True, can_use_marketplace=True).first()
         if not assigned:
@@ -5485,6 +5592,6 @@ def update_marketplace_assignment(request):
             return redirect("settings")
 
     settings_obj.assigned_shopboy = assigned
-    settings_obj.save(update_fields=["assigned_shopboy", "updated_at"])
-    messages.success(request, "Marketplace handler updated.")
+    settings_obj.save(update_fields=["assigned_shopboy", "is_enabled", "updated_at"])
+    messages.success(request, "Marketplace settings updated.")
     return redirect("settings")

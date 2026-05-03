@@ -85,6 +85,9 @@ function initBuyerDeliveryApp(app) {
     mapLink: document.getElementById("deliveryMapLink"),
     pickupHint: document.getElementById("deliveryPickupHint"),
     dropoffHint: document.getElementById("deliveryDropoffHint"),
+    mapStageLabel: document.getElementById("deliveryMapStageLabel"),
+    mapRiderCount: document.getElementById("deliveryMapRiderCount"),
+    ridersBadge: document.getElementById("deliveryRidersBadge"),
   };
 
   function getDistanceKm() {
@@ -191,6 +194,17 @@ function initBuyerDeliveryApp(app) {
     if (els.routeSummary) {
       els.routeSummary.textContent = mapState.summary;
     }
+    if (els.mapStageLabel) {
+      const hasPickup = Boolean(getPickupText());
+      const hasDropoff = Boolean(getDropoffText());
+      if (hasPickup && hasDropoff) {
+        els.mapStageLabel.textContent = "Route ready for pricing";
+      } else if (hasPickup) {
+        els.mapStageLabel.textContent = "Pickup ready, add destination";
+      } else {
+        els.mapStageLabel.textContent = "Waiting for route details";
+      }
+    }
     if (els.mapFrame) {
       els.mapFrame.src = mapState.embed;
     }
@@ -283,6 +297,13 @@ function initBuyerDeliveryApp(app) {
   }
 
   function renderRiders() {
+    const riderCountLabel = `${state.availableRiders.length} rider${state.availableRiders.length === 1 ? "" : "s"} nearby`;
+    if (els.mapRiderCount) {
+      els.mapRiderCount.textContent = riderCountLabel;
+    }
+    if (els.ridersBadge) {
+      els.ridersBadge.textContent = riderCountLabel;
+    }
     if (!state.availableRiders.length) {
       els.ridersList.innerHTML = '<div class="delivery-empty"><p>No riders found yet. Add a clearer pickup point or use current location for stronger matches.</p></div>';
       return;

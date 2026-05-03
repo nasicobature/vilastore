@@ -9,6 +9,471 @@
   <title>VilaStore - Settings</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .settings-shell {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .settings-hero {
+      position: relative;
+      overflow: hidden;
+      padding: 1.75rem;
+      border-radius: 1.5rem;
+      border: 1px solid rgba(176, 110, 33, 0.16);
+      background:
+        radial-gradient(circle at top right, rgba(176, 110, 33, 0.18), transparent 32%),
+        linear-gradient(145deg, #fffaf3 0%, #ffffff 50%, #f8f2e8 100%);
+      box-shadow: 0 22px 55px rgba(30, 41, 59, 0.08);
+    }
+
+    .settings-hero::after {
+      content: "";
+      position: absolute;
+      right: -80px;
+      top: -80px;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      background: rgba(176, 110, 33, 0.08);
+      filter: blur(8px);
+    }
+
+    .settings-hero-content {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .settings-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.45rem 0.8rem;
+      border-radius: 999px;
+      background: rgba(176, 110, 33, 0.12);
+      color: var(--accent-foreground);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 0.9rem;
+    }
+
+    .settings-hero h1 {
+      font-size: clamp(2rem, 3vw, 2.6rem);
+      line-height: 1.05;
+      margin-bottom: 0.55rem;
+    }
+
+    .settings-hero p {
+      max-width: 56ch;
+      color: var(--muted-foreground);
+      font-size: 0.98rem;
+    }
+
+    .settings-hero-aside {
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .settings-profile-card {
+      display: flex;
+      align-items: center;
+      gap: 0.95rem;
+      padding: 1rem;
+      border-radius: 1.25rem;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      backdrop-filter: blur(8px);
+    }
+
+    .settings-avatar {
+      width: 58px;
+      height: 58px;
+      border-radius: 1rem;
+      overflow: hidden;
+      background: linear-gradient(135deg, #f6dfbf, #f3b86f);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6f4617;
+      flex-shrink: 0;
+    }
+
+    .settings-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .settings-profile-card strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 0.15rem;
+      color: var(--foreground);
+    }
+
+    .settings-profile-card span {
+      display: block;
+      font-size: 0.84rem;
+      color: var(--muted-foreground);
+    }
+
+    .settings-highlight-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .settings-highlight {
+      padding: 1rem 1.05rem;
+      border-radius: 1.2rem;
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.88));
+      box-shadow: 0 16px 32px rgba(15, 23, 42, 0.04);
+    }
+
+    .settings-highlight span {
+      display: block;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted-foreground);
+      margin-bottom: 0.45rem;
+    }
+
+    .settings-highlight strong {
+      display: block;
+      font-size: 1.45rem;
+      line-height: 1;
+      margin-bottom: 0.25rem;
+    }
+
+    .settings-highlight small {
+      color: var(--muted-foreground);
+      font-size: 0.82rem;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    .settings-column {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    .settings-card {
+      border-radius: 1.4rem;
+      padding: 1.4rem;
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.05);
+    }
+
+    .settings-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .settings-card-header h3 {
+      font-size: 1.05rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .settings-card-header p {
+      color: var(--muted-foreground);
+      font-size: 0.88rem;
+    }
+
+    .settings-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    .settings-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.55rem 0.85rem;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--accent-foreground);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    .settings-switch-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.05rem;
+      border-radius: 1rem;
+      background: linear-gradient(180deg, #ffffff, #fbfbfb);
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+
+    .settings-switch-row strong {
+      display: block;
+      margin-bottom: 0.2rem;
+    }
+
+    .settings-switch-row p {
+      color: var(--muted-foreground);
+      font-size: 0.85rem;
+    }
+
+    .settings-toggle {
+      position: relative;
+      width: 56px;
+      height: 32px;
+      flex-shrink: 0;
+    }
+
+    .settings-toggle input {
+      position: absolute;
+      opacity: 0;
+      inset: 0;
+    }
+
+    .settings-toggle span {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: #d9dee8;
+      transition: 0.2s ease;
+      box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.12);
+    }
+
+    .settings-toggle span::after {
+      content: "";
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
+      transition: 0.2s ease;
+    }
+
+    .settings-toggle input:checked + span {
+      background: linear-gradient(135deg, #b06e21, #d49042);
+    }
+
+    .settings-toggle input:checked + span::after {
+      transform: translateX(24px);
+    }
+
+    .settings-section-list {
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .settings-list-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.95rem 1rem;
+      border-radius: 1rem;
+      background: linear-gradient(180deg, #ffffff, #faf7f2);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .settings-list-item strong {
+      display: block;
+      margin-bottom: 0.18rem;
+      font-size: 0.93rem;
+    }
+
+    .settings-list-item p,
+    .settings-list-item small {
+      color: var(--muted-foreground);
+      font-size: 0.84rem;
+    }
+
+    .settings-value {
+      align-self: center;
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: var(--accent-foreground);
+      text-align: right;
+    }
+
+    .settings-form-grid {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .settings-inline-media {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .settings-media-thumb {
+      width: 72px;
+      height: 72px;
+      border-radius: 1rem;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .settings-media-thumb.round {
+      border-radius: 50%;
+    }
+
+    .settings-media-thumb.wide {
+      width: 144px;
+      height: 72px;
+      border-radius: 1rem;
+    }
+
+    .settings-media-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .settings-note {
+      display: flex;
+      gap: 0.7rem;
+      align-items: flex-start;
+      padding: 0.9rem 1rem;
+      border-radius: 1rem;
+      background: #fff8ee;
+      border: 1px solid rgba(176, 110, 33, 0.15);
+      color: #7b5421;
+      font-size: 0.86rem;
+    }
+
+    .settings-responsive-table .table {
+      min-width: 0;
+    }
+
+    .settings-responsive-table .action-buttons {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .settings-empty {
+      padding: 1.25rem;
+      border-radius: 1rem;
+      border: 1px dashed var(--border);
+      text-align: center;
+      color: var(--muted-foreground);
+      background: linear-gradient(180deg, #fff, #fafafa);
+    }
+
+    .settings-quick-links {
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .settings-quick-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.05rem;
+      border-radius: 1rem;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, #ffffff, #fbfbfb);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .settings-quick-link:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+    }
+
+    .settings-quick-link strong {
+      display: block;
+      margin-bottom: 0.15rem;
+      font-size: 0.94rem;
+    }
+
+    .settings-quick-link p {
+      color: var(--muted-foreground);
+      font-size: 0.84rem;
+    }
+
+    .settings-icon-pill {
+      width: 40px;
+      height: 40px;
+      border-radius: 0.95rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-soft);
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 1100px) {
+      .settings-hero-content,
+      .settings-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .settings-highlight-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .settings-hero {
+        padding: 1.2rem;
+        border-radius: 1.25rem;
+      }
+
+      .settings-card {
+        padding: 1.05rem;
+        border-radius: 1.2rem;
+      }
+
+      .settings-card-header,
+      .settings-switch-row,
+      .settings-list-item,
+      .settings-quick-link {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .settings-value {
+        text-align: left;
+      }
+
+      .settings-inline-media {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .settings-media-thumb.wide {
+        width: 100%;
+        max-width: 180px;
+      }
+    }
+  </style>
 </head>
 <body>
   <div class="app-container">
@@ -28,193 +493,488 @@
     </aside>
 
     <main class="main-content">
-      <header class="page-header">
-        <h1><i data-lucide="settings" style="display:inline;width:28px;height:28px;vertical-align:middle;margin-right:8px;"></i>Settings</h1>
-        <p>Manage your shop settings and staff</p>
-      </header>
-
-      {% if messages %}
-      <section style="margin-bottom: 1rem;">
-        {% for message in messages %}
-        <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
-        {% endfor %}
-      </section>
-      {% endif %}
-
-      <section class="card" style="margin-bottom:1.5rem;">
-        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-          <h3>Shop Boy Management</h3>
-          <button class="btn btn-primary" type="button" onclick="openShopBoyModal()"><i data-lucide="user-plus"></i> Add Shop Boy</button>
-        </div>
-        <div class="table-container" style="margin-top:1rem;">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Username</th>
-                <th>Marketplace Access</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for sb in shopboys %}
-              <tr>
-                <td>{{ sb.full_name }}</td>
-                <td>{{ sb.username }}</td>
-                <td>
-                  {% if sb.can_use_marketplace %}
-                  <span class="badge badge-success">Yes</span>
+      <div class="settings-shell">
+        <section class="settings-hero">
+          <div class="settings-hero-content">
+            <div>
+              <span class="settings-kicker"><i data-lucide="sliders-horizontal"></i> Smart settings</span>
+              <h1>Make your store feel sharp on mobile and easier to manage every day.</h1>
+              <p>Update your business profile, control marketplace handling, organize staff access, and keep the most important account actions in one clear place.</p>
+            </div>
+            <div class="settings-hero-aside">
+              <div class="settings-profile-card">
+                <div class="settings-avatar">
+                  {% if request.user.profile_image %}
+                  <img src="{{ request.user.profile_image.url }}" alt="{{ request.user.business_name|default:request.user.username }}">
                   {% else %}
-                  <span class="badge badge-warning">No</span>
+                  <i data-lucide="store"></i>
                   {% endif %}
-                </td>
-                <td>
-                  {% if sb.is_active %}
-                  <span class="badge badge-success">Active</span>
-                  {% else %}
-                  <span class="badge badge-destructive">Inactive</span>
-                  {% endif %}
-                </td>
-                <td>
-                  <div class="action-buttons">
-                    <form method="POST" action="{% url 'toggle_shopboy' sb.id %}" style="display:inline;">
-                      {% csrf_token %}
-                      <button type="submit" class="btn btn-ghost btn-sm" title="Toggle Status">
-                        <i data-lucide="refresh-ccw"></i>
-                      </button>
-                    </form>
-                    <form method="POST" action="{% url 'delete_shopboy' sb.id %}" style="display:inline;" onsubmit="return confirm('Delete {{ sb.full_name }}?')">
-                      {% csrf_token %}
-                      <button type="submit" class="btn btn-ghost btn-sm text-destructive" title="Delete">
-                        <i data-lucide="trash-2"></i>
-                      </button>
-                    </form>
-                  </div>
-                </td>
-              </tr>
-              {% empty %}
-              <tr><td colspan="5" class="empty-state"><p>No shop boys added yet</p></td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="card" style="margin-bottom:1.5rem;">
-        <div class="card-header"><h3>Marketplace Handler</h3></div>
-        <form method="POST" action="{% url 'update_marketplace_assignment' %}" style="margin-top:1rem;">
-          {% csrf_token %}
-          <div class="form-group">
-            <label>Assign a Shop Boy to Handle Marketplace Orders</label>
-            <select name="assigned_shopboy" class="input">
-              <option value="">Auto-assign (first available)</option>
-              {% for sb in shopboys %}
-                {% if sb.can_use_marketplace and sb.is_active %}
-                <option value="{{ sb.id }}" {% if marketplace_settings.assigned_shopboy and marketplace_settings.assigned_shopboy.id == sb.id %}selected{% endif %}>
-                  {{ sb.full_name }} ({{ sb.username }})
-                </option>
-                {% endif %}
-              {% endfor %}
-            </select>
-          </div>
-          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Assignment</button>
-        </form>
-      </section>
-
-      <section class="card">
-        <div class="card-header"><h3>Shop Profile</h3></div>
-        <form method="POST" action="{% url 'update_profile' %}" style="margin-top:1rem;" enctype="multipart/form-data">
-          {% csrf_token %}
-          <div class="form-group">
-            <label>Shop Code (for Shop Boy Login)</label>
-            <input type="text" class="input" value="{{ request.user.shop_code }}" readonly>
-          </div>
-          <div class="form-group">
-            <label>Profile Image</label>
-            {% if request.user.profile_image %}
-              <div style="margin-bottom:0.5rem;">
-                <img src="{{ request.user.profile_image.url }}" alt="Profile image" style="width:72px;height:72px;border-radius:12px;object-fit:cover;">
+                </div>
+                <div>
+                  <strong>{{ request.user.business_name|default:request.user.username }}</strong>
+                  <span>@{{ request.user.username }}</span>
+                  <span>{{ request.user.country|default:"Country not set yet" }}</span>
+                </div>
               </div>
-            {% endif %}
-            <input type="file" name="profile_image" class="input" accept="image/*">
-            <small style="color:var(--muted-foreground);">Upload a square image for best results.</small>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Marketplace Logo</label>
-              {% if request.user.marketplace_profile and request.user.marketplace_profile.logo %}
-                <div style="margin-bottom:0.5rem;">
-                  <img src="{{ request.user.marketplace_profile.logo.url }}" alt="Marketplace logo" style="width:72px;height:72px;border-radius:50%;object-fit:cover;">
-                </div>
-              {% endif %}
-              <input type="file" name="marketplace_logo" class="input" accept="image/*">
-              <small style="color:var(--muted-foreground);">Used for marketplace listing and shop header.</small>
-            </div>
-            <div class="form-group">
-              <label>Marketplace Cover Image</label>
-              {% if request.user.marketplace_profile and request.user.marketplace_profile.cover_image %}
-                <div style="margin-bottom:0.5rem;">
-                  <img src="{{ request.user.marketplace_profile.cover_image.url }}" alt="Marketplace cover" style="width:160px;height:72px;border-radius:12px;object-fit:cover;">
-                </div>
-              {% endif %}
-              <input type="file" name="marketplace_cover_image" class="input" accept="image/*">
-              <small style="color:var(--muted-foreground);">Wide image looks best (e.g. 1200x400).</small>
+              <div class="settings-chip-row">
+                <span class="settings-chip"><i data-lucide="hash"></i> {{ request.user.shop_code|default:"Generating..." }}</span>
+                {% if marketplace_settings.is_enabled %}
+                <span class="settings-chip"><i data-lucide="badge-check"></i> Marketplace live</span>
+                {% else %}
+                <span class="settings-chip"><i data-lucide="pause-circle"></i> Marketplace paused</span>
+                {% endif %}
+              </div>
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Business Name</label>
-              <input type="text" name="business_name" class="input" value="{{ request.user.business_name|default:'' }}" required>
-            </div>
-            <div class="form-group">
-              <label>Country</label>
-              <select name="country" class="input" required>
-                <option value="">Select country</option>
-                <option value="Nigeria" {% if request.user.country == "Nigeria" %}selected{% endif %}>Nigeria</option>
-                <option value="Ghana" {% if request.user.country == "Ghana" %}selected{% endif %}>Ghana</option>
-                <option value="Kenya" {% if request.user.country == "Kenya" %}selected{% endif %}>Kenya</option>
-                <option value="South Africa" {% if request.user.country == "South Africa" %}selected{% endif %}>South Africa</option>
-                <option value="Other" {% if request.user.country == "Other" %}selected{% endif %}>Other</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Business Address</label>
-            <input type="text" name="address" class="input" value="{{ request.user.address|default:'' }}" required>
-          </div>
-          <div class="form-group">
-            <label>Phone</label>
-            <input type="tel" name="phone" class="input" value="{{ request.user.phone|default:'' }}" required>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Fixed Assets (???)</label>
-              <input type="number" step="0.01" min="0" name="fixed_assets" class="input" value="{% if request.user.fixed_assets %}{{ request.user.fixed_assets }}{% endif %}" placeholder="e.g. 25000000">
-              <small style="color:var(--muted-foreground);">Used for small-company CIT test (??? ???250,000,000).</small>
-            </div>
-            <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;">
-              <label style="margin-bottom:0.4rem;">Professional Services</label>
-              <label style="display:flex;align-items:center;gap:0.5rem;">
-                <input type="checkbox" name="is_professional_services" {% if request.user.is_professional_services %}checked{% endif %}>
-                <span>We provide professional services</span>
-              </label>
-              <small style="color:var(--muted-foreground);">Professional services do not qualify for small-company CIT relief.</small>
-            </div>
-          </div>
-          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Profile</button>
-        </form>
-      </section>
+        </section>
 
-      <section class="card" style="margin-top:1.5rem;">
-        <div class="card-header"><h3>Account</h3></div>
-        <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
-          <a href="{% url 'logout' %}" class="btn btn-ghost">
-            <i data-lucide="log-out"></i>
-            Logout
-          </a>
-        </div>
-      </section>
+        <section class="settings-highlight-grid">
+          <article class="settings-highlight">
+            <span>Team members</span>
+            <strong>{{ shopboys|length }}</strong>
+            <small>{{ active_shopboy_count }} active for daily operations</small>
+          </article>
+          <article class="settings-highlight">
+            <span>Marketplace support</span>
+            <strong>{{ marketplace_ready_shopboy_count }}</strong>
+            <small>Ready to handle marketplace orders</small>
+          </article>
+          <article class="settings-highlight">
+            <span>Branches</span>
+            <strong>{{ branch_count }}</strong>
+            <small>{% if best_branch %}Best branch: {{ best_branch.branch.name }}{% else %}Add branches for separate locations{% endif %}</small>
+          </article>
+        </section>
+
+        {% if messages %}
+        <section>
+          {% for message in messages %}
+          <div class="card settings-card" style="padding:0.95rem 1rem;">{{ message }}</div>
+          {% endfor %}
+        </section>
+        {% endif %}
+
+        <section class="settings-grid">
+          <div class="settings-column">
+            <section class="card settings-card">
+              <div class="settings-card-header">
+                <div>
+                  <h3>Marketplace control</h3>
+                  <p>Choose who handles online orders and whether your marketplace flow should stay active.</p>
+                </div>
+                <span class="badge {% if marketplace_settings.is_enabled %}badge-success{% else %}badge-warning{% endif %}">
+                  {% if marketplace_settings.is_enabled %}Enabled{% else %}Disabled{% endif %}
+                </span>
+              </div>
+              <form method="POST" action="{% url 'update_marketplace_assignment' %}">
+                {% csrf_token %}
+                <div class="settings-switch-row">
+                  <div>
+                    <strong>Marketplace visibility</strong>
+                    <p>Turn this on when you want shop listings and order handling available.</p>
+                  </div>
+                  <label class="settings-toggle" aria-label="Marketplace enabled">
+                    <input type="checkbox" name="marketplace_enabled" {% if marketplace_settings.is_enabled %}checked{% endif %}>
+                    <span></span>
+                  </label>
+                </div>
+                <div class="form-group">
+                  <label>Assign a shop boy to handle marketplace orders</label>
+                  <select name="assigned_shopboy" class="input">
+                    <option value="">Auto-assign (first available)</option>
+                    {% for sb in shopboys %}
+                      {% if sb.can_use_marketplace and sb.is_active %}
+                      <option value="{{ sb.id }}" {% if marketplace_settings.assigned_shopboy and marketplace_settings.assigned_shopboy.id == sb.id %}selected{% endif %}>
+                        {{ sb.full_name }} ({{ sb.username }})
+                      </option>
+                      {% endif %}
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="settings-section-list" style="margin-bottom:1rem;">
+                  <div class="settings-list-item">
+                    <div>
+                      <strong>Current routing</strong>
+                      <p>
+                        {% if marketplace_settings.assigned_shopboy %}
+                        Marketplace orders go to {{ marketplace_settings.assigned_shopboy.full_name }}.
+                        {% else %}
+                        Orders auto-route to the first available marketplace-ready team member.
+                        {% endif %}
+                      </p>
+                    </div>
+                    <div class="settings-value">{% if marketplace_settings.assigned_shopboy %}@{{ marketplace_settings.assigned_shopboy.username }}{% else %}Auto{% endif %}</div>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Marketplace Settings</button>
+              </form>
+            </section>
+
+            <section class="card settings-card">
+              <div class="settings-card-header">
+                <div>
+                  <h3>Shop profile</h3>
+                  <p>Your main business identity, marketplace visuals, and tax-related business info.</p>
+                </div>
+              </div>
+              <form method="POST" action="{% url 'update_profile' %}" enctype="multipart/form-data" class="settings-form-grid">
+                {% csrf_token %}
+                <div class="settings-note">
+                  <i data-lucide="sparkles"></i>
+                  <div>
+                    Strong profile photos, a clean logo, and a wide cover image make the mobile shop experience feel much more premium.
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Shop Code (for Shop Boy Login)</label>
+                  <input type="text" class="input" value="{{ request.user.shop_code }}" readonly>
+                </div>
+
+                <div class="form-group">
+                  <label>Profile Image</label>
+                  {% if request.user.profile_image %}
+                  <div class="settings-inline-media">
+                    <div class="settings-media-thumb">
+                      <img src="{{ request.user.profile_image.url }}" alt="Profile image">
+                    </div>
+                    <small style="color:var(--muted-foreground);">This image appears around your owner account areas.</small>
+                  </div>
+                  {% endif %}
+                  <input type="file" name="profile_image" class="input" accept="image/*">
+                  <small style="color:var(--muted-foreground);">Upload a square image for the cleanest mobile avatar.</small>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Marketplace Logo</label>
+                    {% if marketplace_profile.logo %}
+                    <div class="settings-inline-media">
+                      <div class="settings-media-thumb round">
+                        <img src="{{ marketplace_profile.logo.url }}" alt="Marketplace logo">
+                      </div>
+                    </div>
+                    {% endif %}
+                    <input type="file" name="marketplace_logo" class="input" accept="image/*">
+                    <small style="color:var(--muted-foreground);">Best for listing cards, profile headers, and circular brand spots.</small>
+                  </div>
+                  <div class="form-group">
+                    <label>Marketplace Cover Image</label>
+                    {% if marketplace_profile.cover_image %}
+                    <div class="settings-inline-media">
+                      <div class="settings-media-thumb wide">
+                        <img src="{{ marketplace_profile.cover_image.url }}" alt="Marketplace cover">
+                      </div>
+                    </div>
+                    {% endif %}
+                    <input type="file" name="marketplace_cover_image" class="input" accept="image/*">
+                    <small style="color:var(--muted-foreground);">Wide banner images look best for mobile headers.</small>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Business Name</label>
+                    <input type="text" name="business_name" class="input" value="{{ request.user.business_name|default:'' }}" required>
+                  </div>
+                  <div class="form-group">
+                    <label>Country</label>
+                    <select name="country" class="input" required>
+                      <option value="">Select country</option>
+                      <option value="Nigeria" {% if request.user.country == "Nigeria" %}selected{% endif %}>Nigeria</option>
+                      <option value="Ghana" {% if request.user.country == "Ghana" %}selected{% endif %}>Ghana</option>
+                      <option value="Kenya" {% if request.user.country == "Kenya" %}selected{% endif %}>Kenya</option>
+                      <option value="South Africa" {% if request.user.country == "South Africa" %}selected{% endif %}>South Africa</option>
+                      <option value="Other" {% if request.user.country == "Other" %}selected{% endif %}>Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Business Address</label>
+                  <input type="text" name="address" class="input" value="{{ request.user.address|default:'' }}" required>
+                </div>
+
+                <div class="form-group">
+                  <label>Phone</label>
+                  <input type="tel" name="phone" class="input" value="{{ request.user.phone|default:'' }}" required>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Fixed Assets</label>
+                    <input type="number" step="0.01" min="0" name="fixed_assets" class="input" value="{% if request.user.fixed_assets %}{{ request.user.fixed_assets }}{% endif %}" placeholder="e.g. 25000000">
+                    <small style="color:var(--muted-foreground);">Used for your tax and company-size profile.</small>
+                  </div>
+                  <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;">
+                    <label style="margin-bottom:0.45rem;">Business Type Marker</label>
+                    <label class="settings-list-item" style="padding:0.85rem 1rem;">
+                      <div>
+                        <strong>Professional services business</strong>
+                        <small>Useful for tax profiling and business classification.</small>
+                      </div>
+                      <input type="checkbox" name="is_professional_services" {% if request.user.is_professional_services %}checked{% endif %}>
+                    </label>
+                  </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Profile</button>
+              </form>
+            </section>
+
+            <section class="card settings-card">
+              <div class="settings-card-header">
+                <div>
+                  <h3>Branch management</h3>
+                  <p>Create store branches, choose a default location, and organize where staff and orders belong.</p>
+                </div>
+                <button class="btn btn-primary" type="button" onclick="openBranchModal()"><i data-lucide="plus-circle"></i> Add Branch</button>
+              </div>
+              <div class="settings-section-list">
+                {% for item in branch_summaries %}
+                <div class="settings-list-item">
+                  <div>
+                    <strong>{{ item.branch.name }} {% if item.branch.is_default %}<span class="badge badge-success" style="margin-left:0.5rem;">Default</span>{% endif %}</strong>
+                    <p>{{ item.branch.address }}</p>
+                    <small>Revenue: NGN {{ item.revenue|floatformat:2 }} · Sales: {{ item.sales_count }} · Active staff: {{ item.active_staff }}</small>
+                  </div>
+                  <div class="settings-value">
+                    <form method="POST" action="{% url 'set_default_branch' item.branch.id %}" style="display:inline-block;margin-bottom:0.4rem;">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-ghost btn-sm">Make Default</button>
+                    </form>
+                    {% if not item.branch.is_default or branch_count > 1 %}
+                    <form method="POST" action="{% url 'delete_branch' item.branch.id %}" style="display:inline-block;" onsubmit="return confirm('Delete {{ item.branch.name }}? Staff and records will move to another branch.')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-ghost btn-sm text-destructive">Delete</button>
+                    </form>
+                    {% endif %}
+                  </div>
+                </div>
+                {% empty %}
+                <div class="settings-empty">
+                  <p>No branches yet. Add your first branch to separate locations, staff, and reporting.</p>
+                </div>
+                {% endfor %}
+              </div>
+            </section>
+
+            <section class="card settings-card">
+              <div class="settings-card-header">
+                <div>
+                  <h3>Shop boy management</h3>
+                  <p>Add team members, decide who can handle marketplace activity, and keep staff access organized.</p>
+                </div>
+                <button class="btn btn-primary" type="button" onclick="openShopBoyModal()"><i data-lucide="user-plus"></i> Add Shop Boy</button>
+              </div>
+
+              {% if shopboys %}
+              <div class="table-container settings-responsive-table">
+                <table class="table table--responsive">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Username</th>
+                      <th>Role</th>
+                      <th>Branch</th>
+                      <th>Marketplace Access</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for sb in shopboys %}
+                    <tr>
+                      <td data-label="Name">{{ sb.full_name }}</td>
+                      <td data-label="Username">@{{ sb.username }}</td>
+                      <td data-label="Role">{{ sb.get_role_display }}</td>
+                      <td data-label="Branch">{{ sb.branch.name|default:"Main / Unassigned" }}</td>
+                      <td data-label="Marketplace Access">
+                        {% if sb.can_use_marketplace %}
+                        <span class="badge badge-success">Enabled</span>
+                        {% else %}
+                        <span class="badge badge-warning">Disabled</span>
+                        {% endif %}
+                      </td>
+                      <td data-label="Status">
+                        {% if sb.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-destructive">Inactive</span>
+                        {% endif %}
+                      </td>
+                      <td data-label="Action">
+                        <div class="action-buttons">
+                          <form method="POST" action="{% url 'toggle_shopboy' sb.id %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-ghost btn-sm" title="Toggle Status">
+                              <i data-lucide="refresh-ccw"></i>
+                              <span>Toggle</span>
+                            </button>
+                          </form>
+                          <form method="POST" action="{% url 'delete_shopboy' sb.id %}" style="display:inline;" onsubmit="return confirm('Delete {{ sb.full_name }}?')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-ghost btn-sm text-destructive" title="Delete">
+                              <i data-lucide="trash-2"></i>
+                              <span>Delete</span>
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              {% else %}
+              <div class="settings-empty">
+                <p>No shop boys added yet. Add your first team member to delegate sales or marketplace tasks.</p>
+              </div>
+              {% endif %}
+            </section>
+          </div>
+
+          <aside class="settings-column">
+            <section class="card settings-card">
+              <div class="settings-card-header">
+                <div>
+                  <h3>Structured account settings</h3>
+                  <p>Extra areas that usually matter most in a modern store setup.</p>
+                </div>
+              </div>
+              <div class="settings-section-list">
+                <div class="settings-list-item">
+                  <div>
+                    <strong>Brand images</strong>
+                    <p>Profile photo, marketplace logo, and cover image for stronger first impressions.</p>
+                  </div>
+                  <div class="settings-value">{% if marketplace_profile.logo and marketplace_profile.cover_image %}Ready{% else %}Improve{% endif %}</div>
+                </div>
+                <div class="settings-list-item">
+                  <div>
+                    <strong>Staff permissions</strong>
+                    <p>Control which shop boys can log in, which branch they belong to, and who can handle online orders.</p>
+                  </div>
+                  <div class="settings-value">{{ marketplace_ready_shopboy_count }} ready</div>
+                </div>
+                <div class="settings-list-item">
+                  <div>
+                    <strong>Branch network</strong>
+                    <p>Operate multiple shop locations under the same main owner account.</p>
+                  </div>
+                  <div class="settings-value">{{ branch_count }} live</div>
+                </div>
+                <div class="settings-list-item">
+                  <div>
+                    <strong>Business contact info</strong>
+                    <p>Keep phone, address, and business identity current for trust and delivery flow.</p>
+                  </div>
+                  <div class="settings-value">Live</div>
+                </div>
+                <div class="settings-list-item">
+                  <div>
+                    <strong>Tax profile</strong>
+                    <p>Fixed assets and professional-service status help with cleaner financial records.</p>
+                  </div>
+                  <div class="settings-value">{% if request.user.fixed_assets %}Set{% else %}Pending{% endif %}</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card settings-card">
+              <div class="settings-card-header">
+                <div>
+                  <h3>Good things to keep in settings</h3>
+                  <p>These are smart settings areas to continue adding as VilaStore grows.</p>
+                </div>
+              </div>
+              <div class="settings-quick-links">
+                <div class="settings-quick-link">
+                  <div style="display:flex;gap:0.85rem;align-items:flex-start;">
+                    <span class="settings-icon-pill"><i data-lucide="bell-ring"></i></span>
+                    <div>
+                      <strong>Notifications</strong>
+                      <p>Order alerts, low-stock reminders, and payment follow-up messages.</p>
+                    </div>
+                  </div>
+                  <span class="badge badge-primary">Next</span>
+                </div>
+                <div class="settings-quick-link">
+                  <div style="display:flex;gap:0.85rem;align-items:flex-start;">
+                    <span class="settings-icon-pill"><i data-lucide="shield-check"></i></span>
+                    <div>
+                      <strong>Security</strong>
+                      <p>Password updates, device sessions, and login verification controls.</p>
+                    </div>
+                  </div>
+                  <span class="badge badge-primary">Next</span>
+                </div>
+                <div class="settings-quick-link">
+                  <div style="display:flex;gap:0.85rem;align-items:flex-start;">
+                    <span class="settings-icon-pill"><i data-lucide="truck"></i></span>
+                    <div>
+                      <strong>Delivery & fulfillment</strong>
+                      <p>Default delivery notes, dispatch preferences, and fulfillment handoff rules.</p>
+                    </div>
+                  </div>
+                  <span class="badge badge-primary">Idea</span>
+                </div>
+                <div class="settings-quick-link">
+                  <div style="display:flex;gap:0.85rem;align-items:flex-start;">
+                    <span class="settings-icon-pill"><i data-lucide="palette"></i></span>
+                    <div>
+                      <strong>Store appearance</strong>
+                      <p>Theme accents, banner text, featured categories, and shop welcome message.</p>
+                    </div>
+                  </div>
+                  <span class="badge badge-primary">Idea</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="card settings-card">
+              <div class="settings-card-header">
+                <div>
+                  <h3>Account actions</h3>
+                  <p>Shortcuts for the most common account tasks.</p>
+                </div>
+              </div>
+              <div class="settings-quick-links">
+                <a href="{% url 'product' %}" class="settings-quick-link">
+                  <div style="display:flex;gap:0.85rem;align-items:flex-start;">
+                    <span class="settings-icon-pill"><i data-lucide="package-plus"></i></span>
+                    <div>
+                      <strong>Manage products</strong>
+                      <p>Update inventory, pricing, and product cards.</p>
+                    </div>
+                  </div>
+                  <i data-lucide="arrow-right"></i>
+                </a>
+                <a href="{% url 'reports' %}" class="settings-quick-link">
+                  <div style="display:flex;gap:0.85rem;align-items:flex-start;">
+                    <span class="settings-icon-pill"><i data-lucide="chart-column"></i></span>
+                    <div>
+                      <strong>Open reports</strong>
+                      <p>Review business performance after settings changes.</p>
+                    </div>
+                  </div>
+                  <i data-lucide="arrow-right"></i>
+                </a>
+                <a href="{% url 'logout' %}" class="settings-quick-link">
+                  <div style="display:flex;gap:0.85rem;align-items:flex-start;">
+                    <span class="settings-icon-pill" style="background:var(--destructive-soft);color:var(--destructive);"><i data-lucide="log-out"></i></span>
+                    <div>
+                      <strong>Logout</strong>
+                      <p>Securely sign out of this session.</p>
+                    </div>
+                  </div>
+                  <i data-lucide="arrow-right"></i>
+                </a>
+              </div>
+            </section>
+          </aside>
+        </section>
+      </div>
     </main>
   </div>
 
@@ -240,6 +1000,25 @@
             <input type="password" name="password" class="input" placeholder="Password" required>
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Role</label>
+            <select name="role" class="input">
+              <option value="staff">Staff / Shopboy</option>
+              <option value="manager">Manager</option>
+              <option value="owner">Owner</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Assigned Branch</label>
+            <select name="branch_id" class="input">
+              <option value="">Main / Unassigned</option>
+              {% for branch in branches %}
+              <option value="{{ branch.id }}">{{ branch.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
         <div class="form-group">
           <label class="checkbox-label">
             <input type="checkbox" name="can_use_marketplace">
@@ -254,12 +1033,60 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="branchModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Branch</h3>
+        <button class="modal-close" type="button" onclick="closeBranchModal()"><i data-lucide="x"></i></button>
+      </div>
+      <form method="POST" action="{% url 'add_branch' %}" class="modal-form">
+        {% csrf_token %}
+        <div class="form-row">
+          <div class="form-group">
+            <label>Branch Name</label>
+            <input type="text" name="name" class="input" placeholder="e.g. Lekki Branch" required>
+          </div>
+          <div class="form-group">
+            <label>Phone</label>
+            <input type="text" name="phone" class="input" placeholder="Branch phone">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <input type="text" name="address" class="input" placeholder="Branch address" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>City</label>
+            <input type="text" name="city" class="input" placeholder="City">
+          </div>
+          <div class="form-group">
+            <label>State</label>
+            <input type="text" name="state" class="input" placeholder="State" value="{{ request.user.state|default:'' }}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" name="is_default">
+            <span>Make this the default branch</span>
+          </label>
+        </div>
+        <div class="form-buttons">
+          <button type="button" class="btn btn-outline" onclick="closeBranchModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Branch</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       lucide.createIcons();
     });
     function openShopBoyModal() { document.getElementById('shopBoyModal').classList.add('active'); }
     function closeShopBoyModal() { document.getElementById('shopBoyModal').classList.remove('active'); }
+    function openBranchModal() { document.getElementById('branchModal').classList.add('active'); }
+    function closeBranchModal() { document.getElementById('branchModal').classList.remove('active'); }
     document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
       overlay.addEventListener('click', function (e) {
         if (e.target === overlay) overlay.classList.remove('active');
