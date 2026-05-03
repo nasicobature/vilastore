@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.db import transaction
-from django.db.models import Q, Sum, F
+from django.db.models import Q, Sum, F, Count
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -24,19 +24,23 @@ from .models import (
     MarketplaceOrder,
     MarketplaceOrderItem,
     MarketplaceShopProfile,
+    BranchInventory,
     DeliveryRider,
     DeliveryRequest,
     DeliveryCompany,
     HouseInquiry,
     HouseInquiryMessage,
     HouseListing,
+    HouseListingImage,
     Product,
     RentalPayment,
     RentalRecord,
     Sale,
     SaleItem,
+    ShopBranch,
     ShopBoy,
     ShopboyCart,
+    TenantRecord,
     OwnerCart,
     User,
     Customer,
@@ -47,9 +51,11 @@ from .views import (
     _parse_stock,
     _ensure_marketplace_profiles,
     _get_assigned_shopboy,
+    _login_account_type_options,
     _get_marketplace_settings,
     _password_meets_rules,
     _ensure_shop_code,
+    _valid_accounts_for_credentials,
     _vat_registered_for_sale,
     _year_turnover,
     _is_vat_registered,
@@ -59,9 +65,11 @@ from .views import (
     VAT_RATE,
     _send_marketplace_reset_code,
     _send_marketplace_verification_code,
+    _refresh_house_availability,
+    _sync_rental_payment_state,
 )
 from .subscription import subscription_is_active
-from .utils.notifications import send_sms
+from .utils.notifications import send_email, send_sms
 
 
 TOKEN_TTL_DAYS = 30
@@ -321,6 +329,13 @@ def _require_owner(request):
     return token_obj.owner
 
 
+def _require_housing_owner(request):
+    owner = _require_owner(request)
+    if not owner or owner.account_type != User.ACCOUNT_TYPE_HOUSING:
+        return None
+    return owner
+
+
 def _serialize_owner(owner):
     return {
         "id": owner.id,
@@ -344,8 +359,11 @@ def _serialize_shopboy(shopboy):
         "id": shopboy.id,
         "username": shopboy.username,
         "full_name": shopboy.full_name,
+        "role": shopboy.role,
+        "role_label": shopboy.get_role_display(),
         "can_use_marketplace": shopboy.can_use_marketplace,
         "is_active": shopboy.is_active,
+        "branch": _serialize_branch(shopboy.branch) if getattr(shopboy, "branch_id", None) else None,
         "owner": {
             "id": shopboy.user_id,
             "business_name": shopboy.user.business_name,
@@ -370,19 +388,71 @@ def _serialize_category(category):
     }
 
 
-def _serialize_owner_product(request, product):
+def _serialize_branch(branch):
+    if not branch:
+        return None
     return {
+        "id": branch.id,
+        "name": branch.name,
+        "code": branch.code or "",
+        "phone": branch.phone or "",
+        "address": branch.address or "",
+        "city": branch.city or "",
+        "state": branch.state or "",
+        "latitude": str(branch.latitude) if branch.latitude is not None else "",
+        "longitude": str(branch.longitude) if branch.longitude is not None else "",
+        "is_active": branch.is_active,
+        "is_default": branch.is_default,
+    }
+
+
+def _branch_inventory_row(branch, product):
+    if not branch:
+        return None
+    if hasattr(product, "_branch_inventory"):
+        return product._branch_inventory
+    return BranchInventory.objects.filter(branch=branch, product=product).first()
+
+
+def _effective_product_stock(product, branch=None):
+    inventory = _branch_inventory_row(branch, product)
+    if inventory and inventory.track_separately:
+        return inventory.stock
+    return product.stock
+
+
+def _effective_product_price(product, branch=None):
+    inventory = _branch_inventory_row(branch, product)
+    if inventory and inventory.selling_price is not None:
+        return inventory.selling_price
+    return product.selling_price
+
+
+def _serialize_owner_product(request, product, branch=None):
+    inventory = _branch_inventory_row(branch, product)
+    effective_stock = _effective_product_stock(product, branch)
+    effective_price = _effective_product_price(product, branch)
+    payload = {
         "id": product.id,
         "name": product.name,
         "code": product.code,
-        "stock": str(product.stock),
+        "stock": str(effective_stock),
+        "global_stock": str(product.stock),
         "low_stock_threshold": product.low_stock_threshold,
         "cost_price": _money(product.cost_price),
-        "selling_price": _money(product.selling_price),
+        "selling_price": _money(effective_price),
+        "global_selling_price": _money(product.selling_price),
         "vat_status": product.vat_status,
         "category": _serialize_category(product.category) if product.category_id else None,
         "image_url": _abs_media_url(request, product.image),
+        "branch_inventory": {
+            "track_separately": inventory.track_separately if inventory else False,
+            "is_active": inventory.is_active if inventory else True,
+            "stock": str(inventory.stock) if inventory else "",
+            "selling_price": _money(inventory.selling_price) if inventory and inventory.selling_price is not None else "",
+        } if branch else None,
     }
+    return payload
 
 
 def _serialize_sale(sale):
@@ -394,6 +464,7 @@ def _serialize_sale(sale):
         remaining = Decimal("0.00")
     return {
         "id": sale.id,
+        "branch": _serialize_branch(sale.branch) if getattr(sale, "branch_id", None) else None,
         "total_amount": _money(sale.total_amount),
         "total_profit": _money(sale.total_profit),
         "vat_total": _money(sale.vat_total),
@@ -621,6 +692,7 @@ def _serialize_house_image(request, image):
 
 
 def _serialize_house_listing(request, house, include_images=False):
+    marketplace_agent = house.marketplace_agent
     data = {
         "id": house.id,
         "title": house.title,
@@ -629,15 +701,31 @@ def _serialize_house_listing(request, house, include_images=False):
         "listing_mode_label": house.get_listing_mode_display(),
         "property_type": house.property_type,
         "property_type_label": house.get_property_type_display(),
+        "profile_type_label": house.profile_type_label,
         "price": _money(house.price),
+        "location": house.location or "",
+        "location_label": house.area_label,
         "rooms_count": house.rooms_count,
         "spaces_available": house.spaces_available,
+        "units_summary": house.units_summary,
         "availability_status": house.availability_status,
         "availability_status_label": house.get_availability_status_display(),
         "is_available": house.is_available,
+        "listed_in_marketplace": house.listed_in_marketplace,
+        "is_active": house.is_active,
         "owner_name": house.display_owner_name,
+        "owner_username": house.owner.username if house.owner_id else "",
         "owner_phone": house.display_owner_phone or "",
+        "owner_address": house.display_owner_address or "",
+        "agent_name": marketplace_agent.full_name if marketplace_agent else "",
+        "agent_username": marketplace_agent.username if marketplace_agent else "",
+        "agent_phone": marketplace_agent.phone if marketplace_agent else "",
+        "agent_email": marketplace_agent.email if marketplace_agent else "",
+        "agent_role": "Property Manager" if house.managed_by_agent_id else ("Listing Agent" if house.listing_agent_id else ""),
+        "privacy_note": "Exact address is shared privately after contact is established.",
         "primary_image_url": _abs_media_url(request, house.primary_image.image) if house.primary_image else "",
+        "images_count": house.images.count() if hasattr(house, "images") else 0,
+        "inquiries_count": house.inquiries.count() if hasattr(house, "inquiries") else 0,
     }
     if include_images:
         data["images"] = [_serialize_house_image(request, image) for image in house.images.all()]
@@ -655,6 +743,63 @@ def _serialize_owner_house_inquiry(request, inquiry):
         "created_at": inquiry.created_at.isoformat(),
         "updated_at": inquiry.updated_at.isoformat(),
         "house": _serialize_house_listing(request, inquiry.house),
+    }
+
+
+def _serialize_tenant_record(tenant):
+    return {
+        "id": tenant.id,
+        "full_name": tenant.full_name,
+        "phone": tenant.phone or "",
+        "email": tenant.email or "",
+    }
+
+
+def _serialize_rental_record(rental):
+    return {
+        "id": rental.id,
+        "tenant_name": rental.tenant_name,
+        "tenant_phone": rental.tenant_phone or "",
+        "tenant_email": rental.tenant_email or "",
+        "start_date": rental.start_date.isoformat() if rental.start_date else "",
+        "end_date": rental.end_date.isoformat() if rental.end_date else "",
+        "monthly_rent": _money(rental.monthly_rent),
+        "next_due_date": rental.next_due_date.isoformat() if rental.next_due_date else "",
+        "last_payment_date": rental.last_payment_date.isoformat() if rental.last_payment_date else "",
+        "payment_status": rental.payment_status,
+        "payment_status_label": rental.get_payment_status_display(),
+        "status": rental.status,
+        "status_label": rental.get_status_display(),
+        "notes": rental.notes or "",
+        "created_at": rental.created_at.isoformat(),
+        "updated_at": rental.updated_at.isoformat(),
+        "days_until_expiry": rental.days_until_expiry,
+        "needs_expiry_reminder": rental.needs_expiry_reminder,
+        "reminder_sent_at": rental.reminder_sent_at.isoformat() if rental.reminder_sent_at else "",
+        "tenant": _serialize_tenant_record(rental.tenant) if rental.tenant_id else None,
+        "house": {
+            "id": rental.house_id,
+            "title": rental.house.title,
+            "location": rental.house.location,
+        },
+    }
+
+
+def _serialize_rental_payment(payment):
+    return {
+        "id": payment.id,
+        "amount": _money(payment.amount),
+        "status": payment.status,
+        "status_label": payment.get_status_display(),
+        "due_date": payment.due_date.isoformat() if payment.due_date else "",
+        "paid_on": payment.paid_on.isoformat() if payment.paid_on else "",
+        "notes": payment.notes or "",
+        "created_at": payment.created_at.isoformat(),
+        "rental": {
+            "id": payment.rental_id,
+            "tenant_name": payment.rental.tenant_name,
+            "house_title": payment.rental.house.title,
+        },
     }
 
 
@@ -712,6 +857,7 @@ def _serialize_order(request, order, include_access_token=False):
         "total_amount": _money(order.total_amount),
         "created_at": order.created_at.isoformat(),
         "updated_at": order.updated_at.isoformat(),
+        "branch": _serialize_branch(order.branch) if getattr(order, "branch_id", None) else None,
         "shop": {
             "username": order.shop_owner.username,
             "business_name": order.shop_owner.business_name or order.shop_owner.username,
@@ -1126,6 +1272,8 @@ def api_marketplace_houses(request):
     rooms_min = (request.GET.get("rooms_min") or "").strip()
     min_price = (request.GET.get("min_price") or "").strip()
     max_price = (request.GET.get("max_price") or "").strip()
+    owner_username = (request.GET.get("owner_username") or "").strip()
+    agent_username = (request.GET.get("agent_username") or "").strip()
     available_only = request.GET.get("available") == "1"
     verified = request.GET.get("verified") == "1"
     sort = request.GET.get("sort") or "rating"
@@ -1139,6 +1287,13 @@ def api_marketplace_houses(request):
             | Q(owner__username__icontains=username_q)
             | Q(listing_agent__full_name__icontains=q)
             | Q(listing_agent__username__icontains=username_q)
+        )
+    if owner_username:
+        houses = houses.filter(owner__username__iexact=owner_username)
+    if agent_username:
+        houses = houses.filter(
+            Q(listing_agent__username__iexact=agent_username)
+            | Q(managed_by_agent__username__iexact=agent_username)
         )
     if location:
         houses = houses.filter(location__icontains=location)
@@ -1222,10 +1377,14 @@ def api_marketplace_shop_detail(request, username):
     shop_owner = get_object_or_404(User, username=username, is_active=True)
     profile, _ = MarketplaceShopProfile.objects.get_or_create(user=shop_owner)
     products = Product.objects.filter(user=shop_owner).order_by("name")
+    branches = _serialize_business_branch_analytics(shop_owner)["branches"] if shop_owner.account_type == User.ACCOUNT_TYPE_SHOP else []
+    default_branch = _default_branch_for_owner(shop_owner)
 
     return _json_success({
         "shop": _serialize_shop_profile(request, profile),
         "products": [_serialize_product(request, product) for product in products],
+        "branches": branches,
+        "default_branch": _serialize_branch(default_branch),
     })
 
 
@@ -1242,6 +1401,7 @@ def api_marketplace_place_order(request, username):
     buyer_name = (data.get("buyer_name") or "").strip()
     buyer_contact = (data.get("buyer_contact") or "").strip()
     buyer_address = (data.get("buyer_address") or "").strip()
+    branch_id = data.get("branch_id") or None
 
     if not buyer_name or not buyer_contact:
         return _json_error("Buyer name and contact are required.")
@@ -1268,6 +1428,13 @@ def api_marketplace_place_order(request, username):
 
     total_amount = Decimal("0.00")
     order_items = []
+    branch = None
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=shop_owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Selected branch is not available.")
+    else:
+        branch = _default_branch_for_owner(shop_owner)
 
     with transaction.atomic():
         products = (
@@ -1275,24 +1442,34 @@ def api_marketplace_place_order(request, username):
             .filter(user=shop_owner, id__in=product_ids)
         )
         product_map = {product.id: product for product in products}
+        inventory_map = {}
+        if branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.select_for_update().filter(branch=branch, product__in=products)
+            }
+            for product in products:
+                product._branch_inventory = inventory_map.get(product.id)
 
         for row in clean_items:
             product = product_map.get(row["product_id"])
             if not product:
                 return _json_error("A product in your cart is invalid.")
-            if product.stock < row["quantity"]:
-                return _json_error(f"Not enough stock for {product.name}. Available: {product.stock}.")
+            available_stock = _effective_product_stock(product, branch)
+            if available_stock < row["quantity"]:
+                return _json_error(f"Not enough stock for {product.name}. Available: {available_stock}.")
 
-            line_total = product.selling_price * row["quantity"]
+            line_total = _effective_product_price(product, branch) * row["quantity"]
             total_amount += line_total
             order_items.append({
                 "product": product,
                 "quantity": row["quantity"],
-                "unit_price": product.selling_price,
+                "unit_price": _effective_product_price(product, branch),
             })
 
         order = MarketplaceOrder.objects.create(
             shop_owner=shop_owner,
+            branch=branch,
             buyer=buyer,
             assigned_shopboy=_get_assigned_shopboy(shop_owner),
             buyer_name=buyer_name,
@@ -2113,12 +2290,19 @@ def api_mobile_auth_login(request):
         return _json_error("Invalid JSON payload.")
 
     role = (data.get("role") or "").strip().lower()
+    account_type = (data.get("account_type") or "").strip().lower()
     if role in ("shopowner", "shop_owner", "owner"):
         role = AuthToken.ROLE_OWNER
     if role in ("shopboy", "shop_boy"):
         role = AuthToken.ROLE_SHOPBOY
     if role in ("agent",):
         role = AuthToken.ROLE_AGENT
+    if account_type in ("shop_owner", "shopowner"):
+        account_type = User.ACCOUNT_TYPE_SHOP
+    elif account_type in ("house", "housing_owner"):
+        account_type = User.ACCOUNT_TYPE_HOUSING
+    elif account_type not in ("", User.ACCOUNT_TYPE_SHOP, User.ACCOUNT_TYPE_HOUSING):
+        return _json_error("Invalid account type. Use shop or housing.")
 
     if role == AuthToken.ROLE_OWNER:
         identifier = (data.get("identifier") or "").strip()
@@ -2126,7 +2310,28 @@ def api_mobile_auth_login(request):
         if not identifier or not password:
             return _json_error("Email/username and password are required.")
 
-        owner = _authenticate_with_identifier(request, identifier, password)
+        valid_accounts = _valid_accounts_for_credentials(
+            request,
+            identifier,
+            password,
+            account_type=account_type or None,
+        )
+        if len(valid_accounts) > 1 and not account_type:
+            return _json_error(
+                "Choose which workspace you want to open.",
+                status=409,
+                code="account_type_required",
+                account_type_options=_login_account_type_options(valid_accounts),
+            )
+
+        owner = valid_accounts[0] if len(valid_accounts) == 1 else None
+        if not owner:
+            owner = _authenticate_with_identifier(
+                request,
+                identifier,
+                password,
+                account_type=account_type or None,
+            )
         if not owner:
             return _json_error("Invalid email/username or password.", status=401)
 
@@ -2406,10 +2611,26 @@ def api_owner_adjust_stock(request, pk):
         adjustment = _parse_stock(data.get("adjustment", 0))
     except Exception:
         return _json_error("Invalid adjustment amount.")
+    branch_id = data.get("branch_id") or None
+    branch = None
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
 
-    product.stock = max(Decimal("0.00"), product.stock + adjustment)
-    product.save(update_fields=["stock"])
-    return _json_success({ "product": _serialize_owner_product(request, product) })
+    if branch:
+        inventory, _ = BranchInventory.objects.get_or_create(
+            branch=branch,
+            product=product,
+            defaults={"stock": Decimal("0.00"), "selling_price": product.selling_price},
+        )
+        inventory.stock = max(Decimal("0.00"), inventory.stock + adjustment)
+        inventory.save(update_fields=["stock", "updated_at"])
+        product._branch_inventory = inventory
+    else:
+        product.stock = max(Decimal("0.00"), product.stock + adjustment)
+        product.save(update_fields=["stock"])
+    return _json_success({ "product": _serialize_owner_product(request, product, branch=branch) })
 
 
 @csrf_exempt
@@ -2437,6 +2658,7 @@ def api_owner_dashboard(request):
             .annotate(total_sold=Sum("saleitem__quantity"))
             .order_by("-total_sold", "-created_at")[:6]
         )
+        branch_analytics = _serialize_business_branch_analytics(owner)
 
         return _json_success({
             "today_date": today.isoformat(),
@@ -2444,6 +2666,7 @@ def api_owner_dashboard(request):
             "today_profit": _money(today_profit),
             "total_products": total_products,
             "low_stock_count": low_stock_count,
+            "branch_analytics": branch_analytics,
             "today_transactions": [
                 {
                     "id": sale.id,
@@ -2473,16 +2696,15 @@ def api_owner_dashboard(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 def api_housing_dashboard(request):
-    owner = _require_owner(request)
+    owner = _require_housing_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
-    if owner.account_type != User.ACCOUNT_TYPE_HOUSING:
-        return _json_error("This dashboard is only available for housing accounts.", status=403)
 
     today = timezone.localdate()
     houses = (
         HouseListing.objects.filter(owner=owner, is_active=True)
-        .prefetch_related("images")
+        .prefetch_related("images", "inquiries")
+        .select_related("managed_by_agent")
         .order_by("-created_at")
     )
     inquiries = (
@@ -2503,6 +2725,8 @@ def api_housing_dashboard(request):
         Q(status__in=[RentalPayment.STATUS_PENDING, RentalPayment.STATUS_PARTIAL, RentalPayment.STATUS_OVERDUE])
         | Q(due_date__lt=today)
     )
+    agents = Agent.objects.filter(is_active=True).order_by("full_name")
+    tenants = TenantRecord.objects.filter(user=owner).order_by("full_name")
 
     return _json_success({
         "profile": _serialize_owner(owner),
@@ -2514,8 +2738,323 @@ def api_housing_dashboard(request):
             "expiring_rentals": upcoming_reminders.count(),
             "due_payments": due_payments.count(),
         },
-        "houses": [_serialize_house_listing(request, house) for house in houses[:8]],
-        "inquiries": [_serialize_owner_house_inquiry(request, inquiry) for inquiry in inquiries[:8]],
+        "houses": [_serialize_house_listing(request, house) for house in houses],
+        "inquiries": [_serialize_owner_house_inquiry(request, inquiry) for inquiry in inquiries[:12]],
+        "rentals": [_serialize_rental_record(rental) for rental in rentals.select_related("house", "tenant")[:12]],
+        "payments": [_serialize_rental_payment(payment) for payment in payments.select_related("rental", "rental__house")[:12]],
+        "upcoming_reminders": [_serialize_rental_record(rental) for rental in upcoming_reminders.select_related("house", "tenant")[:8]],
+        "due_payments": [_serialize_rental_payment(payment) for payment in due_payments.select_related("rental", "rental__house")[:8]],
+        "tenants": [_serialize_tenant_record(tenant) for tenant in tenants],
+        "agents": [_serialize_agent(agent) for agent in agents],
+        "choices": {
+            "house_statuses": [{"value": value, "label": label} for value, label in HouseListing.AVAILABILITY_STATUS_CHOICES],
+            "property_types": [{"value": value, "label": label} for value, label in HouseListing.PROPERTY_TYPE_CHOICES],
+            "listing_modes": [{"value": value, "label": label} for value, label in HouseListing.LISTING_MODE_CHOICES],
+            "rental_statuses": [{"value": value, "label": label} for value, label in RentalRecord.STATUS_CHOICES],
+            "rental_payment_statuses": [{"value": value, "label": label} for value, label in RentalRecord.PAYMENT_STATUS_CHOICES],
+            "payment_statuses": [{"value": value, "label": label} for value, label in RentalPayment.STATUS_CHOICES],
+        },
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_housing_listing_create(request):
+    owner = _require_housing_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    title = (request.POST.get("title") or "").strip()
+    listing_mode = (request.POST.get("listing_mode") or HouseListing.MODE_RENT).strip()
+    property_type = (request.POST.get("property_type") or HouseListing.TYPE_APARTMENT).strip()
+    location = (request.POST.get("location") or "").strip()
+    description = (request.POST.get("description") or "").strip()
+    availability_status = (request.POST.get("availability_status") or HouseListing.STATUS_AVAILABLE).strip()
+    managed_by_agent = None
+    managed_by_agent_id = (request.POST.get("managed_by_agent") or "").strip()
+    if managed_by_agent_id:
+        managed_by_agent = Agent.objects.filter(id=managed_by_agent_id, is_active=True).first()
+
+    if not title or not location:
+        return _json_error("House title and location are required.")
+
+    valid_property_types = {choice[0] for choice in HouseListing.PROPERTY_TYPE_CHOICES}
+    if property_type not in valid_property_types:
+        property_type = HouseListing.TYPE_OTHER
+    valid_listing_modes = {choice[0] for choice in HouseListing.LISTING_MODE_CHOICES}
+    if listing_mode not in valid_listing_modes:
+        listing_mode = HouseListing.MODE_RENT
+    valid_availability = {choice[0] for choice in HouseListing.AVAILABILITY_STATUS_CHOICES}
+    if availability_status not in valid_availability:
+        availability_status = HouseListing.STATUS_AVAILABLE
+
+    try:
+        price = Decimal(request.POST.get("price") or "0")
+        rooms_count = int(request.POST.get("rooms_count") or "1")
+        spaces_available = int(request.POST.get("spaces_available") or "1")
+        if price <= 0 or rooms_count <= 0 or spaces_available <= 0:
+            raise ValueError
+    except Exception:
+        return _json_error("Price, rooms, and spaces must be valid positive values.")
+
+    house = HouseListing.objects.create(
+        owner=owner,
+        managed_by_agent=managed_by_agent,
+        title=title,
+        listing_mode=listing_mode,
+        property_type=property_type,
+        price=price,
+        location=location,
+        rooms_count=rooms_count,
+        spaces_available=spaces_available,
+        description=description,
+        availability_status=availability_status,
+        listed_in_marketplace=request.POST.get("listed_in_marketplace") in {"true", "1", "on"},
+    )
+
+    for index, image in enumerate(request.FILES.getlist("images")):
+        HouseListingImage.objects.create(house=house, image=image, is_primary=index == 0)
+
+    return _json_success({
+        "message": "House listing added.",
+        "house": _serialize_house_listing(request, house, include_images=True),
+    }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_housing_listing_update(request, house_id):
+    owner = _require_housing_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    house = get_object_or_404(HouseListing, id=house_id, owner=owner)
+    availability_status = (request.POST.get("availability_status") or house.availability_status).strip()
+    listing_mode = (request.POST.get("listing_mode") or house.listing_mode).strip()
+
+    valid_availability = {choice[0] for choice in HouseListing.AVAILABILITY_STATUS_CHOICES}
+    if availability_status not in valid_availability:
+        availability_status = house.availability_status
+    valid_listing_modes = {choice[0] for choice in HouseListing.LISTING_MODE_CHOICES}
+    if listing_mode not in valid_listing_modes:
+        listing_mode = house.listing_mode
+
+    house.availability_status = availability_status
+    house.listing_mode = listing_mode
+    house.listed_in_marketplace = request.POST.get("listed_in_marketplace") in {"true", "1", "on"}
+    house.is_active = request.POST.get("is_active") in {"true", "1", "on"}
+    house.save(update_fields=["availability_status", "listing_mode", "listed_in_marketplace", "is_active", "updated_at"])
+
+    return _json_success({
+        "message": f"{house.title} updated.",
+        "house": _serialize_house_listing(request, house, include_images=True),
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_housing_rental_create(request):
+    owner = _require_housing_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    house = get_object_or_404(HouseListing, id=request.POST.get("house_id"), owner=owner)
+    tenant = None
+    tenant_id = (request.POST.get("tenant_id") or "").strip()
+    if tenant_id:
+        tenant = TenantRecord.objects.filter(id=tenant_id, user=owner).first()
+
+    tenant_name = (request.POST.get("tenant_name") or (tenant.full_name if tenant else "")).strip()
+    tenant_phone = (request.POST.get("tenant_phone") or (tenant.phone if tenant else "")).strip()
+    tenant_email = (request.POST.get("tenant_email") or (tenant.email if tenant else "")).strip()
+    notes = (request.POST.get("notes") or "").strip()
+
+    if not tenant_name:
+        return _json_error("Tenant name is required.")
+
+    start_date = parse_date((request.POST.get("start_date") or "").strip())
+    end_date = parse_date((request.POST.get("end_date") or "").strip())
+    next_due_date = parse_date((request.POST.get("next_due_date") or "").strip()) if request.POST.get("next_due_date") else None
+    if not start_date or not end_date or end_date <= start_date:
+        return _json_error("Please provide a valid rental start and end date.")
+
+    try:
+        monthly_rent = Decimal(request.POST.get("monthly_rent") or house.price)
+        if monthly_rent <= 0:
+            raise ValueError
+    except Exception:
+        return _json_error("Monthly rent must be a valid positive amount.")
+
+    valid_payment_statuses = {choice[0] for choice in RentalRecord.PAYMENT_STATUS_CHOICES}
+    payment_status = (request.POST.get("payment_status") or RentalRecord.PAYMENT_CURRENT).strip()
+    if payment_status not in valid_payment_statuses:
+        payment_status = RentalRecord.PAYMENT_CURRENT
+    valid_rental_statuses = {choice[0] for choice in RentalRecord.STATUS_CHOICES}
+    rental_status = (request.POST.get("status") or RentalRecord.STATUS_ACTIVE).strip()
+    if rental_status not in valid_rental_statuses:
+        rental_status = RentalRecord.STATUS_ACTIVE
+
+    if tenant is None:
+        tenant = TenantRecord.objects.create(
+            user=owner,
+            full_name=tenant_name,
+            phone=tenant_phone,
+            email=tenant_email,
+        )
+
+    rental = RentalRecord.objects.create(
+        house=house,
+        tenant=tenant,
+        tenant_name=tenant_name,
+        tenant_phone=tenant_phone,
+        tenant_email=tenant_email,
+        start_date=start_date,
+        end_date=end_date,
+        monthly_rent=monthly_rent,
+        next_due_date=next_due_date,
+        payment_status=payment_status,
+        status=rental_status,
+        notes=notes,
+    )
+    _refresh_house_availability(house)
+    _sync_rental_payment_state(rental)
+
+    return _json_success({
+        "message": "Rental record saved.",
+        "rental": _serialize_rental_record(rental),
+        "tenant": _serialize_tenant_record(tenant),
+    }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_housing_payment_create(request):
+    owner = _require_housing_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    rental = get_object_or_404(
+        RentalRecord.objects.select_related("house"),
+        id=request.POST.get("rental_id"),
+        house__owner=owner,
+    )
+    due_date = parse_date((request.POST.get("due_date") or "").strip())
+    paid_on = parse_date((request.POST.get("paid_on") or "").strip()) if request.POST.get("paid_on") else None
+    status = (request.POST.get("status") or RentalPayment.STATUS_PENDING).strip()
+    notes = (request.POST.get("notes") or "").strip()
+
+    if not due_date:
+        return _json_error("Payment due date is required.")
+
+    valid_payment_statuses = {choice[0] for choice in RentalPayment.STATUS_CHOICES}
+    if status not in valid_payment_statuses:
+        status = RentalPayment.STATUS_PENDING
+
+    try:
+        amount = Decimal(request.POST.get("amount") or "0")
+        if amount <= 0:
+            raise ValueError
+    except Exception:
+        return _json_error("Payment amount must be a valid positive amount.")
+
+    payment = RentalPayment.objects.create(
+        rental=rental,
+        amount=amount,
+        due_date=due_date,
+        paid_on=paid_on,
+        status=status,
+        notes=notes,
+    )
+    if payment.status == RentalPayment.STATUS_PAID and payment.paid_on:
+        rental.last_payment_date = payment.paid_on
+        rental.save(update_fields=["last_payment_date", "updated_at"])
+    _sync_rental_payment_state(rental)
+
+    return _json_success({
+        "message": "Rental payment record saved.",
+        "payment": _serialize_rental_payment(payment),
+    }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_housing_inquiry_detail(request, public_id):
+    owner = _require_housing_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    inquiry = get_object_or_404(
+        HouseInquiry.objects.select_related("house", "buyer").prefetch_related("house__images", "messages"),
+        public_id=public_id,
+        owner=owner,
+    )
+    return _json_success({
+        "inquiry": _serialize_house_inquiry(request, inquiry),
+        "messages": [_serialize_house_inquiry_message(message) for message in inquiry.messages.all()],
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_housing_inquiry_message(request, public_id):
+    owner = _require_housing_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    inquiry = get_object_or_404(HouseInquiry.objects.select_related("house"), public_id=public_id, owner=owner)
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid request payload.")
+
+    message_text = (data.get("message") or "").strip()
+    if not message_text:
+        return _json_error("Message cannot be empty.")
+
+    message = HouseInquiryMessage.objects.create(
+        inquiry=inquiry,
+        sender_type=HouseInquiryMessage.SENDER_SELLER,
+        message=message_text,
+    )
+    if inquiry.status != HouseInquiry.STATUS_OPEN:
+        inquiry.status = HouseInquiry.STATUS_OPEN
+        inquiry.save(update_fields=["status", "updated_at"])
+
+    return _json_success({
+        "message": _serialize_house_inquiry_message(message),
+    }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_housing_rental_reminder(request, rental_id):
+    owner = _require_housing_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    rental = get_object_or_404(
+        RentalRecord.objects.select_related("house", "house__owner"),
+        id=rental_id,
+        house__owner=owner,
+    )
+
+    reminder_message = (
+        f"Hello {rental.tenant_name}, your rent for {rental.house.title} at {rental.house.location} "
+        f"is set to expire on {rental.end_date:%B %d, %Y}. Please plan your renewal early."
+    )
+    sent = False
+    if rental.tenant_email:
+        sent = send_email(rental.tenant_email, "VilaStore Rent Expiry Reminder", reminder_message) or sent
+    if rental.tenant_phone:
+        sent = send_sms(rental.tenant_phone, reminder_message) or sent
+
+    if not sent:
+        return _json_error("Reminder could not be delivered. Add tenant email or phone first.")
+
+    rental.reminder_sent_at = timezone.now()
+    rental.save(update_fields=["reminder_sent_at", "updated_at"])
+    return _json_success({
+        "message": f"Reminder sent to {rental.tenant_name}.",
+        "rental": _serialize_rental_record(rental),
     })
 
 
@@ -2750,6 +3289,7 @@ def api_owner_cart_checkout(request):
         payment_status = Sale.PAYMENT_PAID
 
     customer_name = (data.get("customer_name") or "").strip()
+    branch_id = data.get("branch_id") or None
     try:
         initial_payment = Decimal(str(data.get("initial_payment") or "0"))
         if initial_payment < 0:
@@ -2765,10 +3305,23 @@ def api_owner_cart_checkout(request):
     total_amount = Decimal("0.00")
     total_profit = Decimal("0.00")
     line_items = []
+    branch = None
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
 
     with transaction.atomic():
         products = Product.objects.select_for_update().filter(user=owner, id__in=product_ids)
         product_map = {str(p.id): p for p in products}
+        inventory_map = {}
+        if branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.select_for_update().filter(branch=branch, product__in=products)
+            }
+            for product in products:
+                product._branch_inventory = inventory_map.get(product.id)
 
         for pid, item in cart.data.items():
             product = product_map.get(str(pid))
@@ -2779,8 +3332,9 @@ def api_owner_cart_checkout(request):
             if quantity <= 0:
                 continue
 
-            if product.stock < quantity:
-                return _json_error(f"Not enough stock for {product.name}. Available: {product.stock}.", status=409)
+            available_stock = _effective_product_stock(product, branch)
+            if available_stock < quantity:
+                return _json_error(f"Not enough stock for {product.name}. Available: {available_stock}.", status=409)
 
             price = Decimal(str(item.get("price", product.selling_price)))
             cost = Decimal(str(item.get("cost", product.cost_price)))
@@ -2822,6 +3376,7 @@ def api_owner_cart_checkout(request):
 
         sale = Sale.objects.create(
             user=owner,
+            branch=branch,
             sales_channel=Sale.CHANNEL_OWNER_POS,
             customer_name=customer_name,
             total_amount=total_amount.quantize(Decimal("0.01")),
@@ -2847,8 +3402,13 @@ def api_owner_cart_checkout(request):
                 vat_amount=row["vat_amount"],
                 vat_applicable=row["vat_applicable"],
             )
-            row["product"].stock -= row["quantity"]
-            row["product"].save(update_fields=["stock"])
+            inventory = inventory_map.get(row["product"].id) if branch else None
+            if inventory and inventory.track_separately:
+                inventory.stock = max(Decimal("0.00"), inventory.stock - row["quantity"])
+                inventory.save(update_fields=["stock", "updated_at"])
+            else:
+                row["product"].stock -= row["quantity"]
+                row["product"].save(update_fields=["stock"])
 
     cart.data = {}
     cart.last_sale_id = sale.id
@@ -2872,6 +3432,12 @@ def api_owner_inventory(request):
         return _json_error("Unauthorized.", status=401)
 
     q = (request.GET.get("q") or "").strip()
+    branch_id = (request.GET.get("branch_id") or "").strip()
+    branch = None
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
     products = Product.objects.filter(user=owner)
     if q:
         products = products.filter(
@@ -2881,11 +3447,18 @@ def api_owner_inventory(request):
         )
 
     products = products.select_related("category")
+    if branch:
+        inventory_map = {
+            item.product_id: item
+            for item in BranchInventory.objects.filter(branch=branch, product__in=products)
+        }
+        for product in products:
+            product._branch_inventory = inventory_map.get(product.id)
 
     total_products = products.count()
-    total_value = sum((p.selling_price * p.stock for p in products), Decimal("0.00"))
-    low_stock = products.filter(stock__lte=F("low_stock_threshold"), stock__gt=0).count()
-    out_of_stock = products.filter(stock=0).count()
+    total_value = sum((_effective_product_price(p, branch) * _effective_product_stock(p, branch) for p in products), Decimal("0.00"))
+    low_stock = sum(1 for p in products if Decimal(_effective_product_stock(p, branch)) <= p.low_stock_threshold and Decimal(_effective_product_stock(p, branch)) > 0)
+    out_of_stock = sum(1 for p in products if Decimal(_effective_product_stock(p, branch)) <= 0)
 
     sample_products = list(products.order_by("name").values_list("name", flat=True)[:3])
     return _json_success({
@@ -2895,7 +3468,8 @@ def api_owner_inventory(request):
             "low_stock": low_stock,
             "out_of_stock": out_of_stock,
         },
-        "products": [_serialize_owner_product(request, product) for product in products.order_by("name")],
+        "branch": _serialize_branch(branch) if branch else None,
+        "products": [_serialize_owner_product(request, product, branch=branch) for product in products.order_by("name")],
         "inventory_debug": {
             "owner_id": owner.id,
             "owner_username": owner.username,
@@ -3029,15 +3603,18 @@ def api_owner_sales_history(request):
     start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
     end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
     q = (request.GET.get("q") or "").strip()
+    branch_id = (request.GET.get("branch_id") or "").strip()
     if start_date and end_date and start_date > end_date:
         start_date, end_date = end_date, start_date
 
     sales = (
         Sale.objects.filter(user=owner)
-        .select_related("handled_by_shopboy")
+        .select_related("handled_by_shopboy", "branch")
         .prefetch_related("items__product")
         .order_by("-created_at")
     )
+    if branch_id:
+        sales = sales.filter(branch_id=branch_id)
     if start_date:
         sales = sales.filter(created_at__date__gte=start_date)
     if end_date:
@@ -3096,6 +3673,7 @@ def api_owner_sales_history(request):
             "amount_paid": _money(getattr(sale, "amount_paid", Decimal("0.00"))),
             "remaining_balance": _money(sale.remaining_balance),
             "payment_status": getattr(sale, "payment_status", Sale.PAYMENT_PAID),
+            "branch_name": sale.branch.name if sale.branch_id else "",
             "customer_name": sale.display_customer_name if hasattr(sale, "display_customer_name") else "",
             "created_at": sale.created_at.isoformat(),
             "sales_channel": sale.sales_channel,
@@ -3331,6 +3909,7 @@ def api_owner_reports(request):
 
     now = timezone.now()
     period = request.GET.get("period", "month")
+    branch_id = (request.GET.get("branch_id") or "").strip()
     start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
     end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
     custom_range = bool(start_date or end_date)
@@ -3356,6 +3935,13 @@ def api_owner_reports(request):
 
     sales = Sale.objects.filter(user=owner)
     expenses = Expense.objects.filter(user=owner)
+    selected_branch = None
+    if branch_id:
+        selected_branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
+        if not selected_branch:
+            return _json_error("Branch not found.", status=404)
+        sales = sales.filter(branch=selected_branch)
+        expenses = expenses.filter(branch=selected_branch)
 
     if start is not None:
         sales = sales.filter(created_at__gte=start)
@@ -3391,6 +3977,12 @@ def api_owner_reports(request):
     expense_breakdown = (
         expenses.values("category")
         .annotate(total=Sum("amount"))
+        .order_by("-total")
+    )
+    branch_breakdown = (
+        Sale.objects.filter(user=owner)
+        .values("branch__id", "branch__name")
+        .annotate(total=Sum("total_amount"), transactions=Count("id"))
         .order_by("-total")
     )
 
@@ -3468,6 +4060,7 @@ def api_owner_reports(request):
 
     return _json_success({
         "period": period,
+        "branch": _serialize_branch(selected_branch) if selected_branch else None,
         "start_date": start_date.isoformat() if start_date else "",
         "end_date": end_date.isoformat() if end_date else "",
         "totals": {
@@ -3487,6 +4080,15 @@ def api_owner_reports(request):
         "top_products": [
             { "name": row["product__name"], "total": float(row["total"] or 0) }
             for row in top_products
+        ],
+        "branch_performance": [
+            {
+                "id": row["branch__id"],
+                "name": row["branch__name"] or "Unassigned",
+                "total_revenue": _money(row["total"] or Decimal("0.00")),
+                "transactions": row["transactions"] or 0,
+            }
+            for row in branch_breakdown
         ],
         "expense_breakdown": [
             { "category": row["category"], "total": _money(row["total"]) }
@@ -3648,8 +4250,77 @@ def _serialize_shopboy_settings(shopboy):
         "id": shopboy.id,
         "full_name": shopboy.full_name,
         "username": shopboy.username,
+        "role": shopboy.role,
+        "role_label": shopboy.get_role_display(),
+        "branch_id": shopboy.branch_id,
+        "branch_name": shopboy.branch.name if shopboy.branch_id else "",
         "can_use_marketplace": shopboy.can_use_marketplace,
         "is_active": shopboy.is_active,
+    }
+
+
+def _owner_branch_queryset(owner):
+    return ShopBranch.objects.filter(user=owner).order_by("name", "id")
+
+
+def _default_branch_for_owner(owner):
+    branch = _owner_branch_queryset(owner).filter(is_default=True).first() or _owner_branches_qs_first(owner)
+    if branch:
+        return branch
+    if owner.account_type != User.ACCOUNT_TYPE_SHOP:
+        return None
+    return ShopBranch.objects.create(
+        user=owner,
+        name=(owner.business_name or owner.username or "Main Shop").strip(),
+        phone=owner.phone or "",
+        address=owner.address or "Main address",
+        city="",
+        state=owner.state or "",
+        is_default=True,
+    )
+
+
+def _owner_branches_qs_first(owner):
+    return _owner_branch_queryset(owner).first()
+
+
+def _serialize_branch_summary(owner, branch):
+    sales = Sale.objects.filter(user=owner, branch=branch)
+    orders = MarketplaceOrder.objects.filter(shop_owner=owner, branch=branch)
+    revenue = sales.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+    product_count = BranchInventory.objects.filter(branch=branch, is_active=True).count()
+    active_staff = ShopBoy.objects.filter(user=owner, branch=branch, is_active=True).count()
+    return {
+        **_serialize_branch(branch),
+        "stats": {
+            "sales_count": sales.count(),
+            "orders_count": orders.count(),
+            "revenue": _money(revenue),
+            "product_count": product_count,
+            "active_staff": active_staff,
+        },
+    }
+
+
+def _serialize_business_branch_analytics(owner):
+    branches = list(_owner_branch_queryset(owner))
+    summaries = [_serialize_branch_summary(owner, branch) for branch in branches]
+    best_branch = None
+    if summaries:
+        best_branch = max(summaries, key=lambda item: Decimal(item["stats"]["revenue"]))
+    total_revenue = Sale.objects.filter(user=owner).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+    return {
+        "branches": summaries,
+        "summary": {
+            "branch_count": len(branches),
+            "active_branch_count": sum(1 for branch in branches if branch.is_active),
+            "total_revenue": _money(total_revenue),
+            "best_performing_branch": {
+                "id": best_branch["id"],
+                "name": best_branch["name"],
+                "revenue": best_branch["stats"]["revenue"],
+            } if best_branch else None,
+        },
     }
 
 
@@ -3663,7 +4334,19 @@ def api_owner_settings(request):
     _ensure_shop_code(owner)
     marketplace_settings = _get_marketplace_settings(owner)
     marketplace_profile, _ = MarketplaceShopProfile.objects.get_or_create(user=owner)
-    shopboys = ShopBoy.objects.filter(user=owner).order_by("-id")
+    branches = list(_owner_branch_queryset(owner))
+    if not branches:
+        default_branch = ShopBranch.objects.create(
+            user=owner,
+            name=(owner.business_name or owner.username or "Main Shop").strip(),
+            phone=owner.phone or "",
+            address=owner.address or "Main address",
+            city="",
+            state=owner.state or "",
+            is_default=True,
+        )
+        branches = [default_branch]
+    shopboys = ShopBoy.objects.filter(user=owner).select_related("branch").order_by("-id")
 
     return _json_success({
         "shop_code": owner.shop_code or "",
@@ -3682,6 +4365,8 @@ def api_owner_settings(request):
             "logo_url": _abs_media_url(request, marketplace_profile.logo),
             "cover_url": _abs_media_url(request, marketplace_profile.cover_image),
         },
+        "branches": [_serialize_branch_summary(owner, branch) for branch in branches],
+        "branch_analytics": _serialize_business_branch_analytics(owner)["summary"],
         "shopboys": [_serialize_shopboy_settings(sb) for sb in shopboys],
         "marketplace_assignment": {
             "assigned_shopboy_id": marketplace_settings.assigned_shopboy_id,
@@ -3773,7 +4458,7 @@ def api_owner_settings_shopboys(request):
         return _json_error("Unauthorized.", status=401)
 
     if request.method == "GET":
-        shopboys = ShopBoy.objects.filter(user=owner).order_by("-id")
+        shopboys = ShopBoy.objects.filter(user=owner).select_related("branch").order_by("-id")
         return _json_success({ "shopboys": [_serialize_shopboy_settings(sb) for sb in shopboys] })
 
     data = _get_body_data(request)
@@ -3783,6 +4468,8 @@ def api_owner_settings_shopboys(request):
     full_name = (data.get("full_name") or "").strip()
     username = (data.get("username") or "").strip()
     password = (data.get("password") or "").strip()
+    role = (data.get("role") or ShopBoy.ROLE_STAFF).strip().lower()
+    branch_id = data.get("branch_id") or None
     can_use_marketplace_raw = data.get("can_use_marketplace")
     if isinstance(can_use_marketplace_raw, str):
         can_use_marketplace = can_use_marketplace_raw.strip().lower() in {"true", "1", "yes", "on"}
@@ -3791,19 +4478,122 @@ def api_owner_settings_shopboys(request):
 
     if not full_name or not username or not password:
         return _json_error("Full name, username, and password are required.")
+    valid_roles = {choice[0] for choice in ShopBoy.ROLE_CHOICES}
+    if role not in valid_roles:
+        role = ShopBoy.ROLE_STAFF
 
     if ShopBoy.objects.filter(user=owner, username__iexact=username).exists():
         return _json_error("Shop boy username already exists.")
 
+    branch = None
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Invalid branch selection.")
+
     shopboy = ShopBoy.objects.create(
         user=owner,
+        branch=branch,
         full_name=full_name,
         username=username,
         password=make_password(password),
+        role=role,
         can_use_marketplace=can_use_marketplace,
         is_active=True,
     )
     return _json_success({ "shopboy": _serialize_shopboy_settings(shopboy) }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def api_owner_settings_branches(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    if request.method == "GET":
+        return _json_success(_serialize_business_branch_analytics(owner))
+
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    name = (data.get("name") or "").strip()
+    address = (data.get("address") or "").strip()
+    if not name or not address:
+        return _json_error("Branch name and address are required.")
+
+    branch = ShopBranch.objects.create(
+        user=owner,
+        name=name,
+        phone=(data.get("phone") or "").strip(),
+        address=address,
+        city=(data.get("city") or "").strip(),
+        state=(data.get("state") or owner.state or "").strip(),
+        latitude=_to_decimal(data.get("latitude")),
+        longitude=_to_decimal(data.get("longitude")),
+        is_active=str(data.get("is_active", "true")).strip().lower() in {"true", "1", "yes", "on"},
+        is_default=str(data.get("is_default", "")).strip().lower() in {"true", "1", "yes", "on"},
+    )
+    return _json_success({"branch": _serialize_branch_summary(owner, branch)}, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_settings_branch_update(request, branch_id):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    branch = get_object_or_404(ShopBranch, user=owner, id=branch_id)
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    if "name" in data:
+        branch.name = (data.get("name") or "").strip() or branch.name
+    if "phone" in data:
+        branch.phone = (data.get("phone") or "").strip()
+    if "address" in data:
+        branch.address = (data.get("address") or "").strip() or branch.address
+    if "city" in data:
+        branch.city = (data.get("city") or "").strip()
+    if "state" in data:
+        branch.state = (data.get("state") or "").strip()
+    if "latitude" in data:
+        branch.latitude = _to_decimal(data.get("latitude"))
+    if "longitude" in data:
+        branch.longitude = _to_decimal(data.get("longitude"))
+    if "is_active" in data:
+        branch.is_active = str(data.get("is_active")).strip().lower() in {"true", "1", "yes", "on"}
+    if "is_default" in data:
+        branch.is_default = str(data.get("is_default")).strip().lower() in {"true", "1", "yes", "on"}
+    branch.save()
+    return _json_success({"branch": _serialize_branch_summary(owner, branch)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_settings_branch_delete(request, branch_id):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    branch = get_object_or_404(ShopBranch, user=owner, id=branch_id)
+    if ShopBranch.objects.filter(user=owner).count() <= 1:
+        return _json_error("At least one branch must remain.")
+
+    fallback = ShopBranch.objects.filter(user=owner).exclude(id=branch.id).order_by("-is_default", "id").first()
+    ShopBoy.objects.filter(user=owner, branch=branch).update(branch=fallback)
+    Sale.objects.filter(user=owner, branch=branch).update(branch=fallback)
+    Expense.objects.filter(user=owner, branch=branch).update(branch=fallback)
+    MarketplaceOrder.objects.filter(shop_owner=owner, branch=branch).update(branch=fallback)
+    DeliveryRequest.objects.filter(branch=branch).update(branch=fallback)
+    branch.delete()
+    if fallback and not ShopBranch.objects.filter(user=owner, is_default=True).exists():
+        fallback.is_default = True
+        fallback.save(update_fields=["is_default"])
+    return _json_success({"deleted": True, "fallback_branch_id": fallback.id if fallback else None})
 
 
 @csrf_exempt
@@ -3872,6 +4662,7 @@ def api_shopboy_dashboard(request):
     q = (request.GET.get("q") or "").strip()
     category_id = (request.GET.get("category") or "").strip()
 
+    branch = shopboy.branch
     products = Product.objects.filter(user=shopboy.user)
     if category_id:
         products = products.filter(category_id=category_id)
@@ -3883,6 +4674,13 @@ def api_shopboy_dashboard(request):
         )
 
     categories = Category.objects.filter(user=shopboy.user).order_by("name")
+    if branch:
+        inventory_map = {
+            item.product_id: item
+            for item in BranchInventory.objects.filter(branch=branch, product__in=products)
+        }
+        for product in products:
+            product._branch_inventory = inventory_map.get(product.id)
     cart = _get_shopboy_cart(token_obj)
     cart_payload = _serialize_shopboy_cart(request, cart, shopboy)
 
@@ -3898,7 +4696,8 @@ def api_shopboy_dashboard(request):
 
     return _json_success({
         "shopboy": _serialize_shopboy(shopboy),
-        "products": [_serialize_owner_product(request, product) for product in products.select_related("category")],
+        "branch": _serialize_branch(branch) if branch else None,
+        "products": [_serialize_owner_product(request, product, branch=branch) for product in products.select_related("category")],
         "categories": [_serialize_category(cat) for cat in categories],
         "cart": cart_payload,
         "last_sale": last_sale,
@@ -3923,15 +4722,16 @@ def api_shopboy_cart_add(request):
         return _json_error("Invalid product or quantity.")
 
     product = get_object_or_404(Product, id=product_id, user=shopboy.user)
-    if product.stock <= 0:
+    available_stock = _effective_product_stock(product, shopboy.branch)
+    if available_stock <= 0:
         return _json_error(f"{product.name} is out of stock.", status=409)
 
     cart = _get_shopboy_cart(token_obj)
     product_key = str(product.id)
     current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
     desired_qty = current_qty + quantity
-    if desired_qty > product.stock:
-        desired_qty = product.stock
+    if desired_qty > available_stock:
+        desired_qty = available_stock
 
     cart.data[product_key] = {
         "name": product.name,
@@ -3967,15 +4767,16 @@ def api_shopboy_cart_add_by_code(request):
     product = Product.objects.filter(user=shopboy.user, code__iexact=code).first()
     if not product:
         return _json_error(f"No product found for code {code}.", status=404)
-    if product.stock <= 0:
+    available_stock = _effective_product_stock(product, shopboy.branch)
+    if available_stock <= 0:
         return _json_error(f"{product.name} is out of stock.", status=409)
 
     cart = _get_shopboy_cart(token_obj)
     product_key = str(product.id)
     current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
     desired_qty = current_qty + quantity
-    if desired_qty > product.stock:
-        desired_qty = product.stock
+    if desired_qty > available_stock:
+        desired_qty = available_stock
 
     cart.data[product_key] = {
         "name": product.name,
@@ -4013,12 +4814,13 @@ def api_shopboy_cart_update(request):
         return _json_error("Item not in cart.", status=404)
 
     product = get_object_or_404(Product, id=product_id, user=shopboy.user)
+    available_stock = _effective_product_stock(product, shopboy.branch)
     current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
 
     if action == "increase":
         desired_qty = current_qty + Decimal("1")
-        if desired_qty > product.stock:
-            desired_qty = product.stock
+        if desired_qty > available_stock:
+            desired_qty = available_stock
         cart.data[product_key]["quantity"] = _format_quantity(desired_qty)
     elif action == "decrease":
         desired_qty = current_qty - Decimal("1")
@@ -4033,8 +4835,8 @@ def api_shopboy_cart_update(request):
             return _json_error("Invalid quantity.")
         if quantity <= 0:
             cart.data.pop(product_key, None)
-        elif quantity > product.stock:
-            cart.data[product_key]["quantity"] = _format_quantity(product.stock)
+        elif quantity > available_stock:
+            cart.data[product_key]["quantity"] = _format_quantity(available_stock)
         else:
             cart.data[product_key]["quantity"] = _format_quantity(quantity)
 
@@ -4081,8 +4883,17 @@ def api_shopboy_cart_checkout(request):
     line_items = []
 
     with transaction.atomic():
+        branch = shopboy.branch
         products = Product.objects.select_for_update().filter(user=shopboy.user, id__in=product_ids)
         product_map = {str(p.id): p for p in products}
+        inventory_map = {}
+        if branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.select_for_update().filter(branch=branch, product__in=products)
+            }
+            for product in products:
+                product._branch_inventory = inventory_map.get(product.id)
 
         for pid, item in cart.data.items():
             product = product_map.get(str(pid))
@@ -4093,8 +4904,9 @@ def api_shopboy_cart_checkout(request):
             if quantity <= 0:
                 continue
 
-            if product.stock < quantity:
-                return _json_error(f"Not enough stock for {product.name}. Available: {product.stock}.", status=409)
+            available_stock = _effective_product_stock(product, branch)
+            if available_stock < quantity:
+                return _json_error(f"Not enough stock for {product.name}. Available: {available_stock}.", status=409)
 
             price = Decimal(str(item.get("price", product.selling_price)))
             cost = Decimal(str(item.get("cost", product.cost_price)))
@@ -4115,6 +4927,7 @@ def api_shopboy_cart_checkout(request):
 
         sale = Sale.objects.create(
             user=shopboy.user,
+            branch=branch,
             sales_channel=Sale.CHANNEL_SHOPBOY_PORTAL,
             handled_by_shopboy=shopboy,
             total_amount=total_amount.quantize(Decimal("0.01")),
@@ -4131,8 +4944,13 @@ def api_shopboy_cart_checkout(request):
                 price=row["price"].quantize(Decimal("0.01")),
                 profit=row["profit"].quantize(Decimal("0.01")),
             )
-            row["product"].stock -= row["quantity"]
-            row["product"].save(update_fields=["stock"])
+            inventory = inventory_map.get(row["product"].id) if branch else None
+            if inventory and inventory.track_separately:
+                inventory.stock = max(Decimal("0.00"), inventory.stock - row["quantity"])
+                inventory.save(update_fields=["stock", "updated_at"])
+            else:
+                row["product"].stock -= row["quantity"]
+                row["product"].save(update_fields=["stock"])
 
     cart.data = {}
     cart.last_sale_id = sale.id

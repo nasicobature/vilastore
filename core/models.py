@@ -153,6 +153,50 @@ class Category(models.Model):
         return self.name
     
     
+class ShopBranch(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="branches")
+    name = models.CharField(max_length=150)
+    code = models.CharField(max_length=24, blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    address = models.CharField(max_length=255)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=100, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "name"], name="unique_branch_name_per_user"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.business_name or self.user.username} - {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            raw = "".join(ch for ch in (self.name or "").upper() if ch.isalnum())[:6] or "BRANCH"
+            candidate = raw
+            counter = 1
+            while ShopBranch.objects.exclude(pk=self.pk).filter(user=self.user, code=candidate).exists():
+                counter += 1
+                suffix = str(counter)
+                candidate = f"{raw[: max(1, 6 - len(suffix))]}{suffix}"
+            self.code = candidate
+
+        super().save(*args, **kwargs)
+
+        if self.is_default:
+            ShopBranch.objects.filter(user=self.user).exclude(pk=self.pk).update(is_default=False)
+        elif not ShopBranch.objects.filter(user=self.user, is_default=True).exists():
+            ShopBranch.objects.filter(pk=self.pk).update(is_default=True)
+            self.is_default = True
+
+
 class Product(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True)
@@ -202,6 +246,24 @@ class Product(models.Model):
         super().save(*args, **kwargs)
     
     
+class BranchInventory(models.Model):
+    branch = models.ForeignKey(ShopBranch, on_delete=models.CASCADE, related_name="inventory_items")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="branch_inventory")
+    stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    selling_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    track_separately = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["branch", "product"], name="unique_branch_product_inventory"),
+        ]
+
+    def __str__(self):
+        return f"{self.branch.name} - {self.product.name}"
+
+
 class Customer(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
@@ -277,6 +339,7 @@ class Sale(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    branch = models.ForeignKey(ShopBranch, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales")
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
     customer_name = models.CharField(max_length=200, blank=True, default="")
     sales_channel = models.CharField(max_length=30, choices=CHANNEL_CHOICES, default=CHANNEL_OWNER_POS)
@@ -356,6 +419,7 @@ class Expense(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    branch = models.ForeignKey(ShopBranch, on_delete=models.SET_NULL, null=True, blank=True, related_name="expenses")
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default="Other")
     title = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -366,11 +430,22 @@ class Expense(models.Model):
         return self.title
     
 class ShopBoy(models.Model):
+    ROLE_OWNER = "owner"
+    ROLE_MANAGER = "manager"
+    ROLE_STAFF = "staff"
+    ROLE_CHOICES = [
+        (ROLE_OWNER, "Owner"),
+        (ROLE_MANAGER, "Manager"),
+        (ROLE_STAFF, "Staff / Shopboy"),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    branch = models.ForeignKey(ShopBranch, on_delete=models.SET_NULL, null=True, blank=True, related_name="staff_members")
 
     full_name = models.CharField(max_length=255)
     username = models.CharField(max_length=100)
     password = models.CharField(max_length=255)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_STAFF)
 
     can_use_marketplace = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -508,6 +583,47 @@ class HouseListing(models.Model):
         if primary:
             return primary
         return self.images.first()
+
+    @property
+    def profile_type_label(self):
+        property_label = self.get_property_type_display()
+        room_based_types = {
+            self.TYPE_APARTMENT,
+            self.TYPE_DUPLEX,
+            self.TYPE_ROOM,
+        }
+        if self.property_type in room_based_types and self.rooms_count:
+            room_label = "Bedroom" if self.rooms_count == 1 else "Bedrooms"
+            return f"{self.rooms_count} {room_label} {property_label}"
+        if self.property_type == self.TYPE_STUDIO:
+            return "Studio Apartment"
+        if self.property_type == self.TYPE_SELF_CONTAIN:
+            return "Self Contain"
+        if self.property_type == self.TYPE_OFFICE:
+            return "Office Space"
+        if self.property_type == self.TYPE_SHOP:
+            return "Shop Space"
+        return property_label
+
+    @property
+    def units_summary(self):
+        if self.spaces_available == 1:
+            return "1 unit available"
+        return f"{self.spaces_available} units available"
+
+    @property
+    def area_label(self):
+        location = (self.location or "").strip()
+        if not location:
+            return "Location on request"
+        parts = [part.strip() for part in location.split(",") if part.strip()]
+        if len(parts) >= 2:
+            return ", ".join(parts[-2:])
+        return parts[0]
+
+    @property
+    def marketplace_agent(self):
+        return self.managed_by_agent or self.listing_agent
 
 
 class HouseListingImage(models.Model):
@@ -785,6 +901,7 @@ class DeliveryRequest(models.Model):
 
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     buyer = models.ForeignKey(MarketplaceBuyer, on_delete=models.CASCADE, related_name="delivery_requests")
+    branch = models.ForeignKey(ShopBranch, on_delete=models.SET_NULL, null=True, blank=True, related_name="delivery_requests")
     rider = models.ForeignKey(
         DeliveryRider, on_delete=models.SET_NULL, null=True, blank=True, related_name="delivery_requests"
     )
@@ -872,6 +989,7 @@ class MarketplaceOrder(models.Model):
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     access_token = models.UUIDField(default=uuid.uuid4, editable=False)
     shop_owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="marketplace_orders")
+    branch = models.ForeignKey(ShopBranch, on_delete=models.SET_NULL, null=True, blank=True, related_name="marketplace_orders")
     buyer = models.ForeignKey(MarketplaceBuyer, on_delete=models.SET_NULL, null=True, blank=True, related_name="orders")
     assigned_shopboy = models.ForeignKey(ShopBoy, on_delete=models.SET_NULL, null=True, blank=True, related_name="marketplace_orders")
     buyer_name = models.CharField(max_length=255)
