@@ -32,8 +32,19 @@
 
     <main class="main-content">
       <header class="page-header">
-        <h1>Dashboard</h1>
-        <p>Welcome back! Today is {{ today_date|date:"F d, Y" }}.</p>
+        <div class="page-header-content">
+          <h1>Dashboard</h1>
+          <p>Welcome back! Today is {{ today_date|date:"F d, Y" }}.</p>
+        </div>
+        <form method="GET" action="{% url 'index' %}" class="header-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <select name="branch" class="input" onchange="this.form.submit()">
+            <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+            {% for branch in branches %}
+              <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}{% if branch.is_default %} (Default){% endif %}</option>
+            {% endfor %}
+          </select>
+          <noscript><button type="submit" class="btn btn-outline">Apply</button></noscript>
+        </form>
       </header>
 
       {% if messages %}
@@ -80,6 +91,13 @@
           </div>
           <div class="stat-card-value">{{ low_stock_count }}</div>
         </div>
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Open Orders</span>
+            <div class="stat-card-icon primary"><i data-lucide="shopping-bag"></i></div>
+          </div>
+          <div class="stat-card-value">{{ pending_orders }}</div>
+        </div>
       </section>
 
       <section class="section">
@@ -100,7 +118,7 @@
             <div class="product-card-content">
               <h3>{{ product.name }}</h3>
               <p>₦{{ product.selling_price|floatformat:2 }}</p>
-              <small>Stock: {{ product.stock }} | Sold: {{ product.total_sold|default:0 }}</small>
+              <small>Stock: {{ product.display_stock }} | Sold: {{ product.total_sold|default:0 }}</small>
             </div>
           </div>
           {% empty %}
@@ -134,6 +152,40 @@
                 <td colspan="4" class="empty-state">
                   <i data-lucide="receipt"></i>
                   <p>No transactions yet</p>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="section">
+        <h2 class="section-title">Recent Marketplace Orders</h2>
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Branch</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for order in recent_marketplace_orders %}
+              <tr>
+                <td>{{ order.buyer_name }}</td>
+                <td>{{ order.branch.name|default:"Unassigned" }}</td>
+                <td>â‚¦{{ order.total_amount|floatformat:2 }}</td>
+                <td>{{ order.get_status_display }}</td>
+                <td>{{ order.created_at|date:"M d, H:i" }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="empty-state">
+                  <i data-lucide="shopping-bag"></i>
+                  <p>No marketplace orders for this branch yet</p>
                 </td>
               </tr>
               {% endfor %}

@@ -67,10 +67,20 @@
           <h1>Expenses</h1>
           <p>Track and manage your business expenses</p>
         </div>
-        <button class="btn btn-primary" type="button" onclick="openExpenseModal()">
-          <i data-lucide="plus"></i>
-          Add Expense
-        </button>
+        <div class="header-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <form method="GET" action="{% url 'expenses' %}">
+            <select name="branch" class="input" onchange="this.form.submit()">
+              <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+              {% for branch in branches %}
+                <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+              {% endfor %}
+            </select>
+          </form>
+          <button class="btn btn-primary" type="button" onclick="openExpenseModal()">
+            <i data-lucide="plus"></i>
+            Add Expense
+          </button>
+        </div>
       </header>
 
       {% if messages %}
@@ -128,6 +138,7 @@
           <thead>
             <tr>
               <th>Date</th>
+              <th>Branch</th>
               <th>Category</th>
               <th>Description</th>
               <th>Amount</th>
@@ -137,13 +148,14 @@
             {% for expense in expenses %}
               <tr>
                 <td>{{ expense.date|date:"Y-m-d" }}</td>
+                <td>{{ expense.branch.name|default:"Unassigned" }}</td>
                 <td>{{ expense.category }}</td>
                 <td>{{ expense.title }}</td>
                 <td>₦{{ expense.amount|floatformat:2 }}</td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="4" class="empty-state">
+                <td colspan="5" class="empty-state">
                   <i data-lucide="receipt"></i>
                   <p>No expenses found</p>
                 </td>
@@ -178,6 +190,16 @@
             <option value="Maintenance">Maintenance</option>
             <option value="Marketing">Marketing</option>
             <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="expenseBranch">Branch</label>
+          <select id="expenseBranch" name="branch_id" class="input">
+            <option value="">No specific branch</option>
+            {% for branch in branches %}
+              <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+            {% endfor %}
           </select>
         </div>
 

@@ -41,6 +41,15 @@
         <h1>Loans</h1>
         <p>Manage credit sales and repayments</p>
       </div>
+      <form method="GET" action="{% url 'loans' %}" class="header-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <select name="branch" class="input" onchange="this.form.submit()">
+          <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+          {% for branch in branches %}
+            <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+          {% endfor %}
+        </select>
+        <noscript><button type="submit" class="btn btn-outline">Apply</button></noscript>
+      </form>
     </header>
 
     {% if messages %}
@@ -58,6 +67,7 @@
             <tr>
               <th>Date</th>
               <th>Customer</th>
+              <th>Branch</th>
               <th>Total</th>
               <th>Paid</th>
               <th>Balance</th>
@@ -79,6 +89,7 @@
                   <span class="badge">Walk-in</span>
                 {% endif %}
               </td>
+              <td data-label="Branch">{{ sale.branch.name|default:"Unassigned" }}</td>
               <td data-label="Total">₦{{ sale.total_amount|floatformat:2 }}</td>
               <td data-label="Paid">₦{{ sale.amount_paid|floatformat:2 }}</td>
               <td data-label="Balance">₦{{ sale.remaining_balance|floatformat:2 }}</td>
@@ -101,7 +112,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="7" class="empty-state">
+              <td colspan="8" class="empty-state">
                 <i data-lucide="credit-card"></i>
                 <p>No loan sales found</p>
               </td>

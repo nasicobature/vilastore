@@ -413,12 +413,26 @@ def submit_feedback(request):
 @login_required
 def index(request):
     user = request.user
+    branches, selected_branch, _ = _selected_branch_for_request(request)
 
     today = timezone.localdate()
+    sales_qs = Sale.objects.filter(user=user)
+    if selected_branch:
+        sales_qs = sales_qs.filter(branch=selected_branch)
 
-    today_sales = Sale.objects.filter(user=user, created_at__date=today).aggregate(total=Sum('total_amount'))['total'] or Decimal("0.00")
-    today_profit = Sale.objects.filter(user=user, created_at__date=today).aggregate(total=Sum('total_profit'))['total'] or Decimal("0.00")
-    total_products = Product.objects.filter(user=user).count()
+    expenses_qs = Expense.objects.filter(user=user)
+    if selected_branch:
+        expenses_qs = expenses_qs.filter(branch=selected_branch)
+
+    products_qs = Product.objects.filter(user=user)
+    products = _attach_branch_inventory(products_qs.order_by("-created_at"), selected_branch)
+    for product in products:
+        product.display_stock = _effective_product_stock(product, selected_branch)
+        product.display_price = _effective_product_price(product, selected_branch)
+
+    today_sales = sales_qs.filter(created_at__date=today).aggregate(total=Sum('total_amount'))['total'] or Decimal("0.00")
+    today_profit = sales_qs.filter(created_at__date=today).aggregate(total=Sum('total_profit'))['total'] or Decimal("0.00")
+    total_products = len(products) if selected_branch else products_qs.count()
     total_houses = HouseListing.objects.filter(owner=user, is_active=True).count()
     expiring_rentals = RentalRecord.objects.filter(
         house__owner=user,
@@ -427,19 +441,32 @@ def index(request):
         end_date__lte=today + timedelta(days=60),
     ).count()
 
-    low_stock_count = Product.objects.filter(user=user, stock__lte=F('low_stock_threshold'), stock__gt=0).count()
+    if selected_branch:
+        low_stock_count = sum(1 for product in products if product.display_stock <= product.low_stock_threshold and product.display_stock > 0)
+    else:
+        low_stock_count = Product.objects.filter(user=user, stock__lte=F('low_stock_threshold'), stock__gt=0).count()
 
     today_transactions = (
-        Sale.objects.filter(user=user, created_at__date=today)
+        sales_qs.filter(created_at__date=today)
         .annotate(items_count=Sum('items__quantity'))
         .order_by('-created_at')[:5]
     )
 
     top_products = (
         Product.objects.filter(user=user)
-        .annotate(total_sold=Sum('saleitem__quantity'))
+        .annotate(total_sold=Sum('saleitem__quantity', filter=Q(saleitem__sale__branch=selected_branch) if selected_branch else Q()))
         .order_by('-total_sold', '-created_at')[:6]
     )
+    top_products = _attach_branch_inventory(top_products, selected_branch)
+    for product in top_products:
+        product.display_stock = _effective_product_stock(product, selected_branch)
+        product.display_price = _effective_product_price(product, selected_branch)
+
+    marketplace_orders_qs = MarketplaceOrder.objects.filter(shop_owner=user)
+    if selected_branch:
+        marketplace_orders_qs = marketplace_orders_qs.filter(branch=selected_branch)
+    pending_orders = marketplace_orders_qs.exclude(status__in=[MarketplaceOrder.STATUS_DELIVERED, MarketplaceOrder.STATUS_CANCELLED]).count()
+    recent_marketplace_orders = marketplace_orders_qs.select_related("assigned_shopboy", "branch").order_by("-created_at")[:5]
 
     context = {
         'today_date': today,
@@ -451,7 +478,11 @@ def index(request):
         'low_stock_count': low_stock_count,
         'today_transactions': today_transactions,
         'top_products': top_products,
+        'pending_orders': pending_orders,
+        'recent_marketplace_orders': recent_marketplace_orders,
         'migration_warning': _check_migrations(),
+        'branches': branches,
+        'selected_branch': selected_branch,
     }
     return render(request, 'home/index.html', context)
 
@@ -1232,14 +1263,19 @@ def sales_history(request):
 
 @login_required
 def loans(request):
+    branches, selected_branch, _ = _selected_branch_for_request(request)
     loans_qs = (
         Sale.objects.filter(user=request.user)
         .select_related("customer", "handled_by_shopboy")
         .order_by("-created_at")
     ).filter(payment_status__in=[Sale.PAYMENT_LOAN, Sale.PAYMENT_PARTIAL])
+    if selected_branch:
+        loans_qs = loans_qs.filter(branch=selected_branch)
 
     return render(request, "home/loans.html", {
         "loans": loans_qs,
+        "branches": branches,
+        "selected_branch": selected_branch,
     })
 
 
@@ -1333,11 +1369,13 @@ def shopboy_sale_receipt(request, sale_id):
 
 @login_required
 def expenses(request):
+    branches, selected_branch, _ = _selected_branch_for_request(request)
     if request.method == "POST":
         category = request.POST.get("category", "").strip()
         title = request.POST.get("title", "").strip()
         amount = request.POST.get("amount")
         expense_date = request.POST.get("date")
+        branch_id = (request.POST.get("branch_id") or "").strip()
 
         valid_categories = {choice[0] for choice in Expense.CATEGORY_CHOICES}
         if category not in valid_categories:
@@ -1360,25 +1398,40 @@ def expenses(request):
             messages.error(request, "Expense date is required.")
             return redirect("expenses")
 
+        expense_branch = None
+        if branch_id:
+            expense_branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
+            if not expense_branch:
+                messages.error(request, "Selected branch is invalid.")
+                return redirect("expenses")
+        elif selected_branch:
+            expense_branch = selected_branch
+
         Expense.objects.create(
             user=request.user,
+            branch=expense_branch,
             category=category,
             title=title,
             amount=amount_value,
             date=expense_date,
         )
         messages.success(request, "Expense added successfully.")
+        if expense_branch:
+            return redirect(f"{reverse('expenses')}?branch={expense_branch.id}")
         return redirect("expenses")
 
     today = timezone.localdate()
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
 
-    expenses_qs = Expense.objects.filter(user=request.user).order_by("-date", "-created_at")
+    expenses_qs = Expense.objects.filter(user=request.user)
+    if selected_branch:
+        expenses_qs = expenses_qs.filter(branch=selected_branch)
+    expenses_qs = expenses_qs.order_by("-date", "-created_at")
 
-    today_expenses = Expense.objects.filter(user=request.user, date=today).aggregate(total=Sum("amount"))["total"] or 0
-    week_expenses = Expense.objects.filter(user=request.user, date__gte=week_start, date__lte=today).aggregate(total=Sum("amount"))["total"] or 0
-    month_expenses = Expense.objects.filter(user=request.user, date__gte=month_start, date__lte=today).aggregate(total=Sum("amount"))["total"] or 0
+    today_expenses = expenses_qs.filter(date=today).aggregate(total=Sum("amount"))["total"] or 0
+    week_expenses = expenses_qs.filter(date__gte=week_start, date__lte=today).aggregate(total=Sum("amount"))["total"] or 0
+    month_expenses = expenses_qs.filter(date__gte=month_start, date__lte=today).aggregate(total=Sum("amount"))["total"] or 0
 
     context = {
         "expenses": expenses_qs,
@@ -1386,6 +1439,8 @@ def expenses(request):
         "week_expenses": week_expenses,
         "month_expenses": month_expenses,
         "total_records": expenses_qs.count(),
+        "branches": branches,
+        "selected_branch": selected_branch,
     }
     return render(request, "home/expenses.html", context)
 
