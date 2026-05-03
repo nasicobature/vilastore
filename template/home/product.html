@@ -73,19 +73,24 @@
             <input type="hidden" name="category" value="{{ selected_category }}">
           {% endif %}
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <select name="branch" class="input" style="min-width:220px;">
+              {% for branch in branches %}
+                <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}{% if branch.is_default %} (Default){% endif %}</option>
+              {% endfor %}
+            </select>
             <input type="text" name="q" class="input" placeholder="Search products by name, code, or category" value="{{ search_query }}" style="flex:1;min-width:220px;">
             <button type="submit" class="btn btn-outline">Search</button>
             {% if search_query %}
-              <a href="{% url 'product' %}{% if selected_category %}?category={{ selected_category }}{% endif %}" class="btn btn-ghost">Clear</a>
+              <a href="{% url 'product' %}?{% if selected_branch %}branch={{ selected_branch.id }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}" class="btn btn-ghost">Clear</a>
             {% endif %}
           </div>
         </form>
 
         <div class="filters-section" style="margin-bottom:1rem;">
           <div class="filter-list">
-            <a href="{% url 'product' %}" class="filter-btn {% if not selected_category %}active{% endif %}">All</a>
+            <a href="{% url 'product' %}?{% if selected_branch %}branch={{ selected_branch.id }}{% endif %}" class="filter-btn {% if not selected_category %}active{% endif %}">All</a>
             {% for category in categories %}
-              <a href="{% url 'product' %}?category={{ category.id }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="filter-btn {% if selected_category == category.id|stringformat:'s' %}active{% endif %}">
+              <a href="{% url 'product' %}?{% if selected_branch %}branch={{ selected_branch.id }}&{% endif %}category={{ category.id }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="filter-btn {% if selected_category == category.id|stringformat:'s' %}active{% endif %}">
                 {{ category.name }}
               </a>
             {% endfor %}
@@ -111,15 +116,15 @@
 
                 <div class="product-card-content">
                   <h3>{{ product.name }}</h3>
-                  <p>₦{{ product.selling_price }}</p>
+                  <p>₦{{ product.display_price }}</p>
                   <small style="color:var(--muted-foreground);">{{ product.category.name|default:"Uncategorized" }}</small>
                   <br>
-                  <small>{{ product.stock }} in stock</small>
+                  <small>{{ product.display_stock }} in stock{% if selected_branch %} at {{ selected_branch.name }}{% endif %}</small>
                 </div>
 
                 <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;">
-                  <input type="number" name="quantity" min="0.01" step="0.01" max="{{ product.stock }}" value="1" class="input" style="width:80px;" {% if product.stock <= 0 %}disabled{% endif %}>
-                  <button type="submit" class="btn btn-primary btn-full" {% if product.stock <= 0 %}disabled{% endif %}>
+                  <input type="number" name="quantity" min="0.01" step="0.01" max="{{ product.display_stock }}" value="1" class="input" style="width:80px;" {% if product.display_stock <= 0 %}disabled{% endif %}>
+                  <button type="submit" class="btn btn-primary btn-full" {% if product.display_stock <= 0 %}disabled{% endif %}>
                     Add to Cart
                   </button>
                 </div>
@@ -274,7 +279,8 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
       try {
-        const res = await fetch(`{% url 'product_lookup_by_code' %}?code=${encodeURIComponent(code)}`);
+        const branchPart = `{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}`;
+        const res = await fetch(`{% url 'product_lookup_by_code' %}?code=${encodeURIComponent(code)}${branchPart}`);
         const data = await res.json();
         if (!data.success) {
           setPreview('No product found for this code.');

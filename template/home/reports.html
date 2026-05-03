@@ -74,6 +74,12 @@
           <p>View your business performance and analytics</p>
         </div>
         <div class="header-actions">
+          <select id="branchFilter" class="input" onchange="updateReports()">
+            <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+            {% for branch in branches %}
+              <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}{% if branch.is_default %} (Default){% endif %}</option>
+            {% endfor %}
+          </select>
           <select id="periodFilter" class="input" onchange="updateReports()">
             <option value="today" {% if period == "today" %}selected{% endif %}>Today</option>
             <option value="week" {% if period == "week" %}selected{% endif %}>This Week</option>
@@ -337,9 +343,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
 function updateReports() {
     const period = document.getElementById("periodFilter").value;
+    const branch = document.getElementById("branchFilter") ? document.getElementById("branchFilter").value : "all";
     const startDate = document.getElementById("startDate") ? document.getElementById("startDate").value : "";
     const endDate = document.getElementById("endDate") ? document.getElementById("endDate").value : "";
     const params = [];
+    if (branch) {
+        params.push(`branch=${encodeURIComponent(branch)}`);
+    }
     if (period) {
         params.push(`period=${encodeURIComponent(period)}`);
     }
@@ -356,10 +366,12 @@ function updateReports() {
 
 function updateCITForm() {
     const period = document.getElementById("periodFilter").value;
+    const branch = document.getElementById("branchFilter") ? document.getElementById("branchFilter").value : "all";
     const year = document.getElementById("citYear").value;
     const startDate = document.getElementById("startDate") ? document.getElementById("startDate").value : "";
     const endDate = document.getElementById("endDate") ? document.getElementById("endDate").value : "";
     const params = [
+        `branch=${encodeURIComponent(branch)}`,
         `period=${encodeURIComponent(period)}`,
         `cit_year=${encodeURIComponent(year)}`
     ];
@@ -376,12 +388,14 @@ function updateCITForm() {
 
 function updateVATForm() {
     const period = document.getElementById("periodFilter").value;
+    const branch = document.getElementById("branchFilter") ? document.getElementById("branchFilter").value : "all";
     const raw = document.getElementById("vatPeriod").value.split("-");
     const year = raw[0];
     const month = raw[1];
     const startDate = document.getElementById("startDate") ? document.getElementById("startDate").value : "";
     const endDate = document.getElementById("endDate") ? document.getElementById("endDate").value : "";
     const params = [
+        `branch=${encodeURIComponent(branch)}`,
         `period=${encodeURIComponent(period)}`,
         `vat_year=${encodeURIComponent(year)}`,
         `vat_month=${encodeURIComponent(month)}`

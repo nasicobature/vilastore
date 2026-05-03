@@ -91,10 +91,16 @@
 
     <form method="GET" action="{% url 'inventory' %}" style="margin-bottom:1rem;">
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+        <select name="branch" class="input" style="min-width:220px;">
+          <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+          {% for branch in branches %}
+            <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}{% if branch.is_default %} (Default){% endif %}</option>
+          {% endfor %}
+        </select>
         <input type="text" name="q" class="input" placeholder="Search products by name, code, or category" value="{{ search_query }}" style="flex:1;min-width:220px;">
         <button type="submit" class="btn btn-outline">Search</button>
         {% if search_query %}
-          <a href="{% url 'inventory' %}" class="btn btn-ghost">Clear</a>
+          <a href="{% url 'inventory' %}{% if selected_branch %}?branch={{ selected_branch.id }}{% endif %}" class="btn btn-ghost">Clear</a>
         {% endif %}
       </div>
     </form>
@@ -153,12 +159,17 @@
             <td data-label="Code">{{ product.code|default:"-" }}</td>
             <td data-label="Category">{{ product.category.name|default:"-" }}</td>
             <td data-label="Cost">₦{{ product.cost_price }}</td>
-            <td data-label="Selling">₦{{ product.selling_price }}</td>
-            <td data-label="Stock">{{ product.stock }}</td>
+            <td data-label="Selling">₦{{ product.display_price }}</td>
+            <td data-label="Stock">
+              {{ product.display_stock }}
+              {% if selected_branch and product.branch_inventory_row %}
+                <br><small>{{ selected_branch.name }}</small>
+              {% endif %}
+            </td>
             <td data-label="Status">
-              {% if product.stock == 0 %}
+              {% if product.display_stock == 0 %}
                 <span class="badge badge-destructive">Out of Stock</span>
-              {% elif product.stock <= product.low_stock_threshold %}
+              {% elif product.display_stock <= product.low_stock_threshold %}
                 <span class="badge badge-warning">Low Stock</span>
               {% else %}
                 <span class="badge badge-success">In Stock</span>
@@ -175,21 +186,24 @@
                   data-code="{{ product.code }}"
                   data-category-id="{{ product.category_id|default:'' }}"
                   data-cost-price="{{ product.cost_price }}"
-                  data-selling-price="{{ product.selling_price }}"
-                  data-stock="{{ product.stock }}"
+                  data-selling-price="{{ product.display_price }}"
+                  data-stock="{{ product.display_stock }}"
                   data-low-stock-threshold="{{ product.low_stock_threshold }}"
                   data-vat-status="{{ product.vat_status|default:'standard' }}"
                   data-image-url="{% if product.image %}{{ product.image.url }}{% endif %}"
+                  data-branch-id="{% if selected_branch %}{{ selected_branch.id }}{% endif %}"
                 >
                   Edit
                 </button>
                 <form method="POST" action="{% url 'adjust_stock' product.id %}" style="display:inline;">
                   {% csrf_token %}
+                  {% if selected_branch %}<input type="hidden" name="branch" value="{{ selected_branch.id }}">{% endif %}
                   <input type="hidden" name="adjustment" value="-1">
                   <button type="submit" class="btn btn-sm btn-outline">-1</button>
                 </form>
                 <form method="POST" action="{% url 'adjust_stock' product.id %}" style="display:inline;">
                   {% csrf_token %}
+                  {% if selected_branch %}<input type="hidden" name="branch" value="{{ selected_branch.id }}">{% endif %}
                   <input type="hidden" name="adjustment" value="1">
                   <button type="submit" class="btn btn-sm btn-outline">+1</button>
                 </form>
@@ -250,6 +264,13 @@
           <option value="{{ category.id }}">{{ category.name }}</option>
         {% endfor %}
       </select>
+      <select name="branch_id" class="input">
+        <option value="">Apply to overall store</option>
+        {% for branch in branches %}
+          <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+        {% endfor %}
+      </select>
+      <small style="color:var(--muted-foreground);">Choose a branch if this stock should belong to one location only.</small>
 
       <input type="number" name="cost_price" placeholder="Cost Price" class="input" required>
       <input type="number" name="selling_price" placeholder="Selling Price" class="input" required>
@@ -301,6 +322,13 @@
           <option value="{{ category.id }}">{{ category.name }}</option>
         {% endfor %}
       </select>
+      <select name="branch_id" id="editProductBranch" class="input">
+        <option value="">Apply to overall store</option>
+        {% for branch in branches %}
+          <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+        {% endfor %}
+      </select>
+      <small style="color:var(--muted-foreground);">When a branch is selected, stock and branch price update for that location.</small>
 
       <input type="number" name="cost_price" id="editProductCostPrice" placeholder="Cost Price" class="input" required>
       <input type="number" name="selling_price" id="editProductSellingPrice" placeholder="Selling Price" class="input" required>
@@ -456,6 +484,7 @@ function openEditProductModal(button) {
     document.getElementById('editProductStock').value = button.dataset.stock || '';
     document.getElementById('editProductLowStockThreshold').value = button.dataset.lowStockThreshold || '';
     document.getElementById('editProductVatStatus').value = button.dataset.vatStatus || 'standard';
+    document.getElementById('editProductBranch').value = button.dataset.branchId || '';
 
     const imageUrl = button.dataset.imageUrl || '';
     const preview = document.getElementById('editProductImagePreview');

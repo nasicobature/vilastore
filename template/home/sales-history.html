@@ -98,6 +98,12 @@
       </div>
       <div class="header-actions">
         <form method="get" class="filter-form" style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+          <select name="branch" class="input">
+            <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+            {% for branch in branches %}
+              <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+            {% endfor %}
+          </select>
           <input type="date" name="start_date" class="input" value="{{ start_date|date:'Y-m-d' }}">
           <input type="date" name="end_date" class="input" value="{{ end_date|date:'Y-m-d' }}">
           <button type="submit" class="btn btn-outline">Apply</button>
@@ -129,6 +135,9 @@
     <div class="table-container">
       <div class="table-toolbar">
         <form method="get" class="table-search">
+          {% if selected_branch %}
+            <input type="hidden" name="branch" value="{{ selected_branch.id }}">
+          {% endif %}
           <input type="text" name="q" class="input" placeholder="Search sales (product, staff, customer, ID)" value="{{ search_query }}">
           {% if start_date %}
             <input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}">
@@ -138,7 +147,7 @@
           {% endif %}
           <button type="submit" class="btn btn-outline">Search</button>
           {% if search_query %}
-            <a href="{% url 'sales-history' %}{% if start_date or end_date %}?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}{% endif %}" class="btn btn-ghost">Clear</a>
+            <a href="{% url 'sales-history' %}?{% if selected_branch %}branch={{ selected_branch.id }}&{% endif %}{% if start_date %}start_date={{ start_date|date:'Y-m-d' }}&{% endif %}{% if end_date %}end_date={{ end_date|date:'Y-m-d' }}{% endif %}" class="btn btn-ghost">Clear</a>
           {% endif %}
         </form>
       </div>

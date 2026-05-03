@@ -17,6 +17,7 @@ from .models import (
     Customer,
     Investor,
     ShopBranch,
+    BranchInventory,
     ShopBoy,
     MarketplaceShopProfile,
     MarketplaceSettings,
@@ -139,6 +140,98 @@ def _check_migrations():
         return ""
     except (OperationalError, ProgrammingError):
         return "Database migrations are missing. Please run: python manage.py migrate"
+
+
+def _owner_branches(user):
+    branches = list(ShopBranch.objects.filter(user=user, is_active=True).order_by("-is_default", "name", "id"))
+    if user.is_shop_account and not branches:
+        branches = [
+            ShopBranch.objects.create(
+                user=user,
+                name=user.business_name or user.username or "Main Branch",
+                address=user.business_address or "Main business address",
+                phone=user.phone or "",
+                city=user.country or "",
+                state="",
+                is_default=True,
+            )
+        ]
+    return branches
+
+
+def _default_branch_for_user(user):
+    branches = _owner_branches(user)
+    if not branches:
+        return None
+    return next((branch for branch in branches if branch.is_default), branches[0])
+
+
+def _selected_branch_for_request(request, *, session_key="owner_selected_branch_id", query_key="branch"):
+    branches = _owner_branches(request.user)
+    branch_map = {str(branch.id): branch for branch in branches}
+    branch_id = (request.GET.get(query_key) or request.POST.get(query_key) or "").strip()
+
+    if branch_id == "all":
+        request.session[session_key] = ""
+        return branches, None, True
+
+    if branch_id and branch_id in branch_map:
+        previous_branch_id = str(request.session.get(session_key) or "")
+        request.session[session_key] = branch_id
+        return branches, branch_map[branch_id], previous_branch_id != branch_id
+
+    stored_branch_id = str(request.session.get(session_key) or "")
+    if stored_branch_id in branch_map:
+        return branches, branch_map[stored_branch_id], False
+
+    default_branch = next((branch for branch in branches if branch.is_default), None)
+    if default_branch:
+        request.session[session_key] = str(default_branch.id)
+    return branches, default_branch, False
+
+
+def _branch_inventory_row(branch, product):
+    if not branch:
+        return None
+    if hasattr(product, "_branch_inventory"):
+        return product._branch_inventory
+    return BranchInventory.objects.filter(branch=branch, product=product).first()
+
+
+def _effective_product_stock(product, branch=None):
+    inventory = _branch_inventory_row(branch, product)
+    if inventory and inventory.track_separately:
+        return inventory.stock
+    return product.stock
+
+
+def _effective_product_price(product, branch=None):
+    inventory = _branch_inventory_row(branch, product)
+    if inventory and inventory.selling_price is not None:
+        return inventory.selling_price
+    return product.selling_price
+
+
+def _attach_branch_inventory(products, branch):
+    if not branch:
+        return list(products)
+    products = list(products)
+    inventory_map = {
+        item.product_id: item
+        for item in BranchInventory.objects.filter(branch=branch, product__in=products)
+    }
+    for product in products:
+        product._branch_inventory = inventory_map.get(product.id)
+    return products
+
+
+def _sync_global_product_stock(product):
+    branch_rows = BranchInventory.objects.filter(product=product, is_active=True)
+    if not branch_rows.exists():
+        return
+    total_stock = branch_rows.aggregate(total=Sum("stock"))["total"] or Decimal("0.00")
+    product.stock = total_stock.quantize(Decimal("0.01"))
+    product.save(update_fields=["stock"])
 
 
 def _is_vat_registered(user, turnover):
@@ -369,6 +462,16 @@ def index(request):
 def product(request):
     category_id = (request.GET.get("category") or "").strip()
     search_query = (request.GET.get("q") or "").strip()
+    branches, selected_branch, branch_changed = _selected_branch_for_request(request)
+    cart = request.session.get('cart', {})
+    cart_branch_id = str(request.session.get("owner_cart_branch_id") or "")
+    selected_branch_id = str(selected_branch.id) if selected_branch else ""
+    if branch_changed and cart and cart_branch_id != selected_branch_id:
+        request.session['cart'] = {}
+        cart = {}
+        messages.info(request, "Cart was cleared so you can work with the selected branch stock.")
+    request.session["owner_cart_branch_id"] = selected_branch_id
+
     products = Product.objects.filter(user=request.user)
     if category_id:
         products = products.filter(category_id=category_id)
@@ -378,9 +481,12 @@ def product(request):
             Q(code__icontains=search_query) |
             Q(category__name__icontains=search_query)
         )
+    products = _attach_branch_inventory(products.select_related("category").order_by("-created_at"), selected_branch)
+    for item in products:
+        item.display_stock = _effective_product_stock(item, selected_branch)
+        item.display_price = _effective_product_price(item, selected_branch)
 
     categories = Category.objects.filter(user=request.user).order_by("name")
-    cart = request.session.get('cart', {})
     last_sale = None
     last_sale_id = request.session.get('last_sale_id')
     if last_sale_id:
@@ -402,6 +508,8 @@ def product(request):
         'search_query': search_query,
         'last_sale': last_sale,
         'can_edit_price': _can_edit_cart_price(request.user),
+        'branches': branches,
+        'selected_branch': selected_branch,
     })
 
 
@@ -415,11 +523,17 @@ def _can_edit_cart_price(user):
 def add_to_cart(request, product_id):
     product = get_object_or_404(Product, id=product_id, user=request.user)
     qty_raw = request.POST.get("quantity")
+    selected_branch = _default_branch_for_user(request.user)
+    selected_branch_id = str(request.session.get("owner_selected_branch_id") or "")
+    if selected_branch_id:
+        selected_branch = ShopBranch.objects.filter(user=request.user, id=selected_branch_id, is_active=True).first() or selected_branch
 
     cart = request.session.get('cart', {})
     product_key = str(product_id)
+    available_stock = _effective_product_stock(product, selected_branch)
+    price = _effective_product_price(product, selected_branch)
 
-    if product.stock <= 0:
+    if available_stock <= 0:
         messages.error(request, f"{product.name} is out of stock.")
         return redirect('product')
 
@@ -431,21 +545,22 @@ def add_to_cart(request, product_id):
 
     current_qty = _cart_quantity(cart.get(product_key, {}))
     desired_qty = current_qty + qty
-    if desired_qty > product.stock:
-        desired_qty = product.stock
-        messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+    if desired_qty > available_stock:
+        desired_qty = available_stock
+        messages.warning(request, f"Only {available_stock} units available for {product.name}.")
 
     if product_key in cart:
         cart[product_key]['quantity'] = _format_quantity(desired_qty)
     else:
         cart[product_key] = {
             'name': product.name,
-            'price': float(product.selling_price),
+            'price': float(price),
             'cost': float(product.cost_price),
             'quantity': _format_quantity(desired_qty)
         }
 
     request.session['cart'] = cart
+    request.session["owner_cart_branch_id"] = str(selected_branch.id) if selected_branch else ""
     return redirect('product')
 
 @login_required
@@ -464,12 +579,19 @@ def add_to_cart_by_code(request):
         messages.error(request, "Please enter a valid quantity (e.g., 1 or 1.5).")
         return redirect('product')
 
+    selected_branch = _default_branch_for_user(request.user)
+    selected_branch_id = str(request.session.get("owner_selected_branch_id") or "")
+    if selected_branch_id:
+        selected_branch = ShopBranch.objects.filter(user=request.user, id=selected_branch_id, is_active=True).first() or selected_branch
+
     product = Product.objects.filter(user=request.user, code__iexact=code).first()
     if not product:
         messages.error(request, f"No product found for code {code}.")
         return redirect('product')
 
-    if product.stock <= 0:
+    available_stock = _effective_product_stock(product, selected_branch)
+    price = _effective_product_price(product, selected_branch)
+    if available_stock <= 0:
         messages.error(request, f"{product.name} is out of stock.")
         return redirect('product')
 
@@ -478,25 +600,27 @@ def add_to_cart_by_code(request):
 
     current_qty = _cart_quantity(cart.get(product_key, {}))
     desired_qty = current_qty + qty
-    if desired_qty > product.stock:
-        desired_qty = product.stock
-        messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+    if desired_qty > available_stock:
+        desired_qty = available_stock
+        messages.warning(request, f"Only {available_stock} units available for {product.name}.")
 
     if product_key in cart:
         cart[product_key]['quantity'] = _format_quantity(desired_qty)
     else:
         cart[product_key] = {
             'name': product.name,
-            'price': float(product.selling_price),
+            'price': float(price),
             'cost': float(product.cost_price),
             'quantity': _format_quantity(desired_qty)
         }
 
     request.session['cart'] = cart
+    request.session["owner_cart_branch_id"] = str(selected_branch.id) if selected_branch else ""
     return redirect('product')
 
 def product_lookup_by_code(request):
     code = (request.GET.get("code") or "").strip()
+    branch_id = (request.GET.get("branch") or "").strip()
     if not code:
         return JsonResponse({"success": False, "message": "Code is required."}, status=400)
 
@@ -512,11 +636,17 @@ def product_lookup_by_code(request):
     if not product:
         return JsonResponse({"success": False, "message": "Product not found."}, status=404)
 
+    branch = None
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=user, id=branch_id, is_active=True).first()
+        if branch:
+            product._branch_inventory = BranchInventory.objects.filter(branch=branch, product=product).first()
+
     return JsonResponse({
         "success": True,
         "name": product.name,
-        "stock": product.stock,
-        "price": str(product.selling_price),
+        "stock": _effective_product_stock(product, branch),
+        "price": str(_effective_product_price(product, branch)),
     })
 
 @login_required
@@ -549,9 +679,14 @@ def update_cart(request, product_id):
     action = request.POST.get('action') or ""
     quantity_raw = request.POST.get('quantity')
     price_raw = request.POST.get("price")
+    selected_branch = _default_branch_for_user(request.user)
+    selected_branch_id = str(request.session.get("owner_selected_branch_id") or "")
+    if selected_branch_id:
+        selected_branch = ShopBranch.objects.filter(user=request.user, id=selected_branch_id, is_active=True).first() or selected_branch
 
     if product_id in cart:
         product = get_object_or_404(Product, id=product_id, user=request.user)
+        available_stock = _effective_product_stock(product, selected_branch)
 
         if action == "price":
             if not _can_edit_cart_price(request.user):
@@ -570,10 +705,10 @@ def update_cart(request, product_id):
         elif action == "increase":
             current_qty = _cart_quantity(cart[product_id])
             desired_qty = current_qty + Decimal("1")
-            if desired_qty <= product.stock:
+            if desired_qty <= available_stock:
                 cart[product_id]["quantity"] = _format_quantity(desired_qty)
             else:
-                messages.warning(request, f"Cannot add more than available stock ({product.stock}).")
+                messages.warning(request, f"Cannot add more than available stock ({available_stock}).")
         elif action == "decrease":
             current_qty = _cart_quantity(cart[product_id])
             desired_qty = current_qty - Decimal("1")
@@ -589,9 +724,9 @@ def update_cart(request, product_id):
             else:
                 if quantity <= 0:
                     del cart[product_id]
-                elif quantity > product.stock:
-                    cart[product_id]["quantity"] = _format_quantity(product.stock)
-                    messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+                elif quantity > available_stock:
+                    cart[product_id]["quantity"] = _format_quantity(available_stock)
+                    messages.warning(request, f"Only {available_stock} units available for {product.name}.")
                 else:
                     cart[product_id]["quantity"] = _format_quantity(quantity)
 
@@ -631,6 +766,10 @@ def checkout(request):
         return redirect('product')
 
     product_ids = [int(pid) for pid in cart.keys()]
+    selected_branch = _default_branch_for_user(request.user)
+    selected_branch_id = str(request.session.get("owner_cart_branch_id") or request.session.get("owner_selected_branch_id") or "")
+    if selected_branch_id:
+        selected_branch = ShopBranch.objects.filter(user=request.user, id=selected_branch_id, is_active=True).first() or selected_branch
 
     total_amount = Decimal("0.00")
     total_profit = Decimal("0.00")
@@ -639,6 +778,14 @@ def checkout(request):
     with transaction.atomic():
         products = Product.objects.select_for_update().filter(user=request.user, id__in=product_ids)
         product_map = {str(p.id): p for p in products}
+        inventory_map = {}
+        if selected_branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.select_for_update().filter(branch=selected_branch, product__in=products)
+            }
+            for product in products:
+                product._branch_inventory = inventory_map.get(product.id)
 
         for pid, item in cart.items():
             product = product_map.get(pid)
@@ -650,8 +797,9 @@ def checkout(request):
             if quantity <= 0:
                 continue
 
-            if product.stock < quantity:
-                messages.error(request, f"Not enough stock for {product.name}. Available: {product.stock}.")
+            available_stock = _effective_product_stock(product, selected_branch)
+            if available_stock < quantity:
+                messages.error(request, f"Not enough stock for {product.name}. Available: {available_stock}.")
                 return redirect('product')
 
             price = Decimal(str(item['price']))
@@ -689,6 +837,7 @@ def checkout(request):
 
         sale = Sale.objects.create(
             user=request.user,
+            branch=selected_branch,
             customer_name=customer_name,
             sales_channel=Sale.CHANNEL_OWNER_POS,
             total_amount=total_amount.quantize(Decimal("0.01")),
@@ -718,11 +867,18 @@ def checkout(request):
                 vat_amount=row["vat_amount"],
                 vat_applicable=row["vat_applicable"],
             )
-            row["product"].stock -= row["quantity"]
-            row["product"].save(update_fields=["stock"])
+            branch_inventory = _branch_inventory_row(selected_branch, row["product"])
+            if branch_inventory and branch_inventory.track_separately:
+                branch_inventory.stock = max(Decimal("0.00"), branch_inventory.stock - row["quantity"])
+                branch_inventory.save(update_fields=["stock"])
+                _sync_global_product_stock(row["product"])
+            else:
+                row["product"].stock -= row["quantity"]
+                row["product"].save(update_fields=["stock"])
 
     request.session['last_sale_id'] = sale.id
     request.session['cart'] = {}
+    request.session['owner_cart_branch_id'] = str(selected_branch.id) if selected_branch else ""
     if payment_status == Sale.PAYMENT_LOAN:
         messages.success(request, "Sale recorded as loan.")
     else:
@@ -736,6 +892,7 @@ def checkout(request):
 @login_required
 def inventory(request):
     search_query = (request.GET.get("q") or "").strip()
+    branches, selected_branch, _ = _selected_branch_for_request(request)
     products = Product.objects.filter(user=request.user)
     categories = Category.objects.filter(user=request.user)
     if search_query:
@@ -744,11 +901,16 @@ def inventory(request):
             Q(code__icontains=search_query) |
             Q(category__name__icontains=search_query)
         )
+    products = _attach_branch_inventory(products.select_related("category").order_by("name"), selected_branch)
+    for product in products:
+        product.display_stock = _effective_product_stock(product, selected_branch)
+        product.display_price = _effective_product_price(product, selected_branch)
+        product.branch_inventory_row = _branch_inventory_row(selected_branch, product)
 
-    total_products = products.count()
-    total_value = sum(p.selling_price * p.stock for p in products)
-    low_stock = products.filter(stock__lte=F('low_stock_threshold'), stock__gt=0).count()
-    out_of_stock = products.filter(stock=0).count()
+    total_products = len(products)
+    total_value = sum((product.display_price * product.display_stock for product in products), Decimal("0.00"))
+    low_stock = sum(1 for product in products if product.display_stock <= product.low_stock_threshold and product.display_stock > 0)
+    out_of_stock = sum(1 for product in products if product.display_stock <= 0)
 
     context = {
         'products': products,
@@ -758,6 +920,8 @@ def inventory(request):
         'low_stock': low_stock,
         'out_of_stock': out_of_stock,
         'search_query': search_query,
+        'branches': branches,
+        'selected_branch': selected_branch,
     }
 
     return render(request, 'home/inventory.html', context)
@@ -767,6 +931,7 @@ def inventory(request):
 def add_product(request):
     name = (request.POST.get('name') or '').strip()
     category_id = request.POST.get('category') or None
+    branch_id = (request.POST.get("branch_id") or "").strip()
     code = (request.POST.get("code") or "").strip()
     vat_status = (request.POST.get("vat_status") or Product.VAT_STANDARD).strip()
 
@@ -803,11 +968,18 @@ def add_product(request):
             messages.error(request, "Selected category is invalid.")
             return redirect('inventory')
 
+    branch = None
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
+        if not branch:
+            messages.error(request, "Selected branch is invalid.")
+            return redirect('inventory')
+
     valid_vat_status = {choice[0] for choice in Product.VAT_STATUS_CHOICES}
     if vat_status not in valid_vat_status:
         vat_status = Product.VAT_STANDARD
 
-    Product.objects.create(
+    product = Product.objects.create(
         user=request.user,
         name=name,
         code=code,
@@ -819,7 +991,21 @@ def add_product(request):
         vat_status=vat_status,
         image=request.FILES.get('image')
     )
+    if branch:
+        BranchInventory.objects.update_or_create(
+            branch=branch,
+            product=product,
+            defaults={
+                "stock": stock,
+                "selling_price": selling_price,
+                "is_active": True,
+                "track_separately": True,
+            },
+        )
+        _sync_global_product_stock(product)
     messages.success(request, "Product added successfully.")
+    if branch:
+        return redirect(f"{reverse('inventory')}?branch={branch.id}")
     return redirect('inventory')
 
 
@@ -846,8 +1032,28 @@ def add_category(request):
 @require_POST
 def adjust_stock(request, pk):
     product = get_object_or_404(Product, pk=pk, user=request.user)
+    branch_id = (request.POST.get("branch") or "").strip()
+    branch = None
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
 
     adjustment = Decimal(str(request.POST.get('adjustment', 0)))
+    if branch:
+        inventory, _ = BranchInventory.objects.get_or_create(
+            branch=branch,
+            product=product,
+            defaults={
+                "stock": Decimal("0.00"),
+                "selling_price": product.selling_price,
+                "is_active": True,
+                "track_separately": True,
+            },
+        )
+        inventory.stock = max(Decimal("0.00"), inventory.stock + adjustment)
+        inventory.save(update_fields=["stock"])
+        _sync_global_product_stock(product)
+        return redirect(f"{reverse('inventory')}?branch={branch.id}")
+
     product.stock = max(Decimal("0.00"), product.stock + adjustment)
     product.save(update_fields=['stock'])
 
@@ -865,12 +1071,19 @@ def delete_product(request, pk):
 @require_POST
 def edit_product(request, pk):
     product = get_object_or_404(Product, pk=pk, user=request.user)
+    branch_id = (request.POST.get("branch_id") or "").strip()
+    branch = None
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
+        if not branch:
+            messages.error(request, "Selected branch is invalid.")
+            return redirect('inventory')
 
     product.name = request.POST.get('name')
     product.category_id = request.POST.get('category') or None
     code = (request.POST.get("code") or "").strip()
     try:
-        product.stock = _parse_stock(request.POST.get('stock'))
+        parsed_stock = _parse_stock(request.POST.get('stock'))
         product.cost_price = Decimal(request.POST.get('cost_price'))
         product.selling_price = Decimal(request.POST.get('selling_price'))
         product.low_stock_threshold = int(request.POST.get('low_stock_threshold') or 0)
@@ -892,10 +1105,44 @@ def edit_product(request, pk):
             messages.error(request, f"A product with code {code} already exists.")
             return redirect('inventory')
     product.code = code
+    save_fields = [
+        "name",
+        "category",
+        "cost_price",
+        "selling_price",
+        "low_stock_threshold",
+        "vat_status",
+        "code",
+    ]
+    if request.FILES.get('image'):
+        save_fields.append("image")
+    if branch:
+        inventory, _ = BranchInventory.objects.get_or_create(
+            branch=branch,
+            product=product,
+            defaults={
+                "stock": parsed_stock,
+                "selling_price": product.selling_price,
+                "is_active": True,
+                "track_separately": True,
+            },
+        )
+        inventory.stock = parsed_stock
+        inventory.selling_price = product.selling_price
+        inventory.is_active = True
+        inventory.track_separately = True
+        inventory.save(update_fields=["stock", "selling_price", "is_active", "track_separately"])
+    else:
+        product.stock = parsed_stock
+        save_fields.append("stock")
 
-    product.save()
+    product.save(update_fields=save_fields)
+    if branch:
+        _sync_global_product_stock(product)
     messages.success(request, "Product updated.")
 
+    if branch:
+        return redirect(f"{reverse('inventory')}?branch={branch.id}")
     return redirect('inventory')
 
 
@@ -906,6 +1153,7 @@ def edit_product(request, pk):
 
 @login_required
 def sales_history(request):
+    branches, selected_branch, _ = _selected_branch_for_request(request)
     start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
     end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
     search_query = (request.GET.get("q") or "").strip()
@@ -918,6 +1166,8 @@ def sales_history(request):
         .prefetch_related('items__product')
         .order_by('-created_at')
     )
+    if selected_branch:
+        sales = sales.filter(branch=selected_branch)
     if start_date:
         sales = sales.filter(created_at__date__gte=start_date)
     if end_date:
@@ -973,6 +1223,8 @@ def sales_history(request):
         'start_date': start_date,
         'end_date': end_date,
         'search_query': search_query,
+        'branches': branches,
+        'selected_branch': selected_branch,
     }
 
     return render(request, 'home/sales-history.html', context)
@@ -1146,6 +1398,7 @@ def reports(request):
 
     now = timezone.now()
     period = request.GET.get("period", "month")
+    branches, selected_branch, _ = _selected_branch_for_request(request)
     start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
     end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
     custom_range = bool(start_date or end_date)
@@ -1175,6 +1428,9 @@ def reports(request):
 
     sales = Sale.objects.filter(user=request.user)
     expenses = Expense.objects.filter(user=request.user)
+    if selected_branch:
+        sales = sales.filter(branch=selected_branch)
+        expenses = expenses.filter(branch=selected_branch)
 
     if start is not None:
         sales = sales.filter(created_at__gte=start)
@@ -1225,6 +1481,9 @@ def reports(request):
         created_at__year=cit_year,
         user=request.user
     )
+    if selected_branch:
+        year_sales = year_sales.filter(branch=selected_branch)
+        year_expenses = year_expenses.filter(branch=selected_branch)
 
     cit_revenue = year_sales.aggregate(
         total=Sum("total_amount")
@@ -1294,6 +1553,8 @@ def reports(request):
         created_at__range=(month_start, month_end),
         user=request.user
     )
+    if selected_branch:
+        vat_sales = vat_sales.filter(branch=selected_branch)
 
     vat_year_turnover = _year_turnover(request.user, vat_year)
     vat_registered = _is_vat_registered(request.user, vat_year_turnover)
@@ -1362,6 +1623,8 @@ def reports(request):
         "vat_registered": vat_registered,
         "vat_registration_note": vat_registration_note,
         "is_nigeria": (request.user.country or "").strip().lower() == "nigeria",
+        "branches": branches,
+        "selected_branch": selected_branch,
     }
 
     return render(request, "home/reports.html", context)
