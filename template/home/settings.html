@@ -186,6 +186,22 @@
       margin-bottom: 1rem;
     }
 
+    .settings-card-header--feature {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .settings-primary-action {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 1rem;
+    }
+
+    .settings-primary-action .btn {
+      min-width: 180px;
+      justify-content: center;
+    }
+
     .settings-card-header h3 {
       font-size: 1.05rem;
       margin-bottom: 0.25rem;
@@ -472,6 +488,14 @@
         width: 100%;
         max-width: 180px;
       }
+
+      .settings-primary-action {
+        justify-content: stretch;
+      }
+
+      .settings-primary-action .btn {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -723,11 +747,13 @@
             </section>
 
             <section class="card settings-card">
-              <div class="settings-card-header">
+              <div class="settings-card-header settings-card-header--feature">
                 <div>
                   <h3>Branch management</h3>
                   <p>Create store branches, choose a default location, and organize where staff and orders belong.</p>
                 </div>
+              </div>
+              <div class="settings-primary-action">
                 <button class="btn btn-primary" type="button" onclick="openBranchModal()"><i data-lucide="plus-circle"></i> Add Branch</button>
               </div>
               <div class="settings-section-list">
