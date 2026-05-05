@@ -1,10 +1,11 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import ShopBranch, User
+from .models import Product, Sale, SaleItem, ShopBranch, User
 
 
 class MobileOwnerLoginTests(TestCase):
@@ -175,3 +176,60 @@ class ShopOwnerDashboardTests(TestCase):
         self.assertEqual(dashboard_response.status_code, 200)
         branch = ShopBranch.objects.get(user=owner)
         self.assertEqual(branch.address, owner.address)
+
+    def test_sales_history_defaults_to_all_branches_so_old_unassigned_sales_show(self):
+        password = "TestPass123!"
+        future_date = timezone.localdate() + timedelta(days=30)
+        owner = User.objects.create_user(
+            username="history-owner",
+            email="history@example.com",
+            password=password,
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="History Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000000902",
+            address="10 Market Road",
+            country="Nigeria",
+            plan="basic",
+            subscription_active_until=future_date,
+        )
+        branch = ShopBranch.objects.create(
+            user=owner,
+            name="Main Branch",
+            address=owner.address,
+            is_default=True,
+        )
+        product = Product.objects.create(
+            user=owner,
+            name="Old Sale Product",
+            cost_price=Decimal("50.00"),
+            selling_price=Decimal("100.00"),
+            stock=Decimal("5.00"),
+        )
+        sale = Sale.objects.create(
+            user=owner,
+            total_amount=Decimal("100.00"),
+            total_profit=Decimal("50.00"),
+            amount_paid=Decimal("100.00"),
+            branch=None,
+        )
+        SaleItem.objects.create(
+            sale=sale,
+            product=product,
+            quantity=Decimal("1.00"),
+            price=Decimal("100.00"),
+            profit=Decimal("50.00"),
+        )
+
+        self.client.force_login(owner)
+        session = self.client.session
+        session["owner_selected_branch_id"] = str(branch.id)
+        session.save()
+
+        response = self.client.get(reverse("sales-history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_transactions"], 1)
+        self.assertIsNone(response.context["selected_branch"])
+        self.assertContains(response, "Old Sale Product")

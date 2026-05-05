@@ -166,7 +166,7 @@ def _default_branch_for_user(user):
     return next((branch for branch in branches if branch.is_default), branches[0])
 
 
-def _selected_branch_for_request(request, *, session_key="owner_selected_branch_id", query_key="branch"):
+def _selected_branch_for_request(request, *, session_key="owner_selected_branch_id", query_key="branch", default_to_all=False):
     branches = _owner_branches(request.user)
     branch_map = {str(branch.id): branch for branch in branches}
     branch_id = (request.GET.get(query_key) or request.POST.get(query_key) or "").strip()
@@ -179,6 +179,9 @@ def _selected_branch_for_request(request, *, session_key="owner_selected_branch_
         previous_branch_id = str(request.session.get(session_key) or "")
         request.session[session_key] = branch_id
         return branches, branch_map[branch_id], previous_branch_id != branch_id
+
+    if default_to_all and not branch_id:
+        return branches, None, False
 
     stored_branch_id = str(request.session.get(session_key) or "")
     if stored_branch_id in branch_map:
@@ -1184,7 +1187,7 @@ def edit_product(request, pk):
 
 @login_required
 def sales_history(request):
-    branches, selected_branch, _ = _selected_branch_for_request(request)
+    branches, selected_branch, _ = _selected_branch_for_request(request, default_to_all=True)
     start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
     end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
     search_query = (request.GET.get("q") or "").strip()
@@ -1263,7 +1266,7 @@ def sales_history(request):
 
 @login_required
 def loans(request):
-    branches, selected_branch, _ = _selected_branch_for_request(request)
+    branches, selected_branch, _ = _selected_branch_for_request(request, default_to_all=True)
     loans_qs = (
         Sale.objects.filter(user=request.user)
         .select_related("customer", "handled_by_shopboy")
@@ -1369,7 +1372,7 @@ def shopboy_sale_receipt(request, sale_id):
 
 @login_required
 def expenses(request):
-    branches, selected_branch, _ = _selected_branch_for_request(request)
+    branches, selected_branch, _ = _selected_branch_for_request(request, default_to_all=True)
     if request.method == "POST":
         category = request.POST.get("category", "").strip()
         title = request.POST.get("title", "").strip()
@@ -1453,7 +1456,7 @@ def reports(request):
 
     now = timezone.now()
     period = request.GET.get("period", "month")
-    branches, selected_branch, _ = _selected_branch_for_request(request)
+    branches, selected_branch, _ = _selected_branch_for_request(request, default_to_all=True)
     start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
     end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
     custom_range = bool(start_date or end_date)
