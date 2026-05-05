@@ -9,17 +9,287 @@
   <title>VilaStore - Housing Management</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
+  <style>
+    .housing-shell {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .housing-hero {
+      position: relative;
+      overflow: hidden;
+      padding: 1.75rem;
+      border-radius: 1.5rem;
+      border: 1px solid rgba(249, 115, 22, 0.16);
+      background:
+        radial-gradient(circle at top right, rgba(249, 115, 22, 0.18), transparent 34%),
+        linear-gradient(145deg, #fff8f1 0%, #ffffff 52%, #fff2e2 100%);
+      box-shadow: 0 22px 55px rgba(30, 41, 59, 0.08);
+    }
+
+    .housing-hero::after {
+      content: "";
+      position: absolute;
+      right: -70px;
+      top: -70px;
+      width: 210px;
+      height: 210px;
+      border-radius: 50%;
+      background: rgba(249, 115, 22, 0.08);
+      filter: blur(10px);
+    }
+
+    .housing-hero-content {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .housing-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.45rem 0.8rem;
+      border-radius: 999px;
+      background: rgba(249, 115, 22, 0.12);
+      color: #9a3412;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 0.9rem;
+    }
+
+    .housing-hero h1 {
+      font-size: clamp(2rem, 3vw, 2.55rem);
+      line-height: 1.05;
+      margin-bottom: 0.55rem;
+    }
+
+    .housing-hero p {
+      max-width: 58ch;
+      color: var(--muted-foreground);
+      font-size: 0.97rem;
+    }
+
+    .housing-hero-aside {
+      display: grid;
+      gap: 0.9rem;
+    }
+
+    .housing-profile-card,
+    .housing-action-card {
+      padding: 1rem;
+      border-radius: 1.2rem;
+      background: rgba(255, 255, 255, 0.84);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      backdrop-filter: blur(8px);
+    }
+
+    .housing-profile-card {
+      display: flex;
+      align-items: center;
+      gap: 0.95rem;
+    }
+
+    .housing-avatar {
+      width: 58px;
+      height: 58px;
+      border-radius: 1rem;
+      background: linear-gradient(135deg, #fed7aa, #fb923c);
+      color: #9a3412;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .housing-profile-card strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 0.15rem;
+    }
+
+    .housing-profile-card span {
+      display: block;
+      font-size: 0.84rem;
+      color: var(--muted-foreground);
+    }
+
+    .housing-action-card h3 {
+      font-size: 0.98rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .housing-action-card p {
+      font-size: 0.84rem;
+      color: var(--muted-foreground);
+      margin-bottom: 0.85rem;
+    }
+
+    .housing-action-grid {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .housing-action-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.85rem 0.95rem;
+      border-radius: 1rem;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: linear-gradient(180deg, #ffffff, #fbfbfb);
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .housing-action-link strong {
+      display: block;
+      font-size: 0.9rem;
+      margin-bottom: 0.1rem;
+    }
+
+    .housing-action-link small {
+      color: var(--muted-foreground);
+      font-size: 0.8rem;
+    }
+
+    .housing-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .housing-stat-card {
+      padding: 1rem 1.05rem;
+      border-radius: 1.2rem;
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.88));
+      box-shadow: 0 16px 32px rgba(15, 23, 42, 0.04);
+    }
+
+    .housing-stat-card span {
+      display: block;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted-foreground);
+      margin-bottom: 0.45rem;
+    }
+
+    .housing-stat-card strong {
+      display: block;
+      font-size: 1.45rem;
+      line-height: 1;
+      margin-bottom: 0.25rem;
+    }
+
+    .housing-stat-card small {
+      color: var(--muted-foreground);
+      font-size: 0.82rem;
+    }
+
+    .housing-surface {
+      border-radius: 1.4rem;
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.05);
+    }
+
+    .housing-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .housing-section-header h3 {
+      margin-bottom: 0.2rem;
+    }
+
+    .housing-section-header p {
+      color: var(--muted-foreground);
+      font-size: 0.88rem;
+    }
+
+    .housing-overview-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .housing-overview-card {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 1.15rem;
+      padding: 1rem;
+      background: linear-gradient(180deg, #ffffff, #faf7f2);
+    }
+
+    .housing-overview-card h3 {
+      margin-bottom: 0.35rem;
+    }
+
+    .housing-overview-card p {
+      color: var(--muted-foreground);
+      font-size: 0.86rem;
+      margin-bottom: 0.95rem;
+    }
+
+    .housing-section {
+      margin-top: 1.5rem;
+    }
+
+    @media (max-width: 1180px) {
+      .housing-stat-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .housing-hero-content {
+        grid-template-columns: 1fr;
+      }
+
+      .housing-overview-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .housing-stat-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .housing-hero {
+        padding: 1.2rem;
+        border-radius: 1.25rem;
+      }
+
+      .housing-surface {
+        border-radius: 1.2rem;
+      }
+    }
+  </style>
 </head>
 <body>
   <div class="app-container">
     <aside class="sidebar">
       <div class="sidebar-logo">
-        <div class="sidebar-logo-icon"><i data-lucide="house"></i></div>
-        <h1>Housing Portal</h1>
+        <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+        <h1>VilaStore</h1>
       </div>
       <nav class="sidebar-nav">
-        <a href="{% url 'housing_management' %}?section=overview" class="nav-link {% if active_section == 'overview' %}active{% endif %}"><i data-lucide="layout-dashboard"></i><span>Overview</span></a>
-        <a href="{% url 'housing_management' %}?section=add-listing" class="nav-link {% if active_section == 'add-listing' %}active{% endif %}"><i data-lucide="building-2"></i><span>Add Listing</span></a>
+        <a href="{% url 'housing_management' %}?section=overview" class="nav-link {% if active_section == 'overview' %}active{% endif %}"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+        <a href="{% url 'housing_management' %}?section=add-listing" class="nav-link {% if active_section == 'add-listing' %}active{% endif %}"><i data-lucide="building-2"></i><span>Add House</span></a>
         <a href="{% url 'housing_management' %}?section=inquiries" class="nav-link {% if active_section == 'inquiries' %}active{% endif %}"><i data-lucide="messages-square"></i><span>Inquiries</span></a>
         <a href="{% url 'housing_management' %}?section=rentals" class="nav-link {% if active_section == 'rentals' %}active{% endif %}"><i data-lucide="file-plus-2"></i><span>Rentals</span></a>
         <a href="{% url 'housing_management' %}?section=payments" class="nav-link {% if active_section == 'payments' %}active{% endif %}"><i data-lucide="wallet-cards"></i><span>Payments</span></a>
@@ -30,127 +300,151 @@
     </aside>
 
     <main class="main-content">
-      <header class="page-header">
-        <h1>Housing Management</h1>
-        {% if active_section == "overview" %}
-        <p>Use the housing workspace to jump into listings, rental records, reminders, and payment tracking.</p>
-        {% elif active_section == "add-listing" %}
-        <p>Create and organize house listings with all the details needed for your housing operation.</p>
-        {% elif active_section == "inquiries" %}
-        <p>Reply to marketplace buyers, answer inspection questions, and keep house conversations in one place.</p>
-        {% elif active_section == "rentals" %}
-        <p>Capture tenancy agreements, tenant details, due dates, and current rental status in one section.</p>
-        {% elif active_section == "payments" %}
-        <p>Track rent collections, payment due dates, and outstanding balances from the payments workspace.</p>
-        {% elif active_section == "listings" %}
-        <p>Review, filter, and update every property listing from your dedicated listings section.</p>
-        {% elif active_section == "reminders" %}
-        <p>Monitor expiring rents, recent rental activity, and the full payment tracker from one reminder hub.</p>
+      <div class="housing-shell">
+        <section class="housing-hero">
+          <div class="housing-hero-content">
+            <div>
+              <span class="housing-kicker"><i data-lucide="building-2"></i> Housing workspace</span>
+              <h1>Run your property business with the same sharp VilaStore workflow.</h1>
+              {% if active_section == "overview" %}
+              <p>Use the housing workspace to jump into listings, rental records, reminders, and payment tracking from one familiar management experience.</p>
+              {% elif active_section == "add-listing" %}
+              <p>Create and organize house listings with all the details needed for your housing operation.</p>
+              {% elif active_section == "inquiries" %}
+              <p>Reply to marketplace buyers, answer inspection questions, and keep house conversations in one place.</p>
+              {% elif active_section == "rentals" %}
+              <p>Capture tenancy agreements, tenant details, due dates, and current rental status in one section.</p>
+              {% elif active_section == "payments" %}
+              <p>Track rent collections, payment due dates, and outstanding balances from the payments workspace.</p>
+              {% elif active_section == "listings" %}
+              <p>Review, filter, and update every property listing from your dedicated listings section.</p>
+              {% elif active_section == "reminders" %}
+              <p>Monitor expiring rents, recent rental activity, and the full payment tracker from one reminder hub.</p>
+              {% endif %}
+            </div>
+            <div class="housing-hero-aside">
+              <div class="housing-profile-card">
+                <span class="housing-avatar"><i data-lucide="house"></i></span>
+                <div>
+                  <strong>{{ request.user.business_name|default:request.user.username }}</strong>
+                  <span>@{{ request.user.username }}</span>
+                  <span>{{ request.user.address|default:"Property base not set yet" }}</span>
+                </div>
+              </div>
+              <div class="housing-action-card">
+                <h3>Quick sections</h3>
+                <p>Move through house operations the same way you move through shop management.</p>
+                <div class="housing-action-grid">
+                  <a href="{% url 'housing_management' %}?section=add-listing" class="housing-action-link">
+                    <div>
+                      <strong>Add House</strong>
+                      <small>Create a new listing fast</small>
+                    </div>
+                    <i data-lucide="arrow-right"></i>
+                  </a>
+                  <a href="{% url 'housing_management' %}?section=listings" class="housing-action-link">
+                    <div>
+                      <strong>Manage Listings</strong>
+                      <small>Update status and marketplace visibility</small>
+                    </div>
+                    <i data-lucide="arrow-right"></i>
+                  </a>
+                  <a href="{% url 'housing_management' %}?section=inquiries" class="housing-action-link">
+                    <div>
+                      <strong>Buyer Chats</strong>
+                      <small>Reply to active inquiries</small>
+                    </div>
+                    <i data-lucide="arrow-right"></i>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {% if messages %}
+        <section>
+          {% for message in messages %}
+          <div class="card housing-surface" style="padding: 0.75rem 1rem;">{{ message }}</div>
+          {% endfor %}
+        </section>
         {% endif %}
-      </header>
 
-      {% if messages %}
-      <section style="margin-bottom: 1rem;">
-        {% for message in messages %}
-        <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
-        {% endfor %}
-      </section>
-      {% endif %}
+        <section class="housing-stat-grid">
+          <article class="housing-stat-card">
+            <span>Active Listings</span>
+            <strong>{{ stats.houses }}</strong>
+            <small>Total live houses under management</small>
+          </article>
+          <article class="housing-stat-card">
+            <span>Available</span>
+            <strong>{{ stats.available_houses }}</strong>
+            <small>Ready for new tenants or inspections</small>
+          </article>
+          <article class="housing-stat-card">
+            <span>Occupied</span>
+            <strong>{{ stats.occupied_houses }}</strong>
+            <small>Currently assigned to active tenants</small>
+          </article>
+          <article class="housing-stat-card">
+            <span>Expiring Soon</span>
+            <strong>{{ stats.expiring_rentals }}</strong>
+            <small>Rental records that need attention</small>
+          </article>
+          <article class="housing-stat-card">
+            <span>Open Inquiries</span>
+            <strong>{{ stats.marketplace_inquiries }}</strong>
+            <small>Marketplace buyers waiting for replies</small>
+          </article>
+        </section>
 
-      <section class="stats-grid">
-        <div class="card stat-card">
-          <div class="stat-card-header">
-            <span class="stat-card-title">Active Listings</span>
-            <div class="stat-card-icon primary"><i data-lucide="building-2"></i></div>
+        {% if active_section == "overview" %}
+        <section class="card housing-surface housing-section">
+          <div class="housing-section-header">
+            <div>
+              <h3>Workspace Sections</h3>
+              <p>Each part of housing management now follows the same card-first VilaStore pattern.</p>
+            </div>
           </div>
-          <div class="stat-card-value">{{ stats.houses }}</div>
-        </div>
-        <div class="card stat-card">
-          <div class="stat-card-header">
-            <span class="stat-card-title">Available</span>
-            <div class="stat-card-icon primary"><i data-lucide="door-open"></i></div>
-          </div>
-          <div class="stat-card-value">{{ stats.available_houses }}</div>
-        </div>
-        <div class="card stat-card">
-          <div class="stat-card-header">
-            <span class="stat-card-title">Occupied</span>
-            <div class="stat-card-icon warning"><i data-lucide="users"></i></div>
-          </div>
-          <div class="stat-card-value">{{ stats.occupied_houses }}</div>
-        </div>
-        <div class="card stat-card">
-          <div class="stat-card-header">
-            <span class="stat-card-title">Expiring Soon</span>
-            <div class="stat-card-icon warning"><i data-lucide="bell-ring"></i></div>
-          </div>
-          <div class="stat-card-value">{{ stats.expiring_rentals }}</div>
-        </div>
-        <div class="card stat-card">
-          <div class="stat-card-header">
-            <span class="stat-card-title">Open Inquiries</span>
-            <div class="stat-card-icon primary"><i data-lucide="messages-square"></i></div>
-          </div>
-          <div class="stat-card-value">{{ stats.marketplace_inquiries }}</div>
-        </div>
-      </section>
-
-      {% if active_section == "overview" %}
-      <section class="housing-grid" style="margin-top:1.5rem;">
-        <section class="card">
-          <div class="card-header"><h3>Workspace Sections</h3></div>
-          <div class="housing-listings" style="margin-top:1rem;">
-            <article class="housing-listing-card">
-              <div class="housing-listing-body">
-                <div class="housing-listing-top"><h3>Add Listing</h3></div>
-                <p class="shop-card-desc">Create new properties with title, price, rooms, status, agent, and photos.</p>
-                <a href="{% url 'housing_management' %}?section=add-listing" class="btn btn-outline">Open Section</a>
-              </div>
+          <div class="housing-overview-grid">
+            <article class="housing-overview-card">
+              <h3>Add Listing</h3>
+              <p>Create new properties with title, price, rooms, status, agent, and photos.</p>
+              <a href="{% url 'housing_management' %}?section=add-listing" class="btn btn-outline">Open Section</a>
             </article>
-            <article class="housing-listing-card">
-              <div class="housing-listing-body">
-                <div class="housing-listing-top"><h3>Marketplace Inquiries</h3></div>
-                <p class="shop-card-desc">See which buyers are asking about rent, inspection, location, and payment terms.</p>
-                <a href="{% url 'housing_management' %}?section=inquiries" class="btn btn-outline">Open Section</a>
-              </div>
+            <article class="housing-overview-card">
+              <h3>Marketplace Inquiries</h3>
+              <p>See which buyers are asking about rent, inspection, location, and payment terms.</p>
+              <a href="{% url 'housing_management' %}?section=inquiries" class="btn btn-outline">Open Section</a>
             </article>
-            <article class="housing-listing-card">
-              <div class="housing-listing-body">
-                <div class="housing-listing-top"><h3>Rental Records</h3></div>
-                <p class="shop-card-desc">Save tenant agreements, lease dates, monthly rent, and payment status.</p>
-                <a href="{% url 'housing_management' %}?section=rentals" class="btn btn-outline">Open Section</a>
-              </div>
+            <article class="housing-overview-card">
+              <h3>Rental Records</h3>
+              <p>Save tenant agreements, lease dates, monthly rent, and payment status.</p>
+              <a href="{% url 'housing_management' %}?section=rentals" class="btn btn-outline">Open Section</a>
             </article>
-            <article class="housing-listing-card">
-              <div class="housing-listing-body">
-                <div class="housing-listing-top"><h3>Payments</h3></div>
-                <p class="shop-card-desc">Log rent payments and follow due dates and payment history.</p>
-                <a href="{% url 'housing_management' %}?section=payments" class="btn btn-outline">Open Section</a>
-              </div>
+            <article class="housing-overview-card">
+              <h3>Payments</h3>
+              <p>Log rent payments and follow due dates and payment history.</p>
+              <a href="{% url 'housing_management' %}?section=payments" class="btn btn-outline">Open Section</a>
             </article>
-            <article class="housing-listing-card">
-              <div class="housing-listing-body">
-                <div class="housing-listing-top"><h3>Listings</h3></div>
-                <p class="shop-card-desc">Filter and update availability, listing mode, and active status for properties.</p>
-                <a href="{% url 'housing_management' %}?section=listings" class="btn btn-outline">Open Section</a>
-              </div>
+            <article class="housing-overview-card">
+              <h3>Listings</h3>
+              <p>Filter and update availability, listing mode, and active status for properties.</p>
+              <a href="{% url 'housing_management' %}?section=listings" class="btn btn-outline">Open Section</a>
             </article>
-            <article class="housing-listing-card">
-              <div class="housing-listing-body">
-                <div class="housing-listing-top"><h3>Reminders</h3></div>
-                <p class="shop-card-desc">Review expiring rent records, recent rentals, and payment tracker tables.</p>
-                <a href="{% url 'housing_management' %}?section=reminders" class="btn btn-outline">Open Section</a>
-              </div>
+            <article class="housing-overview-card">
+              <h3>Reminders</h3>
+              <p>Review expiring rent records, recent rentals, and payment tracker tables.</p>
+              <a href="{% url 'housing_management' %}?section=reminders" class="btn btn-outline">Open Section</a>
             </article>
           </div>
         </section>
-      </section>
-      {% endif %}
+        {% endif %}
 
       {% if active_section == "add-listing" %}
-      <section class="housing-grid" style="margin-top:1.5rem;">
-        <section class="card">
-          <div class="card-header"><h3>Add House Listing</h3></div>
+      <section class="housing-grid housing-section">
+        <section class="card housing-surface">
+          <div class="housing-section-header"><div><h3>Add House Listing</h3><p>Create new housing stock with the same clean management flow used across VilaStore.</p></div></div>
           <form method="POST" action="{% url 'add_house_listing' %}" enctype="multipart/form-data" class="stack-form" style="margin-top:1rem;">
             {% csrf_token %}
             <div class="form-row">
@@ -233,8 +527,8 @@
       {% endif %}
 
       {% if active_section == "inquiries" %}
-      <section class="card" style="margin-top:1.5rem;">
-        <div class="card-header"><h3>Marketplace House Inquiries</h3></div>
+      <section class="card housing-surface housing-section">
+        <div class="housing-section-header"><div><h3>Marketplace House Inquiries</h3><p>Keep every house conversation inside one organized workspace.</p></div></div>
         <div class="housing-listings" style="margin-top:1rem;">
           {% for inquiry in inquiries %}
           <article class="housing-listing-card">
@@ -265,9 +559,9 @@
       {% endif %}
 
       {% if active_section == "rentals" %}
-      <section class="housing-grid" style="margin-top:1.5rem;">
-        <section class="card">
-          <div class="card-header"><h3>Add Rental Record</h3></div>
+      <section class="housing-grid housing-section">
+        <section class="card housing-surface">
+          <div class="housing-section-header"><div><h3>Add Rental Record</h3><p>Capture agreements and tenant details in the same structured form style as shop records.</p></div></div>
           <form method="POST" action="{% url 'add_rental_record' %}" class="stack-form" style="margin-top:1rem;">
             {% csrf_token %}
             <div class="form-group">
@@ -347,8 +641,8 @@
             <button type="submit" class="btn btn-primary"><i data-lucide="file-plus-2"></i> Save Rental</button>
           </form>
         </section>
-        <section class="card">
-          <div class="card-header"><h3>Recent Rental Records</h3></div>
+        <section class="card housing-surface">
+          <div class="housing-section-header"><div><h3>Recent Rental Records</h3><p>See the latest tenancy activity at a glance.</p></div></div>
           <div class="table-container" style="margin-top:1rem;">
             <table class="table">
               <thead>
@@ -378,9 +672,9 @@
       {% endif %}
 
       {% if active_section == "payments" %}
-      <section class="housing-grid" style="margin-top:1.5rem;">
-        <section class="card">
-          <div class="card-header"><h3>Add Payment Record</h3></div>
+      <section class="housing-grid housing-section">
+        <section class="card housing-surface">
+          <div class="housing-section-header"><div><h3>Add Payment Record</h3><p>Log rent collections with a cleaner, dashboard-style layout.</p></div></div>
           <form method="POST" action="{% url 'add_rental_payment' %}" class="stack-form" style="margin-top:1rem;">
             {% csrf_token %}
             <div class="form-group">
@@ -423,8 +717,8 @@
             <button type="submit" class="btn btn-primary"><i data-lucide="wallet-cards"></i> Save Payment</button>
           </form>
         </section>
-        <section class="card">
-          <div class="card-header"><h3>Payment Tracker</h3></div>
+        <section class="card housing-surface">
+          <div class="housing-section-header"><div><h3>Payment Tracker</h3><p>Track what is paid, pending, or approaching due dates.</p></div></div>
           <div class="table-container" style="margin-top:1rem;">
             <table class="table">
               <thead>
@@ -454,9 +748,12 @@
       {% endif %}
 
       {% if active_section == "listings" %}
-      <section class="card" style="margin-top:1.5rem;">
-        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-          <h3>Your House Listings</h3>
+      <section class="card housing-surface housing-section">
+        <div class="housing-section-header">
+          <div>
+            <h3>Your House Listings</h3>
+            <p>Review and update property visibility, status, and marketplace readiness from one place.</p>
+          </div>
           <form method="GET" class="housing-filter-bar">
             <input type="text" name="q" class="input" value="{{ filters.q }}" placeholder="Search title or location">
             <select name="status" class="input">
@@ -535,9 +832,9 @@
       {% endif %}
 
       {% if active_section == "reminders" %}
-      <section class="housing-grid" style="margin-top:1.5rem;">
-        <section class="card">
-          <div class="card-header"><h3>Rent Expiry Reminders</h3></div>
+      <section class="housing-grid housing-section">
+        <section class="card housing-surface">
+          <div class="housing-section-header"><div><h3>Rent Expiry Reminders</h3><p>Spot renewals that need follow-up before they become a problem.</p></div></div>
           <div class="table-container" style="margin-top:1rem;">
             <table class="table">
               <thead>
@@ -574,8 +871,8 @@
             </table>
           </div>
         </section>
-        <section class="card">
-          <div class="card-header"><h3>Payment Tracker</h3></div>
+        <section class="card housing-surface">
+          <div class="housing-section-header"><div><h3>Payment Tracker</h3><p>Keep late and upcoming payment records visible while sending reminders.</p></div></div>
           <div class="table-container" style="margin-top:1rem;">
             <table class="table">
               <thead>
@@ -603,6 +900,7 @@
         </section>
       </section>
       {% endif %}
+      </div>
     </main>
   </div>
 

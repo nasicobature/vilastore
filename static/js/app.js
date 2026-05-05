@@ -1,6 +1,111 @@
 document.addEventListener('DOMContentLoaded', function() {
+  initMobileDashboardNav();
   lucide.createIcons();
 });
+
+function initMobileDashboardNav() {
+  const appContainer = document.querySelector('.app-container');
+  const sidebar = appContainer ? appContainer.querySelector(':scope > .sidebar') : null;
+  const mainContent = appContainer ? appContainer.querySelector(':scope > .main-content') : null;
+
+  if (!appContainer || !sidebar || !mainContent || document.querySelector('.mobile-topbar')) {
+    return;
+  }
+
+  const pageTitleNode = mainContent.querySelector('.page-header h1, h1');
+  const pageSubtitleNode = mainContent.querySelector('.page-header p, .page-header-content p');
+  const activeLink = sidebar.querySelector('.nav-link.active');
+  const fallbackTitleNode = activeLink ? activeLink.querySelector('span') : null;
+
+  const pageTitle = pageTitleNode ? pageTitleNode.textContent.trim() : '';
+  const pageSubtitle = pageSubtitleNode ? pageSubtitleNode.textContent.trim() : '';
+  const fallbackTitle = fallbackTitleNode ? fallbackTitleNode.textContent.trim() : 'VilaStore';
+
+  const topbar = document.createElement('div');
+  topbar.className = 'mobile-topbar';
+  topbar.innerHTML = `
+    <button type="button" class="mobile-menu-btn" aria-label="Open menu" aria-expanded="false">
+      <i data-lucide="menu"></i>
+    </button>
+    <div class="mobile-topbar-copy">
+      <strong class="mobile-topbar-title">${escapeHtml(pageTitle || fallbackTitle)}</strong>
+      <span class="mobile-topbar-subtitle">${escapeHtml(pageSubtitle || 'Navigate your store tools from the menu')}</span>
+    </div>
+  `;
+
+  const backdrop = document.createElement('button');
+  backdrop.type = 'button';
+  backdrop.className = 'mobile-nav-backdrop';
+  backdrop.setAttribute('aria-label', 'Close menu');
+
+  document.body.appendChild(topbar);
+  document.body.appendChild(backdrop);
+
+  const menuButton = topbar.querySelector('.mobile-menu-btn');
+
+  function isMobileLayout() {
+    return window.innerWidth <= 900;
+  }
+
+  function closeMenu() {
+    document.body.classList.remove('mobile-nav-open');
+    if (menuButton) {
+      menuButton.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  function openMenu() {
+    if (!isMobileLayout()) {
+      return;
+    }
+    document.body.classList.add('mobile-nav-open');
+    if (menuButton) {
+      menuButton.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function syncLayout() {
+    if (!isMobileLayout()) {
+      closeMenu();
+    }
+  }
+
+  if (menuButton) {
+    menuButton.addEventListener('click', function() {
+      if (document.body.classList.contains('mobile-nav-open')) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
+    });
+  }
+
+  backdrop.addEventListener('click', closeMenu);
+
+  sidebar.querySelectorAll('.nav-link').forEach(function(link) {
+    link.addEventListener('click', function() {
+      closeMenu();
+    });
+  });
+
+  window.addEventListener('resize', syncLayout);
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+      closeMenu();
+    }
+  });
+
+  syncLayout();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 let currentProductId = null;
 let currentQuantity = 1;

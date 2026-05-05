@@ -9,6 +9,7 @@
   <title>VilaStore - Settings</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
   <style>
     .settings-shell {
       display: flex;
@@ -202,6 +203,41 @@
       justify-content: center;
     }
 
+    .settings-section-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .settings-section-actions form {
+      margin: 0;
+    }
+
+    .settings-table-card {
+      display: none;
+    }
+
+    .settings-modal .modal {
+      width: min(92vw, 680px);
+      max-width: 680px;
+      max-height: min(88vh, 760px);
+      padding: 1.35rem;
+    }
+
+    .settings-modal .modal-form {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .settings-modal .form-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
     .settings-card-header h3 {
       font-size: 1.05rem;
       margin-bottom: 0.25rem;
@@ -389,6 +425,10 @@
       flex-wrap: wrap;
     }
 
+    .settings-responsive-table td[data-label="Action"] {
+      min-width: 170px;
+    }
+
     .settings-empty {
       padding: 1.25rem;
       border-radius: 1rem;
@@ -454,6 +494,10 @@
       .settings-highlight-grid {
         grid-template-columns: 1fr;
       }
+
+      .settings-responsive-table .table {
+        min-width: 780px;
+      }
     }
 
     @media (max-width: 640px) {
@@ -494,6 +538,97 @@
       }
 
       .settings-primary-action .btn {
+        width: 100%;
+      }
+
+      .settings-section-actions {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .settings-section-actions .btn,
+      .settings-section-actions form,
+      .settings-section-actions form .btn {
+        width: 100%;
+      }
+
+      .settings-responsive-table {
+        display: none;
+      }
+
+      .settings-table-card {
+        display: grid;
+        gap: 0.85rem;
+      }
+
+      .settings-table-card-item {
+        padding: 1rem;
+        border-radius: 1rem;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: linear-gradient(180deg, #ffffff, #faf7f2);
+      }
+
+      .settings-table-card-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        align-items: flex-start;
+        margin-bottom: 0.85rem;
+      }
+
+      .settings-table-card-top strong {
+        display: block;
+        margin-bottom: 0.18rem;
+        font-size: 0.95rem;
+      }
+
+      .settings-table-card-top small {
+        color: var(--muted-foreground);
+        font-size: 0.82rem;
+      }
+
+      .settings-table-card-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 0.9rem;
+      }
+
+      .settings-table-card-grid > div {
+        padding-top: 0.65rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.14);
+      }
+
+      .settings-table-card-grid span {
+        display: block;
+        margin-bottom: 0.2rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted-foreground);
+      }
+
+      .settings-table-card-grid strong,
+      .settings-table-card-grid .badge {
+        font-size: 0.85rem;
+      }
+
+      .settings-modal .modal {
+        width: 100%;
+        max-width: none;
+        max-height: calc(100vh - 2rem);
+        margin: 0;
+        padding: 1rem;
+      }
+
+      .settings-modal .form-buttons {
+        flex-direction: column-reverse;
+        align-items: stretch;
+      }
+
+      .settings-modal .form-buttons .btn {
         width: 100%;
       }
     }
@@ -765,16 +900,18 @@
                     <small>Revenue: NGN {{ item.revenue|floatformat:2 }} · Sales: {{ item.sales_count }} · Active staff: {{ item.active_staff }}</small>
                   </div>
                   <div class="settings-value">
-                    <form method="POST" action="{% url 'set_default_branch' item.branch.id %}" style="display:inline-block;margin-bottom:0.4rem;">
+                    <div class="settings-section-actions">
+                    <form method="POST" action="{% url 'set_default_branch' item.branch.id %}">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-ghost btn-sm">Make Default</button>
                     </form>
                     {% if not item.branch.is_default or branch_count > 1 %}
-                    <form method="POST" action="{% url 'delete_branch' item.branch.id %}" style="display:inline-block;" onsubmit="return confirm('Delete {{ item.branch.name }}? Staff and records will move to another branch.')">
+                    <form method="POST" action="{% url 'delete_branch' item.branch.id %}" onsubmit="return confirm('Delete {{ item.branch.name }}? Staff and records will move to another branch.')">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-ghost btn-sm text-destructive">Delete</button>
                     </form>
                     {% endif %}
+                    </div>
                   </div>
                 </div>
                 {% empty %}
@@ -851,6 +988,60 @@
                     {% endfor %}
                   </tbody>
                 </table>
+              </div>
+              <div class="settings-table-card">
+                {% for sb in shopboys %}
+                <article class="settings-table-card-item">
+                  <div class="settings-table-card-top">
+                    <div>
+                      <strong>{{ sb.full_name }}</strong>
+                      <small>@{{ sb.username }}</small>
+                    </div>
+                    <div class="settings-section-actions">
+                      <form method="POST" action="{% url 'toggle_shopboy' sb.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-ghost btn-sm" title="Toggle Status">
+                          <i data-lucide="refresh-ccw"></i>
+                          <span>Toggle</span>
+                        </button>
+                      </form>
+                      <form method="POST" action="{% url 'delete_shopboy' sb.id %}" onsubmit="return confirm('Delete {{ sb.full_name }}?')">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-ghost btn-sm text-destructive" title="Delete">
+                          <i data-lucide="trash-2"></i>
+                          <span>Delete</span>
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                  <div class="settings-table-card-grid">
+                    <div>
+                      <span>Role</span>
+                      <strong>{{ sb.get_role_display }}</strong>
+                    </div>
+                    <div>
+                      <span>Branch</span>
+                      <strong>{{ sb.branch.name|default:"Main / Unassigned" }}</strong>
+                    </div>
+                    <div>
+                      <span>Marketplace</span>
+                      {% if sb.can_use_marketplace %}
+                      <span class="badge badge-success">Enabled</span>
+                      {% else %}
+                      <span class="badge badge-warning">Disabled</span>
+                      {% endif %}
+                    </div>
+                    <div>
+                      <span>Status</span>
+                      {% if sb.is_active %}
+                      <span class="badge badge-success">Active</span>
+                      {% else %}
+                      <span class="badge badge-destructive">Inactive</span>
+                      {% endif %}
+                    </div>
+                  </div>
+                </article>
+                {% endfor %}
               </div>
               {% else %}
               <div class="settings-empty">
@@ -1004,7 +1195,7 @@
     </main>
   </div>
 
-  <div class="modal-overlay" id="shopBoyModal">
+  <div class="modal-overlay settings-modal" id="shopBoyModal">
     <div class="modal modal-lg">
       <div class="modal-header">
         <h3 class="modal-title">Add Shop Boy</h3>
@@ -1059,7 +1250,7 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="branchModal">
+  <div class="modal-overlay settings-modal" id="branchModal">
     <div class="modal modal-lg">
       <div class="modal-header">
         <h3 class="modal-title">Add Branch</h3>
