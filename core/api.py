@@ -2641,23 +2641,59 @@ def api_owner_dashboard(request):
         if not owner:
             return _json_error("Unauthorized.", status=401)
 
+        branch_id = (request.GET.get("branch_id") or "").strip()
+        selected_branch = None
+        if branch_id:
+            selected_branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
+            if not selected_branch:
+                return _json_error("Branch not found.", status=404)
+
         today = timezone.localdate()
-        today_sales = Sale.objects.filter(user=owner, created_at__date=today).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
-        today_profit = Sale.objects.filter(user=owner, created_at__date=today).aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
-        total_products = Product.objects.filter(user=owner).count()
-        low_stock_count = Product.objects.filter(user=owner, stock__lte=F("low_stock_threshold"), stock__gt=0).count()
+        sales_qs = Sale.objects.filter(user=owner)
+        if selected_branch:
+            sales_qs = sales_qs.filter(branch=selected_branch)
+
+        products_qs = Product.objects.filter(user=owner)
+        products_for_counts = list(products_qs)
+        if selected_branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.filter(branch=selected_branch, product__in=products_for_counts)
+            }
+            for product in products_for_counts:
+                product._branch_inventory = inventory_map.get(product.id)
+
+        today_sales = sales_qs.filter(created_at__date=today).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+        today_profit = sales_qs.filter(created_at__date=today).aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
+        total_products = len(products_for_counts)
+        if selected_branch:
+            low_stock_count = sum(
+                1
+                for product in products_for_counts
+                if _effective_product_stock(product, selected_branch) <= product.low_stock_threshold and _effective_product_stock(product, selected_branch) > 0
+            )
+        else:
+            low_stock_count = products_qs.filter(stock__lte=F("low_stock_threshold"), stock__gt=0).count()
 
         today_transactions = (
-            Sale.objects.filter(user=owner, created_at__date=today)
+            sales_qs.filter(created_at__date=today)
             .annotate(items_count=Sum("items__quantity"))
             .order_by("-created_at")[:5]
         )
 
         top_products = (
-            Product.objects.filter(user=owner)
-            .annotate(total_sold=Sum("saleitem__quantity"))
+            products_qs
+            .annotate(total_sold=Sum("saleitem__quantity", filter=Q(saleitem__sale__branch=selected_branch) if selected_branch else Q()))
             .order_by("-total_sold", "-created_at")[:6]
         )
+        top_products = list(top_products)
+        if selected_branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.filter(branch=selected_branch, product__in=top_products)
+            }
+            for product in top_products:
+                product._branch_inventory = inventory_map.get(product.id)
         branch_analytics = _serialize_business_branch_analytics(owner)
 
         return _json_success({
@@ -2666,6 +2702,7 @@ def api_owner_dashboard(request):
             "today_profit": _money(today_profit),
             "total_products": total_products,
             "low_stock_count": low_stock_count,
+            "branch": _serialize_branch(selected_branch) if selected_branch else None,
             "branch_analytics": branch_analytics,
             "today_transactions": [
                 {
@@ -2681,8 +2718,8 @@ def api_owner_dashboard(request):
                 {
                     "id": product.id,
                     "name": product.name,
-                    "selling_price": _money(product.selling_price),
-                    "stock": str(product.stock),
+                    "selling_price": _money(_effective_product_price(product, selected_branch)),
+                    "stock": str(_effective_product_stock(product, selected_branch)),
                     "total_sold": float(product.total_sold or 0),
                     "image_url": _abs_media_url(request, product.image),
                 }
