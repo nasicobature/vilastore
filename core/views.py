@@ -2936,6 +2936,9 @@ def login_view(request):
         selected_account_type = (request.POST.get("account_type") or preferred_account_type).strip()
         login_context["prefill_email"] = identifier
         login_context["selected_account_type"] = selected_account_type
+        matching_accounts = _accounts_for_identifier(identifier)
+        account_type_options = _login_account_type_options(matching_accounts)
+        has_multiple_portals = len(account_type_options) > 1
 
         valid_accounts = _valid_accounts_for_credentials(
             request,
@@ -2943,6 +2946,14 @@ def login_view(request):
             password,
             account_type=selected_account_type or None,
         )
+        if has_multiple_portals and not selected_account_type:
+            if valid_accounts:
+                login_context["account_type_options"] = account_type_options
+                messages.error(request, "Choose the portal you want to enter before we sign you in.")
+            else:
+                messages.error(request, "Invalid email/username or password")
+            return render(request, "auth/login.html", login_context)
+
         user = valid_accounts[0] if len(valid_accounts) == 1 else None
         if user is not None:
             if not subscription_is_active(user):
@@ -2970,7 +2981,6 @@ def login_view(request):
         else:
             messages.error(request, "Invalid email/username or password")
 
-        matching_accounts = _accounts_for_identifier(identifier)
         if len(matching_accounts) > 1 and not login_context["account_type_options"]:
             login_context["account_type_options"] = _login_account_type_options(matching_accounts)
 
