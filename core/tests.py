@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import User
+from .models import ShopBranch, User
 
 
 class MobileOwnerLoginTests(TestCase):
@@ -141,3 +141,37 @@ class WebLoginPortalSelectionTests(TestCase):
 
         self.assertRedirects(response, reverse("housing_management"))
         self.assertEqual(int(self.client.session["_auth_user_id"]), self.housing_owner.id)
+
+
+class ShopOwnerDashboardTests(TestCase):
+    def test_login_creates_default_branch_for_shop_owner_without_branch(self):
+        password = "TestPass123!"
+        future_date = timezone.localdate() + timedelta(days=30)
+        owner = User.objects.create_user(
+            username="branchless-owner",
+            email="branchless@example.com",
+            password=password,
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Branchless Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000000901",
+            address="9 Market Road",
+            country="Nigeria",
+            plan="basic",
+            subscription_active_until=future_date,
+        )
+
+        response = self.client.post(
+            reverse("login"),
+            data={
+                "email": owner.email,
+                "password": password,
+            },
+        )
+
+        self.assertRedirects(response, reverse("index"))
+        dashboard_response = self.client.get(reverse("index"))
+        self.assertEqual(dashboard_response.status_code, 200)
+        branch = ShopBranch.objects.get(user=owner)
+        self.assertEqual(branch.address, owner.address)

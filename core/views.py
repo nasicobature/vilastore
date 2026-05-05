@@ -149,7 +149,7 @@ def _owner_branches(user):
             ShopBranch.objects.create(
                 user=user,
                 name=user.business_name or user.username or "Main Branch",
-                address=user.business_address or "Main business address",
+                address=user.address or "Main business address",
                 phone=user.phone or "",
                 city=user.country or "",
                 state="",
