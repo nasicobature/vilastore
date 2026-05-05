@@ -5795,8 +5795,40 @@ body.mobile-nav-open {
     gap: 0.15rem;
   }
 
+  .mobile-topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .mobile-topbar-logo {
+    width: 42px;
+    height: 42px;
+    border-radius: 0.95rem;
+    background: linear-gradient(135deg, var(--sidebar-primary), hsl(32, 70%, 35%));
+    background-image: url("/static/img/vilastore-logo.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-shadow: 0 10px 22px rgba(176, 110, 33, 0.18);
+    flex: 0 0 auto;
+  }
+
+  .mobile-topbar-label {
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .mobile-topbar-title {
-    font-size: 1rem;
+    font-size: 0.96rem;
     font-weight: 700;
     color: var(--foreground);
     white-space: nowrap;
@@ -5958,8 +5990,17 @@ body.mobile-nav-open {
     padding-right: 0.85rem;
   }
 
+  .mobile-topbar-brand {
+    gap: 0.55rem;
+  }
+
+  .mobile-topbar-logo {
+    width: 40px;
+    height: 40px;
+  }
+
   .mobile-topbar-title {
-    font-size: 0.96rem;
+    font-size: 0.92rem;
   }
 
   .mobile-topbar-subtitle {

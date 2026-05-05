@@ -27,9 +27,13 @@ function initMobileDashboardNav() {
     <button type="button" class="mobile-menu-btn" aria-label="Open menu" aria-expanded="false">
       <i data-lucide="menu"></i>
     </button>
-    <div class="mobile-topbar-copy">
-      <strong class="mobile-topbar-title">${escapeHtml(pageTitle || fallbackTitle)}</strong>
-      <span class="mobile-topbar-subtitle">${escapeHtml(pageSubtitle || 'Navigate your store tools from the menu')}</span>
+    <div class="mobile-topbar-brand">
+      <div class="mobile-topbar-logo" aria-hidden="true"></div>
+      <div class="mobile-topbar-copy">
+        <span class="mobile-topbar-label">VilaStore</span>
+        <strong class="mobile-topbar-title">${escapeHtml(pageTitle || fallbackTitle)}</strong>
+        <span class="mobile-topbar-subtitle">${escapeHtml(pageSubtitle || 'Navigate your store tools from the menu')}</span>
+      </div>
     </div>
   `;
 
