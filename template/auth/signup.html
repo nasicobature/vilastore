@@ -295,18 +295,40 @@
 
               <div class="form-group">
                 <label>Pricing</label>
-                <input type="hidden" name="plan" value="{{ prefill_plan|default:'starter' }}">
-                <div class="plan-options" style="margin-bottom:0;">
-                  <div class="plan-card" style="width:100%;">
-                    <div class="plan-header">
-                      <h3>{{ plan_heading|default:"Shop Owner Plan" }}</h3>
-                      <div class="plan-price"><span class="price">1 Month Free Trial</span></div>
+                <div class="plan-options plan-options-compact" style="margin-bottom:0;">
+                  {% for key, plan in plans.items %}
+                  <label class="plan-option">
+                    <input
+                      type="radio"
+                      name="plan"
+                      value="{{ key }}"
+                      {% if key == prefill_plan %}checked{% endif %}
+                      {% if plan.is_custom %}disabled{% endif %}
+                    >
+                    <div class="plan-card {% if key == 'growth' %}popular{% endif %}">
+                      {% if key == 'growth' %}<div class="plan-badge">Recommended</div>{% endif %}
+                      <div class="plan-header">
+                        <h3>{{ plan.name }}</h3>
+                        <div class="plan-price">
+                          {% if plan.is_custom %}
+                          <span class="price">Custom</span>
+                          <span class="period">contact us</span>
+                          {% else %}
+                          <span class="price">&#8358;{{ plan.monthly_fee|floatformat:0 }}</span>
+                          <span class="period">/month</span>
+                          {% endif %}
+                        </div>
+                      </div>
+                      <p style="color:var(--muted-foreground);font-size:0.85rem;margin:0 0 0.75rem 0;">{{ plan.tagline }} - {{ plan.audience }}</p>
+                      <ul class="plan-features">
+                        <li><i data-lucide="check"></i> {% if plan.is_custom %}Custom onboarding{% else %}First payment after trial: &#8358;{{ plan.registration_fee|floatformat:0 }} registration + &#8358;{{ plan.monthly_fee|floatformat:0 }} subscription{% endif %}</li>
+                        {% for feature in plan.features|slice:":4" %}
+                        <li><i data-lucide="check"></i> {{ feature }}</li>
+                        {% endfor %}
+                      </ul>
                     </div>
-                    <ul class="plan-features">
-                      <li><i data-lucide="check"></i> First payment after trial: &#8358;{{ first_payment_total }} (&#8358;{{ base_fee }} base + &#8358;{{ monthly_fee }} subscription)</li>
-                      <li><i data-lucide="check"></i> Then &#8358;{{ monthly_fee }}/month</li>
-                    </ul>
-                  </div>
+                  </label>
+                  {% endfor %}
                 </div>
               </div>
 

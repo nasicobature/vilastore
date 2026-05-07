@@ -7,6 +7,8 @@ from . import api
 
 urlpatterns = [
     path("healthz/", views.healthz, name="healthz"),
+    path("privacy-policy/", views.privacy_policy, name="privacy_policy"),
+    path("account-deletion/", views.account_deletion, name="account_deletion"),
     path("api/health/", api.api_health, name="api_health"),
     path('api/marketplace/auth/signup/', api.api_marketplace_signup, name='api_marketplace_signup'),
     path('api/marketplace/auth/login/', api.api_marketplace_login, name='api_marketplace_login'),
@@ -67,8 +69,6 @@ urlpatterns = [
     path('api/mobile/owner/loans/', api.api_owner_loans, name='api_owner_loans'),
     path('api/mobile/owner/loans/<int:sale_id>/update/', api.api_owner_loan_update, name='api_owner_loan_update'),
     path('api/mobile/owner/inventory/', api.api_owner_inventory, name='api_owner_inventory'),
-    path('api/mobile/owner/debug-data/', api.api_owner_debug_data, name='api_owner_debug_data'),
-    path('api/mobile/owner/debug-products/', api.api_owner_debug_products, name='api_owner_debug_products'),
     path('api/mobile/owner/product-code/', api.api_owner_generate_product_code, name='api_owner_generate_product_code'),
     path('api/mobile/owner/product-labels/', api.api_owner_product_labels, name='api_owner_product_labels'),
     path('api/mobile/owner/sales-history/', api.api_owner_sales_history, name='api_owner_sales_history'),

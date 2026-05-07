@@ -126,6 +126,20 @@
     .feature h4 { font-weight: 700; margin-bottom: 0.4rem; }
     .feature p { color: var(--text-muted); font-size: 0.88rem; }
 
+    /* PRICING */
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 1rem; }
+    .pricing-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; position: relative; overflow: hidden; }
+    .pricing-card.featured { border-color: var(--primary); box-shadow: 0 18px 50px rgba(176,110,33,0.18); }
+    .pricing-badge { position: absolute; top: 1rem; right: 1rem; padding: 0.25rem 0.65rem; border-radius: 999px; background: rgba(241,176,74,0.14); color: var(--primary-light); font-size: 0.72rem; font-weight: 800; }
+    .pricing-card h3 { font-size: 1.2rem; }
+    .pricing-audience { color: var(--text-muted); font-size: 0.88rem; min-height: 2.6rem; }
+    .pricing-price strong { display: block; font-size: 1.7rem; color: var(--text); line-height: 1.1; }
+    .pricing-price span { color: var(--text-muted); font-size: 0.85rem; }
+    .pricing-list { list-style: none; display: flex; flex-direction: column; gap: 0.55rem; }
+    .pricing-list li { display: flex; gap: 0.5rem; color: var(--text-muted); font-size: 0.86rem; }
+    .pricing-list i { color: var(--primary-light); flex: 0 0 auto; width: 16px; height: 16px; margin-top: 0.15rem; }
+    .pricing-footer { margin-top: auto; color: var(--primary-light); font-weight: 800; font-size: 0.9rem; }
+
     /* FEEDBACK */
     .feedback-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2.5rem; max-width: 640px; margin: 0 auto; }
     .feedback-section h3 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; }
@@ -182,6 +196,7 @@
       VilaStore
     </div>
     <div class="nav-links">
+      <a href="#pricing" class="btn-outline">Pricing</a>
       <a href="{% url 'login' %}" class="btn-outline">Sign In</a>
       <a href="{% url 'shop_signup' %}" class="btn-primary">Register Shop</a>
     </div>
@@ -360,6 +375,84 @@
         <div class="feature-icon"><i data-lucide="store" style="width:22px;height:22px;"></i></div>
         <h4>Marketplace</h4>
         <p>List your shop on the marketplace and reach more customers.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="section" id="pricing">
+    <div class="section-title">
+      <h2>Choose Your VilaStore Plan</h2>
+      <p>Simple plans for every stage of your business</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <h3>Starter</h3>
+        <p class="pricing-audience">For small shops and beginners who want to start selling simply.</p>
+        <div class="pricing-price">
+          <strong>&#8358;1,000</strong>
+          <span>/month after &#8358;7,000 registration</span>
+        </div>
+        <ul class="pricing-list">
+          <li><i data-lucide="check"></i> Inventory management</li>
+          <li><i data-lucide="check"></i> Daily sales tracking</li>
+          <li><i data-lucide="check"></i> Basic sales history</li>
+          <li><i data-lucide="check"></i> Up to 1,000 products</li>
+          <li><i data-lucide="check"></i> Basic customer names and phone numbers</li>
+        </ul>
+        <div class="pricing-footer">Start your business</div>
+      </div>
+      <div class="pricing-card featured">
+        <div class="pricing-badge">Recommended</div>
+        <h3>Growth</h3>
+        <p class="pricing-audience">For shops ready to manage customers, staff, and basic reports.</p>
+        <div class="pricing-price">
+          <strong>&#8358;3,000</strong>
+          <span>/month after &#8358;7,000 registration</span>
+        </div>
+        <ul class="pricing-list">
+          <li><i data-lucide="check"></i> Everything in Starter</li>
+          <li><i data-lucide="check"></i> Full customer management</li>
+          <li><i data-lucide="check"></i> Friday, Sunday, and birthday messages</li>
+          <li><i data-lucide="check"></i> Up to 3 staff accounts</li>
+          <li><i data-lucide="check"></i> Up to 5,000 products</li>
+          <li><i data-lucide="check"></i> Basic sales summary reports</li>
+        </ul>
+        <div class="pricing-footer">Grow your customers</div>
+      </div>
+      <div class="pricing-card">
+        <h3>Business</h3>
+        <p class="pricing-audience">For structured businesses with staff, branches, barcode, and tax needs.</p>
+        <div class="pricing-price">
+          <strong>&#8358;7,000</strong>
+          <span>/month after &#8358;7,000 registration</span>
+        </div>
+        <ul class="pricing-list">
+          <li><i data-lucide="check"></i> Everything in Growth</li>
+          <li><i data-lucide="check"></i> Barcode system</li>
+          <li><i data-lucide="check"></i> Multi-branch management</li>
+          <li><i data-lucide="check"></i> Better reports and insights</li>
+          <li><i data-lucide="check"></i> Up to 10 staff and 20,000 products</li>
+          <li><i data-lucide="check"></i> Basic tax calculation and sales summary</li>
+        </ul>
+        <div class="pricing-footer">Manage operations</div>
+      </div>
+      <div class="pricing-card">
+        <h3>Pro / Enterprise</h3>
+        <p class="pricing-audience">For big businesses and companies that need everything unlocked.</p>
+        <div class="pricing-price">
+          <strong>Custom</strong>
+          <span>premium plan</span>
+        </div>
+        <ul class="pricing-list">
+          <li><i data-lucide="check"></i> Unlimited products, staff, and branches</li>
+          <li><i data-lucide="check"></i> Full tax reports and VAT calculations</li>
+          <li><i data-lucide="check"></i> Advanced analytics dashboard</li>
+          <li><i data-lucide="check"></i> Custom branding on messages</li>
+          <li><i data-lucide="check"></i> Smart automation and priority support</li>
+          <li><i data-lucide="check"></i> Future bank and POS integrations</li>
+        </ul>
+        <div class="pricing-footer">Scale without limits</div>
       </div>
     </div>
   </section>

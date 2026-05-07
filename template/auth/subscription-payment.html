@@ -56,6 +56,7 @@
             Access ended on {{ subscription_active_until|date:"M d, Y" }}.
           </p>
           {% endif %}
+          <p style="margin:0 0 0.5rem 0;"><strong>{{ plan.name|default:"Starter" }} Plan</strong></p>
           {% if registration_due %}
           <p style="margin:0 0 0.5rem 0;"><strong>Registration + first month</strong></p>
           <p style="margin:0 0 0.25rem 0;">Registration fee: &#8358;{{ base_fee }}</p>

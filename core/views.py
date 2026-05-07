@@ -376,6 +376,14 @@ def healthz(request):
     return HttpResponse("ok")
 
 
+def privacy_policy(request):
+    return render(request, "legal/privacy-policy.html")
+
+
+def account_deletion(request):
+    return render(request, "legal/account-deletion.html")
+
+
 def not_found(request, exception):
     return render(request, "errors/404.html", status=404)
 
@@ -980,6 +988,12 @@ def add_product(request):
 
     if not name:
         messages.error(request, "Product name is required.")
+        return redirect('inventory')
+
+    plan = _plan_for_slug(request.user.plan)
+    product_limit = _plan_limit(request.user, "product_limit")
+    if product_limit is not None and Product.objects.filter(user=request.user).count() >= product_limit:
+        messages.error(request, _plan_limit_message("product", plan["name"]))
         return redirect('inventory')
 
     if code:
@@ -1895,6 +1909,12 @@ def add_shopboy(request):
         messages.error(request, "Full name, username, and password are required.")
         return redirect("settings")
 
+    plan = _plan_for_slug(request.user.plan)
+    staff_limit = _plan_limit(request.user, "staff_limit")
+    if staff_limit is not None and ShopBoy.objects.filter(user=request.user).count() >= staff_limit:
+        messages.error(request, _plan_limit_message("staff", plan["name"]))
+        return redirect("settings")
+
     if ShopBoy.objects.filter(user=request.user, username__iexact=username).exists():
         messages.error(request, "Shop boy username already exists.")
         return redirect("settings")
@@ -1930,6 +1950,12 @@ def add_branch(request):
     address = (request.POST.get("address") or "").strip()
     if not name or not address:
         messages.error(request, "Branch name and address are required.")
+        return redirect("settings")
+
+    plan = _plan_for_slug(request.user.plan)
+    branch_limit = _plan_limit(request.user, "branch_limit")
+    if branch_limit is not None and ShopBranch.objects.filter(user=request.user, is_active=True).count() >= branch_limit:
+        messages.error(request, _plan_limit_message("branch", plan["name"]))
         return redirect("settings")
 
     ShopBranch.objects.create(
@@ -2327,15 +2353,138 @@ def _username_is_valid(username):
 
 
 TRIAL_DAYS = 30
-BASE_FEE = 6000
+BASE_FEE = 7000
 MONTHLY_SUBSCRIPTION_FEE = 1000
+
+PLAN_CATALOG = {
+    "starter": {
+        "name": "Starter",
+        "tagline": "Start your business",
+        "audience": "For small shops and beginners",
+        "registration_fee": BASE_FEE,
+        "monthly_fee": Decimal("1000.00"),
+        "product_limit": 1000,
+        "staff_limit": 0,
+        "branch_limit": 1,
+        "is_custom": False,
+        "features": [
+            "Inventory management",
+            "Daily sales tracking",
+            "Basic sales history",
+            "Up to 1,000 products",
+            "Basic customer management: name and phone",
+        ],
+        "unavailable": [
+            "Shopboy/staff accounts",
+            "Messages and automation",
+            "Barcode system",
+            "Multi-branch",
+            "Tax tools",
+        ],
+    },
+    "growth": {
+        "name": "Growth",
+        "tagline": "Grow your customers",
+        "audience": "For growing businesses",
+        "registration_fee": BASE_FEE,
+        "monthly_fee": Decimal("3000.00"),
+        "product_limit": 5000,
+        "staff_limit": 3,
+        "branch_limit": 1,
+        "is_custom": False,
+        "features": [
+            "Everything in Starter",
+            "Full customer management",
+            "Automated Friday, Sunday, and birthday messages",
+            "Shopboy/staff management: up to 3 staff",
+            "Up to 5,000 products",
+            "Basic sales summary reports",
+        ],
+        "unavailable": [
+            "Barcode system",
+            "Multi-branch",
+            "Tax tools",
+        ],
+    },
+    "business": {
+        "name": "Business",
+        "tagline": "Manage operations",
+        "audience": "For serious businesses",
+        "registration_fee": BASE_FEE,
+        "monthly_fee": Decimal("7000.00"),
+        "product_limit": 20000,
+        "staff_limit": 10,
+        "branch_limit": 5,
+        "is_custom": False,
+        "features": [
+            "Everything in Growth",
+            "Barcode system",
+            "Multi-branch management",
+            "Advanced customer management",
+            "Better reports and insights",
+            "Shopboy/staff management: up to 10 staff",
+            "Up to 20,000 products",
+            "Basic tax calculation and tax-use sales summary",
+        ],
+        "unavailable": [],
+    },
+    "pro": {
+        "name": "Pro / Enterprise",
+        "tagline": "Scale without limits",
+        "audience": "For big businesses and companies",
+        "registration_fee": None,
+        "monthly_fee": None,
+        "product_limit": None,
+        "staff_limit": None,
+        "branch_limit": None,
+        "is_custom": True,
+        "features": [
+            "Everything in Business",
+            "Unlimited products",
+            "Unlimited staff",
+            "Unlimited branches",
+            "Full tax reports and VAT calculations",
+            "Advanced analytics dashboard",
+            "Custom branding on messages",
+            "Smart personalized automation",
+            "Priority support",
+            "Future integrations: bank, POS, and more",
+        ],
+        "unavailable": [],
+    },
+}
 
 
 def _plan_pricing():
     return {
-        "starter": MONTHLY_SUBSCRIPTION_FEE,
-        "professional": MONTHLY_SUBSCRIPTION_FEE,
+        key: plan["monthly_fee"]
+        for key, plan in PLAN_CATALOG.items()
+        if plan["monthly_fee"] is not None
     }
+
+
+def _plan_for_slug(slug):
+    return PLAN_CATALOG.get(slug) or PLAN_CATALOG["starter"]
+
+
+def _plan_registration_fee(slug):
+    plan = _plan_for_slug(slug)
+    return plan["registration_fee"] if plan["registration_fee"] is not None else BASE_FEE
+
+
+def _plan_first_payment_total(slug):
+    plan = _plan_for_slug(slug)
+    monthly_fee = plan["monthly_fee"] or Decimal("0.00")
+    return _plan_registration_fee(slug) + monthly_fee
+
+
+def _plan_limit(user, key):
+    plan = _plan_for_slug(getattr(user, "plan", "starter"))
+    return plan.get(key)
+
+
+def _plan_limit_message(limit_name, plan_name):
+    return f"Your {plan_name} plan has reached its {limit_name} limit. Upgrade your plan to add more."
 
 
 def _accounts_for_identifier(identifier):
@@ -2681,14 +2830,17 @@ def signup(request):
         request.session.pop("signup_flow", None)
 
         trial_end_display = trial_end.strftime("%b %d, %Y")
-        first_payment_total = BASE_FEE + MONTHLY_SUBSCRIPTION_FEE
+        selected_plan = _plan_for_slug(signup_user.plan)
+        registration_fee = _plan_registration_fee(signup_user.plan)
+        monthly_fee = selected_plan["monthly_fee"] or Decimal(MONTHLY_SUBSCRIPTION_FEE)
+        first_payment_total = registration_fee + monthly_fee
         messages.success(
             request,
             "Signup completed successfully. "
             f"Your free trial runs until {trial_end_display}. "
             f"First payment due after trial is NGN {first_payment_total:,} "
-            f"(NGN {BASE_FEE:,} base + NGN {MONTHLY_SUBSCRIPTION_FEE:,} subscription), "
-            f"then NGN {MONTHLY_SUBSCRIPTION_FEE:,}/month.",
+            f"(NGN {registration_fee:,} registration + NGN {monthly_fee:,} {selected_plan['name']} subscription), "
+            f"then NGN {monthly_fee:,}/month.",
         )
         return redirect(_post_login_redirect_name(signup_user))
 
@@ -2738,6 +2890,7 @@ def signup(request):
         "base_fee": BASE_FEE,
         "monthly_fee": MONTHLY_SUBSCRIPTION_FEE,
         "first_payment_total": BASE_FEE + MONTHLY_SUBSCRIPTION_FEE,
+        "plans": PLAN_CATALOG,
         "signup_flow": "owner",
         "brand_title": "VilaStore",
         "brand_heading": "Launch With Confidence",
@@ -2833,14 +2986,17 @@ def housing_signup(request):
         request.session.pop("signup_flow", None)
 
         trial_end_display = trial_end.strftime("%b %d, %Y")
-        first_payment_total = BASE_FEE + MONTHLY_SUBSCRIPTION_FEE
+        selected_plan = _plan_for_slug(signup_user.plan)
+        registration_fee = _plan_registration_fee(signup_user.plan)
+        monthly_fee = selected_plan["monthly_fee"] or Decimal(MONTHLY_SUBSCRIPTION_FEE)
+        first_payment_total = registration_fee + monthly_fee
         messages.success(
             request,
             "Housing signup completed successfully. "
             f"Your free trial runs until {trial_end_display}. "
             f"First payment due after trial is NGN {first_payment_total:,} "
-            f"(NGN {BASE_FEE:,} base + NGN {MONTHLY_SUBSCRIPTION_FEE:,} subscription), "
-            f"then NGN {MONTHLY_SUBSCRIPTION_FEE:,}/month.",
+            f"(NGN {registration_fee:,} registration + NGN {monthly_fee:,} {selected_plan['name']} subscription), "
+            f"then NGN {monthly_fee:,}/month.",
         )
         return redirect("housing_management")
 
@@ -2890,6 +3046,7 @@ def housing_signup(request):
         "base_fee": BASE_FEE,
         "monthly_fee": MONTHLY_SUBSCRIPTION_FEE,
         "first_payment_total": BASE_FEE + MONTHLY_SUBSCRIPTION_FEE,
+        "plans": PLAN_CATALOG,
         "signup_flow": "housing",
         "brand_title": "VilaStore Housing",
         "brand_heading": "Register for Housing Management",
@@ -3561,8 +3718,11 @@ def subscription_payment(request):
         messages.success(request, "Your subscription is already active. Please log in.")
         return redirect("login")
 
+    plan = _plan_for_slug(user.plan)
+    monthly_fee = plan["monthly_fee"] or (user.monthly_fee or Decimal(MONTHLY_SUBSCRIPTION_FEE))
+    registration_fee = _plan_registration_fee(user.plan)
     registration_due = not user.is_paid
-    amount_due = BASE_FEE + MONTHLY_SUBSCRIPTION_FEE if registration_due else MONTHLY_SUBSCRIPTION_FEE
+    amount_due = registration_fee + monthly_fee if registration_due else monthly_fee
 
     if request.method == "POST":
         payment_reference = (request.POST.get("payment_reference") or "").strip()
@@ -3612,7 +3772,7 @@ def subscription_payment(request):
             start_date = user.subscription_active_until
 
         user.is_paid = True
-        user.monthly_fee = MONTHLY_SUBSCRIPTION_FEE
+        user.monthly_fee = monthly_fee
         user.subscription_active_until = start_date + timedelta(days=30)
         user.save(update_fields=["is_paid", "monthly_fee", "subscription_active_until"])
 
@@ -3629,9 +3789,10 @@ def subscription_payment(request):
         "amount_due": amount_due,
         "amount_due_kobo": amount_due * 100,
         "registration_due": registration_due,
-        "base_fee": BASE_FEE,
-        "monthly_fee": MONTHLY_SUBSCRIPTION_FEE,
-        "first_payment_total": BASE_FEE + MONTHLY_SUBSCRIPTION_FEE,
+        "base_fee": registration_fee,
+        "monthly_fee": monthly_fee,
+        "first_payment_total": registration_fee + monthly_fee,
+        "plan": plan,
         "subscription_active_until": user.subscription_active_until,
         "subscription_email": user.email,
     }

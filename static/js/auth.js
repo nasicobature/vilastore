@@ -36,7 +36,8 @@ function getSelectedPlan() {
 function getPlanAmount(plan) {
     const prices = {
         starter: 1000,
-        professional: 1000,
+        growth: 3000,
+        business: 7000,
     };
     return prices[plan] || prices.starter;
 }

@@ -1,0 +1,54 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Account Deletion | VilaStore</title>
+  {% include "partials/branding-head.html" %}
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f7f4ef; color: #21180f; line-height: 1.6; }
+    main { max-width: 860px; margin: 0 auto; padding: 40px 20px 64px; }
+    header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+    .logo { width: 52px; height: 52px; border-radius: 12px; background: url("{% static 'img/vilastore-logo.png' %}") center/cover no-repeat; }
+    h1 { margin: 0; font-size: 32px; line-height: 1.15; }
+    h2 { margin-top: 30px; font-size: 20px; }
+    p, li { font-size: 15px; }
+    a { color: #8a4b12; font-weight: 700; }
+    .card { background: #fff; border: 1px solid #eadfce; border-radius: 12px; padding: 24px; box-shadow: 0 12px 30px rgba(40, 24, 10, 0.06); }
+    .muted { color: #6b5a48; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1>Delete Your VilaStore Account</h1>
+        <p class="muted">Use this page to request deletion of a VilaStore Marketplace account.</p>
+      </div>
+    </header>
+    <section class="card">
+      <h2>How To Request Deletion</h2>
+      <p>Email <a href="mailto:privacy@vilastore.store">privacy@vilastore.store</a> from the email address on your VilaStore account with the subject line <strong>Delete my VilaStore account</strong>.</p>
+      <p>Include the account email address, phone number if one is attached, and whether the account is used as a buyer, shop owner, housing agent, rider, or delivery company.</p>
+
+      <h2>What Will Be Deleted</h2>
+      <ul>
+        <li>Your sign-in account and profile information where deletion is allowed.</li>
+        <li>Optional marketplace profile content, uploaded images, and inactive user-generated listings where deletion is allowed.</li>
+        <li>Authentication tokens and non-essential account activity data.</li>
+      </ul>
+
+      <h2>What May Be Retained</h2>
+      <p>Some records may be retained when needed for legal, safety, anti-fraud, accounting, dispute resolution, or transaction history purposes. This can include order records, delivery records, payment-related records, tax or business records, and messages needed to resolve active support or safety issues.</p>
+
+      <h2>Timing</h2>
+      <p>We will review deletion requests and respond to the account email. Deletion requests are normally processed within 30 days after account ownership is confirmed, unless a longer period is required by law or active platform obligations.</p>
+
+      <h2>Privacy Policy</h2>
+      <p>Read the VilaStore Privacy Policy at <a href="/privacy-policy/">/privacy-policy/</a>.</p>
+    </section>
+  </main>
+</body>
+</html>

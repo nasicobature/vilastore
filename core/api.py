@@ -45,6 +45,22 @@ from .models import (
     User,
     Customer,
 )
+
+PLAN_LIMITS = {
+    "starter": {"name": "Starter", "product_limit": 1000, "staff_limit": 0, "branch_limit": 1},
+    "growth": {"name": "Growth", "product_limit": 5000, "staff_limit": 3, "branch_limit": 1},
+    "business": {"name": "Business", "product_limit": 20000, "staff_limit": 10, "branch_limit": 5},
+    "pro": {"name": "Pro / Enterprise", "product_limit": None, "staff_limit": None, "branch_limit": None},
+}
+
+
+def _plan_limit(owner, key):
+    plan = PLAN_LIMITS.get(getattr(owner, "plan", "starter")) or PLAN_LIMITS["starter"]
+    return plan, plan.get(key)
+
+
+def _plan_limit_error(limit_name, plan_name):
+    return f"Your {plan_name} plan has reached its {limit_name} limit. Upgrade your plan to add more."
 from .views import (
     _authenticate_with_identifier,
     _calculate_item_vat,
@@ -87,17 +103,6 @@ def _json_success(data=None, status=200):
     if data:
         payload.update(data)
     return JsonResponse(payload, status=status)
-
-
-def _mask_email(email):
-    if not email or "@" not in email:
-        return email or ""
-    name, domain = email.split("@", 1)
-    if len(name) <= 2:
-        masked = name[:1] + "***"
-    else:
-        masked = name[:2] + "***"
-    return f"{masked}@{domain}"
 
 
 @require_http_methods(["GET"])
@@ -2502,6 +2507,10 @@ def api_owner_products(request):
     if not name:
         return _json_error("Product name is required.")
 
+    plan, product_limit = _plan_limit(owner, "product_limit")
+    if product_limit is not None and Product.objects.filter(user=owner).count() >= product_limit:
+        return _json_error(_plan_limit_error("product", plan["name"]), status=403)
+
     if code:
         existing_code = Product.objects.filter(user=owner, code__iexact=code).exists()
         if existing_code:
@@ -3497,7 +3506,6 @@ def api_owner_inventory(request):
     low_stock = sum(1 for p in products if Decimal(_effective_product_stock(p, branch)) <= p.low_stock_threshold and Decimal(_effective_product_stock(p, branch)) > 0)
     out_of_stock = sum(1 for p in products if Decimal(_effective_product_stock(p, branch)) <= 0)
 
-    sample_products = list(products.order_by("name").values_list("name", flat=True)[:3])
     return _json_success({
         "summary": {
             "total_products": total_products,
@@ -3507,85 +3515,6 @@ def api_owner_inventory(request):
         },
         "branch": _serialize_branch(branch) if branch else None,
         "products": [_serialize_owner_product(request, product, branch=branch) for product in products.order_by("name")],
-        "inventory_debug": {
-            "owner_id": owner.id,
-            "owner_username": owner.username,
-            "owner_business_name": owner.business_name or "",
-            "product_count": total_products,
-            "sample_products": sample_products,
-        },
-    })
-
-
-@csrf_exempt
-@require_http_methods(["GET"])
-def api_owner_debug_data(request):
-    owner = _require_owner(request)
-    if not owner:
-        return _json_error("Unauthorized.", status=401)
-
-    same_business = User.objects.filter(business_name__iexact=owner.business_name).exclude(id=owner.id)
-    same_username = User.objects.filter(username__iexact=owner.username).exclude(id=owner.id)
-    same_email = User.objects.filter(email__iexact=owner.email).exclude(id=owner.id)
-    matches = {user.id: user for user in same_business | same_username | same_email}
-
-    other_accounts = []
-    for user in matches.values():
-        other_accounts.append({
-            "id": user.id,
-            "username": user.username,
-            "email": _mask_email(user.email),
-            "business_name": user.business_name or "",
-            "product_count": Product.objects.filter(user=user).count(),
-            "category_count": Category.objects.filter(user=user).count(),
-            "expense_count": Expense.objects.filter(user=user).count(),
-            "customer_count": Customer.objects.filter(user=user).count(),
-        })
-
-    return _json_success({
-        "owner": {
-            "id": owner.id,
-            "username": owner.username,
-            "email": _mask_email(owner.email),
-            "business_name": owner.business_name or "",
-        },
-        "counts": {
-            "products": Product.objects.filter(user=owner).count(),
-            "categories": Category.objects.filter(user=owner).count(),
-            "expenses": Expense.objects.filter(user=owner).count(),
-            "customers": Customer.objects.filter(user=owner).count(),
-            "sales": Sale.objects.filter(user=owner).count(),
-        },
-        "other_accounts": other_accounts,
-    })
-
-
-@csrf_exempt
-@require_http_methods(["GET"])
-def api_owner_debug_products(request):
-    owner = _require_owner(request)
-    if not owner:
-        return _json_error("Unauthorized.", status=401)
-
-    products = Product.objects.filter(user=owner).select_related("category").order_by("name")
-    return _json_success({
-        "products": [
-            {
-                "id": product.id,
-                "name": product.name,
-                "code": product.code or "",
-                "category": {
-                    "id": product.category_id,
-                    "name": product.category.name if product.category_id else "",
-                },
-                "cost_price": _money(product.cost_price),
-                "selling_price": _money(product.selling_price),
-                "stock": _format_quantity(product.stock),
-                "low_stock_threshold": product.low_stock_threshold,
-                "image_url": _abs_media_url(request, product.image),
-            }
-            for product in products
-        ]
     })
 
 
@@ -4515,6 +4444,11 @@ def api_owner_settings_shopboys(request):
 
     if not full_name or not username or not password:
         return _json_error("Full name, username, and password are required.")
+
+    plan, staff_limit = _plan_limit(owner, "staff_limit")
+    if staff_limit is not None and ShopBoy.objects.filter(user=owner).count() >= staff_limit:
+        return _json_error(_plan_limit_error("staff", plan["name"]), status=403)
+
     valid_roles = {choice[0] for choice in ShopBoy.ROLE_CHOICES}
     if role not in valid_roles:
         role = ShopBoy.ROLE_STAFF
@@ -4559,6 +4493,10 @@ def api_owner_settings_branches(request):
     address = (data.get("address") or "").strip()
     if not name or not address:
         return _json_error("Branch name and address are required.")
+
+    plan, branch_limit = _plan_limit(owner, "branch_limit")
+    if branch_limit is not None and ShopBranch.objects.filter(user=owner, is_active=True).count() >= branch_limit:
+        return _json_error(_plan_limit_error("branch", plan["name"]), status=403)
 
     branch = ShopBranch.objects.create(
         user=owner,
