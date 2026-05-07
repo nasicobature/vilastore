@@ -2167,15 +2167,17 @@ button {
 
 .plan-features {
   list-style: none;
+  margin-bottom: 0.85rem;
 }
 
 .plan-features li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   font-size: 0.875rem;
   color: var(--muted-foreground);
   margin-bottom: 0.5rem;
+  line-height: 1.45;
 }
 
 .plan-features li:last-child {
@@ -2186,6 +2188,22 @@ button {
   width: 16px;
   height: 16px;
   color: var(--primary);
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+}
+
+.plan-features li strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.plan-section-title {
+  color: var(--foreground);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin: 0.75rem 0 0.45rem;
+  text-transform: uppercase;
 }
 
 /* Payment Section */

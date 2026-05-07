@@ -320,10 +320,23 @@
                         </div>
                       </div>
                       <p style="color:var(--muted-foreground);font-size:0.85rem;margin:0 0 0.75rem 0;">{{ plan.tagline }} - {{ plan.audience }}</p>
+                      <div class="plan-section-title">Limits</div>
                       <ul class="plan-features">
                         <li><i data-lucide="check"></i> {% if plan.is_custom %}Custom onboarding{% else %}First payment after trial: &#8358;{{ plan.registration_fee|floatformat:0 }} registration + &#8358;{{ plan.monthly_fee|floatformat:0 }} subscription{% endif %}</li>
-                        {% for feature in plan.features|slice:":4" %}
-                        <li><i data-lucide="check"></i> {{ feature }}</li>
+                        {% for label, value in plan.limits %}
+                        <li><i data-lucide="check"></i> <span><strong>{{ label }}:</strong> {{ value }}</span></li>
+                        {% endfor %}
+                      </ul>
+                      <div class="plan-section-title">Plan features</div>
+                      <ul class="plan-features">
+                        {% for feature in plan.features %}
+                        <li><i data-lucide="check"></i> <span>{{ feature }}</span></li>
+                        {% endfor %}
+                      </ul>
+                      <div class="plan-section-title">Category access</div>
+                      <ul class="plan-features">
+                        {% for label, value in plan.feature_groups %}
+                        <li><i data-lucide="check"></i> <span><strong>{{ label }}:</strong> {{ value }}</span></li>
                         {% endfor %}
                       </ul>
                     </div>

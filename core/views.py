@@ -369,7 +369,7 @@ def _sync_rental_payment_state(rental):
 
 
 def home(request):
-    return render(request, 'home/home.html')
+    return render(request, 'home/home.html', {"plans": PLAN_CATALOG})
 
 
 def healthz(request):
@@ -2374,6 +2374,19 @@ PLAN_CATALOG = {
             "Up to 1,000 products",
             "Basic customer management: name and phone",
         ],
+        "limits": [
+            ("Products", "Up to 1,000 products"),
+            ("Staff / Shopboy", "Not included"),
+            ("Branches", "Single shop only"),
+        ],
+        "feature_groups": [
+            ("Customer management", "Basic customer records: name and phone number only."),
+            ("Automation features", "Not included."),
+            ("Barcode access", "Not included."),
+            ("Multi-branch access", "Not included."),
+            ("Tax tools", "Not included."),
+            ("Reports and analytics", "Daily sales tracking and basic sales history."),
+        ],
         "unavailable": [
             "Shopboy/staff accounts",
             "Messages and automation",
@@ -2399,6 +2412,19 @@ PLAN_CATALOG = {
             "Shopboy/staff management: up to 3 staff",
             "Up to 5,000 products",
             "Basic sales summary reports",
+        ],
+        "limits": [
+            ("Products", "Up to 5,000 products"),
+            ("Staff / Shopboy", "Up to 3 staff accounts"),
+            ("Branches", "Single shop only"),
+        ],
+        "feature_groups": [
+            ("Customer management", "Full customer details for stronger relationship management."),
+            ("Automation features", "Friday wishes, Sunday wishes, and birthday messages."),
+            ("Barcode access", "Not included."),
+            ("Multi-branch access", "Not included."),
+            ("Tax tools", "Not included."),
+            ("Reports and analytics", "Basic reports and sales summary."),
         ],
         "unavailable": [
             "Barcode system",
@@ -2426,6 +2452,19 @@ PLAN_CATALOG = {
             "Up to 20,000 products",
             "Basic tax calculation and tax-use sales summary",
         ],
+        "limits": [
+            ("Products", "Up to 20,000 products"),
+            ("Staff / Shopboy", "Up to 10 staff accounts"),
+            ("Branches", "Up to 5 branches"),
+        ],
+        "feature_groups": [
+            ("Customer management", "Advanced customer management for repeat sales."),
+            ("Automation features", "Customer wishes and message automation from Growth."),
+            ("Barcode access", "Included for scanning and product management."),
+            ("Multi-branch access", "Included for multiple shop locations."),
+            ("Tax tools", "Basic tax calculation and sales summaries for tax use."),
+            ("Reports and analytics", "Better reports, insights, and branch performance views."),
+        ],
         "unavailable": [],
     },
     "pro": {
@@ -2449,6 +2488,19 @@ PLAN_CATALOG = {
             "Smart personalized automation",
             "Priority support",
             "Future integrations: bank, POS, and more",
+        ],
+        "limits": [
+            ("Products", "Unlimited"),
+            ("Staff / Shopboy", "Unlimited"),
+            ("Branches", "Unlimited"),
+        ],
+        "feature_groups": [
+            ("Customer management", "Advanced customer management with custom branding."),
+            ("Automation features", "Smart personalized automation and branded messages."),
+            ("Barcode access", "Included."),
+            ("Multi-branch access", "Unlimited branches."),
+            ("Tax tools", "Advanced tax reports, VAT calculations, and full tax support."),
+            ("Reports and analytics", "Advanced analytics dashboard and priority reporting support."),
         ],
         "unavailable": [],
     },
