@@ -173,6 +173,31 @@ class EduPortalVerificationRegistrationTests(TestCase):
         self.assertTrue(profile.is_approved)
         self.assertRedirects(response, reverse("edu:secondary_dashboard", kwargs={"role": "admin"}))
 
+    def test_approved_school_admin_login_is_not_sent_to_shop_subscription_payment(self):
+        institution = Institution.objects.create(
+            name="Approved No Shop Sub Academy",
+            institution_type="secondary",
+            verification_status="approved",
+        )
+        user = get_user_model().objects.create_user(
+            username="approved-admin",
+            password="StrongPass123!",
+            email="approved@example.com",
+        )
+        profile = user.profile
+        profile.institution = institution
+        profile.institution_type = "secondary"
+        profile.role = "admin"
+        profile.is_approved = True
+        profile.save()
+
+        response = self.client.post(reverse("edu:secondary_login"), {
+            "school_code": institution.school_code,
+            "username": "approved-admin",
+            "password": "StrongPass123!",
+        })
+
+        self.assertRedirects(response, reverse("edu:secondary_dashboard", kwargs={"role": "admin"}))
 
 class EduPortalFeesTests(TestCase):
     def setUp(self):

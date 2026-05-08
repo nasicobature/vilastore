@@ -14,6 +14,7 @@ EXEMPT_PATH_PREFIXES = (
     "/subscription/payment/",
     "/admin/",
     "/admin-portal/",
+    "/edu/",
     "/shopboy/",
     "/marketplace/",
     "/static/",
