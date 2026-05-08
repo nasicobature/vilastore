@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -39,6 +39,26 @@ def index(request):
     return render(request, 'edu/index.html')
 
 
+def _resolve_login_user(institution_type, school_code, identifier):
+    User = get_user_model()
+    user = User.objects.filter(username__iexact=identifier).first()
+    if user:
+        return user
+
+    if not school_code or not identifier:
+        return None
+
+    profile = Profile.objects.select_related('user', 'institution').filter(
+        institution_type=institution_type,
+        institution__school_code__iexact=school_code,
+    ).filter(
+        Q(user__email__iexact=identifier) |
+        Q(institution__admin_email__iexact=identifier) |
+        Q(institution__admin_phone__iexact=identifier)
+    ).order_by('id').first()
+    return profile.user if profile else None
+
+
 def _login_for_institution(request, institution_type, template_name):
     roles = SECONDARY_ROLES if institution_type == 'secondary' else TERTIARY_ROLES
 
@@ -46,9 +66,11 @@ def _login_for_institution(request, institution_type, template_name):
         school_code = request.POST.get('school_code', '').strip().upper()
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
-        user = authenticate(request, username=username, password=password)
+        resolved_user = _resolve_login_user(institution_type, school_code, username)
+        auth_username = resolved_user.username if resolved_user else username
+        user = authenticate(request, username=auth_username, password=password)
         if user is None:
-            existing = get_user_model().objects.filter(username=username).first()
+            existing = resolved_user or get_user_model().objects.filter(username__iexact=username).first()
             if existing and not existing.is_active:
                 messages.error(request, 'Account pending approval.')
             else:
@@ -442,7 +464,11 @@ def secondary_school_register(request):
 
                 User = get_user_model()
                 admin_username = _generate_user_id(institution)
-                user = User.objects.create_user(username=admin_username, password=admin_password)
+                user = User.objects.create_user(
+                    username=admin_username,
+                    email=institution.admin_email,
+                    password=admin_password,
+                )
                 user.is_active = True
                 user.save()
 
@@ -1404,7 +1430,11 @@ def tertiary_school_register(request):
 
                 User = get_user_model()
                 vc_username = _generate_user_id(institution)
-                user = User.objects.create_user(username=vc_username, password=vc_password)
+                user = User.objects.create_user(
+                    username=vc_username,
+                    email=institution.admin_email,
+                    password=vc_password,
+                )
                 user.is_active = True
                 user.save()
 

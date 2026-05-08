@@ -96,6 +96,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         institution = Institution.objects.get(name="Verified Pending Academy")
         profile = Profile.objects.get(institution=institution, role="admin")
         self.assertEqual(institution.verification_status, "pending")
+        self.assertEqual(profile.user.email, "admin@example.com")
         self.assertFalse(profile.is_approved)
         self.assertTrue(institution.cac_certificate)
         self.assertTrue(institution.owner_valid_id)
@@ -122,6 +123,22 @@ class EduPortalVerificationRegistrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "School verification is still pending")
         self.assertFalse("_auth_user_id" in self.client.session)
+
+        email_response = self.client.post(reverse("edu:secondary_login"), {
+            "school_code": institution.school_code,
+            "username": "admin@example.com",
+            "password": "StrongPass123!",
+        })
+        self.assertEqual(email_response.status_code, 200)
+        self.assertContains(email_response, "School verification is still pending")
+
+        phone_response = self.client.post(reverse("edu:secondary_login"), {
+            "school_code": institution.school_code,
+            "username": "08000000000",
+            "password": "StrongPass123!",
+        })
+        self.assertEqual(phone_response.status_code, 200)
+        self.assertContains(phone_response, "School verification is still pending")
 
 
 class EduPortalFeesTests(TestCase):
