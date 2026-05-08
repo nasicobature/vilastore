@@ -466,6 +466,13 @@ class EduPortalFeesTests(TestCase):
         examiner_user.profile.is_approved = True
         examiner_user.profile.save()
         self.client.force_login(examiner_user)
+        review_page = self.client.get(
+            reverse("edu:secondary_page", kwargs={"role": "examiner", "page": "review-results"})
+            + f"?submission={submission.id}"
+        )
+        self.assertContains(review_page, "Review Results")
+        self.assertContains(review_page, "Ada Student")
+        self.assertContains(review_page, "90.00")
         self.client.post(reverse("edu:secondary_review_results"), {
             "submission_id": str(submission.id),
             "examiner_comment": "Checked",
@@ -480,6 +487,14 @@ class EduPortalFeesTests(TestCase):
         admin_user.profile.is_approved = True
         admin_user.profile.save()
         self.client.force_login(admin_user)
+        admin_review_page = self.client.get(
+            reverse("edu:secondary_page", kwargs={"role": "admin", "page": "approve-results"})
+            + f"?submission={submission.id}"
+        )
+        self.assertContains(admin_review_page, "Review Before Publishing")
+        self.assertContains(admin_review_page, "Ada Student")
+        self.assertContains(admin_review_page, "90.00")
+        self.assertContains(admin_review_page, "Checked")
         self.client.post(reverse("edu:secondary_admin_result_approval"), {
             "submission_id": str(submission.id),
             "admin_comment": "Published",

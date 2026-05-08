@@ -279,6 +279,27 @@ def _payment_receipt_url(payment):
     return f"/edu/secondary/payments/{payment.reference}/receipt/"
 
 
+def _results_for_submission(submission):
+    if not submission:
+        return Result.objects.none()
+
+    filters = Q(
+        institution=submission.institution,
+        academic_class=submission.academic_class,
+        subject=submission.subject,
+    )
+    if submission.academic_session_id:
+        filters &= Q(academic_session=submission.academic_session)
+    else:
+        filters &= Q(session=submission.session)
+    if submission.academic_term_id:
+        filters &= Q(academic_term=submission.academic_term)
+    else:
+        filters &= Q(term=submission.term)
+
+    return Result.objects.filter(filters).select_related('student').order_by('student__full_name')
+
+
 def _get_secondary_accountant_profile(request):
     profile = getattr(request.user, 'profile', None)
     if not profile or profile.institution_type != 'secondary' or profile.role != 'accountant':
@@ -1838,6 +1859,8 @@ def secondary_page(request, role, page):
     teacher_submissions = ResultSubmission.objects.none()
     teacher_subject_assignments = TeacherSubjectAssignment.objects.filter(institution=institution).select_related('teacher', 'academic_class', 'subject')
     admin_result_submissions = ResultSubmission.objects.none()
+    selected_admin_submission = None
+    admin_review_results = Result.objects.none()
     term_map = {}
     for term_obj in terms:
         term_map.setdefault(term_obj.session_id, []).append({
@@ -1889,6 +1912,13 @@ def secondary_page(request, role, page):
             institution=institution,
             status='approved_by_examiner',
         ).select_related('academic_class', 'subject', 'submitted_by').order_by('-submitted_at')
+        admin_submission_id = request.GET.get('submission')
+        if admin_submission_id:
+            selected_admin_submission = admin_result_submissions.filter(id=admin_submission_id).first()
+        if not selected_admin_submission:
+            selected_admin_submission = admin_result_submissions.first()
+        if selected_admin_submission:
+            admin_review_results = _results_for_submission(selected_admin_submission)
 
     if role == 'teacher':
         staff = Staff.objects.filter(user=request.user, institution=institution).first()
@@ -2132,13 +2162,7 @@ def secondary_page(request, role, page):
         if submission_id:
             selected_submission = examiner_submissions.filter(id=submission_id).first()
             if selected_submission:
-                examiner_results = Result.objects.filter(
-                    institution=institution,
-                    subject=selected_submission.subject,
-                    student__academic_class=selected_submission.academic_class,
-                    session=selected_submission.session,
-                    term=selected_submission.term,
-                ).select_related('student').order_by('student__full_name')
+                examiner_results = _results_for_submission(selected_submission)
         result_sheet_class_id = request.GET.get('class')
         result_sheet_session = request.GET.get('session', '').strip()
         result_sheet_term = request.GET.get('term', '').strip()
@@ -2252,6 +2276,8 @@ def secondary_page(request, role, page):
         'teacher_submissions': teacher_submissions,
         'teacher_subject_assignments': teacher_subject_assignments,
         'admin_result_submissions': admin_result_submissions,
+        'selected_admin_submission': selected_admin_submission,
+        'admin_review_results': admin_review_results,
         'examiner_submissions': examiner_submissions,
         'examiner_results': examiner_results,
         'selected_submission': selected_submission,

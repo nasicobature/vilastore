@@ -1102,42 +1102,100 @@
       {% endif %}
 
       {% if active_page == 'approve-results' and role == 'admin' %}
-        <div class="bg-card rounded-xl border border-border overflow-hidden">
-          <div class="flex items-center justify-between p-4 border-b border-border">
-            <h3 class="font-display font-semibold">Results Awaiting Admin Approval</h3>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead>
-                <tr class="bg-muted/50">
-                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
-                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
-                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Session/Term</th>
-                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Teacher</th>
-                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Action</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-border">
-                {% for submission in admin_result_submissions %}
-                  <tr class="hover:bg-muted/30 transition-colors">
-                    <td class="px-4 py-3 text-sm">{{ submission.academic_class.name }}</td>
-                    <td class="px-4 py-3 text-sm">{{ submission.subject.name }}</td>
-                    <td class="px-4 py-3 text-sm">{{ submission.session }} / {{ submission.term }}</td>
-                    <td class="px-4 py-3 text-sm">{{ submission.submitted_by.full_name }}</td>
-                    <td class="px-4 py-3 text-sm">
-                      <form method="post" action="/edu/secondary/admin/results/approve/" class="flex flex-col sm:flex-row gap-2">
-                        {% csrf_token %}
-                        <input type="hidden" name="submission_id" value="{{ submission.id }}" />
-                        <input type="text" name="admin_comment" placeholder="Admin comment" class="px-2 py-1.5 rounded-lg border border-input bg-background text-xs" />
-                        <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors">Approve & Publish</button>
-                      </form>
-                    </td>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="bg-card rounded-xl border border-border overflow-hidden lg:col-span-1">
+            <div class="flex items-center justify-between p-4 border-b border-border">
+              <h3 class="font-display font-semibold">Results Awaiting Admin Approval</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="bg-muted/50">
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Teacher</th>
                   </tr>
-                {% empty %}
-                  <tr><td colspan="5" class="px-4 py-3 text-sm">No results awaiting Admin approval.</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  {% for submission in admin_result_submissions %}
+                    <tr class="hover:bg-muted/30 transition-colors">
+                      <td class="px-4 py-3 text-sm">
+                        <a href="/edu/secondary/admin/approve-results/?submission={{ submission.id }}" class="text-primary hover:underline">
+                          {{ submission.academic_class.name }}
+                        </a>
+                      </td>
+                      <td class="px-4 py-3 text-sm">{{ submission.subject.name }}</td>
+                      <td class="px-4 py-3 text-sm">{{ submission.submitted_by.full_name }}</td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="3" class="px-4 py-3 text-sm">No results awaiting Admin approval.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border p-5 lg:col-span-2 space-y-4">
+            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+              <div>
+                <h3 class="font-display font-semibold">Review Before Publishing</h3>
+                <p class="text-xs text-muted-foreground">Open a submission, check every student's score, then publish.</p>
+              </div>
+              {% if selected_admin_submission %}
+                <form method="post" action="/edu/secondary/admin/results/approve/" class="flex flex-col sm:flex-row gap-2">
+                  {% csrf_token %}
+                  <input type="hidden" name="submission_id" value="{{ selected_admin_submission.id }}" />
+                  <input type="text" name="admin_comment" placeholder="Admin comment" class="px-3 py-2 rounded-lg border border-input bg-background text-sm" />
+                  <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">Approve & Publish</button>
+                </form>
+              {% endif %}
+            </div>
+
+            {% if selected_admin_submission %}
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                <div><span class="text-muted-foreground">Class:</span> {{ selected_admin_submission.academic_class.name }}</div>
+                <div><span class="text-muted-foreground">Subject:</span> {{ selected_admin_submission.subject.name }}</div>
+                <div><span class="text-muted-foreground">Session/Term:</span> {{ selected_admin_submission.session }} / {{ selected_admin_submission.term }}</div>
+                <div><span class="text-muted-foreground">Teacher:</span> {{ selected_admin_submission.submitted_by.full_name }}</div>
+                <div><span class="text-muted-foreground">Teacher Comment:</span> {{ selected_admin_submission.teacher_comment|default:"-" }}</div>
+                <div><span class="text-muted-foreground">Examiner Comment:</span> {{ selected_admin_submission.examiner_comment|default:"-" }}</div>
+              </div>
+
+              <div class="bg-muted/30 rounded-xl border border-border overflow-hidden">
+                <div class="overflow-x-auto">
+                  <table class="w-full">
+                    <thead>
+                      <tr class="bg-muted/50">
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Student</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 1</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 2</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Assignment</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Exam</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Total</th>
+                        <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Grade</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                      {% for result in admin_review_results %}
+                        <tr class="hover:bg-muted/30 transition-colors">
+                          <td class="px-4 py-3 text-sm">{{ result.student.full_name }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.test1 }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.test2 }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.assignment }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.exam }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.total }}</td>
+                          <td class="px-4 py-3 text-sm">{{ result.grade }}</td>
+                        </tr>
+                      {% empty %}
+                        <tr><td colspan="7" class="px-4 py-3 text-sm">No student scores found for this submission.</td></tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            {% else %}
+              <div class="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">No result submission is ready for Admin review.</div>
+            {% endif %}
           </div>
         </div>
 
