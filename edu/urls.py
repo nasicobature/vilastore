@@ -11,6 +11,7 @@ urlpatterns = [
     path('secondary/users/create/', views.secondary_create_user, name='secondary_create_user'),
     path('secondary/classes/add/', views.secondary_add_class, name='secondary_add_class'),
     path('secondary/sessions/add/', views.secondary_add_session_term, name='secondary_add_session_term'),
+    path('secondary/classes/session-term/', views.secondary_assign_class_session_term, name='secondary_assign_class_session_term'),
     path('secondary/students/add/', views.secondary_add_student, name='secondary_add_student'),
     path('secondary/teachers/assign/', views.secondary_assign_teacher, name='secondary_assign_teacher'),
     path('secondary/teachers/assign-subject/', views.secondary_assign_teacher_subject, name='secondary_assign_teacher_subject'),

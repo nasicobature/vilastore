@@ -7,7 +7,23 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import AcademicClass, AcademicSession, AcademicTerm, Fee, Institution, Payment, Profile, Staff, Student
+from .models import (
+    AcademicClass,
+    AcademicSession,
+    AcademicTerm,
+    ClassSubject,
+    Fee,
+    Institution,
+    Payment,
+    Profile,
+    Result,
+    ResultSubmission,
+    Staff,
+    Student,
+    Subject,
+    TeacherAssignment,
+    TeacherSubjectAssignment,
+)
 
 
 class EduPortalRoutingTests(TestCase):
@@ -254,6 +270,114 @@ class EduPortalFeesTests(TestCase):
         term = AcademicTerm.objects.get(session=session, term="first")
         self.assertTrue(session.is_current)
         self.assertTrue(term.is_current)
+
+    def test_registry_assigns_session_and_term_to_class(self):
+        registry = get_user_model().objects.create_user(
+            username="registry",
+            password="StrongPass123!",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        registry.profile.institution = self.institution
+        registry.profile.institution_type = "secondary"
+        registry.profile.role = "registry"
+        registry.profile.is_approved = True
+        registry.profile.save()
+        self.client.force_login(registry)
+        session = AcademicSession.objects.create(institution=self.institution, name="2025/2026")
+        term = AcademicTerm.objects.create(session=session, term="first")
+
+        response = self.client.post(reverse("edu:secondary_assign_class_session_term"), {
+            "academic_class": str(self.academic_class.id),
+            "academic_session": str(session.id),
+            "academic_term": str(term.id),
+        })
+
+        self.assertRedirects(response, reverse("edu:secondary_page", kwargs={"role": "registry", "page": "sessions"}))
+        self.academic_class.refresh_from_db()
+        self.assertEqual(self.academic_class.academic_session, session)
+        self.assertEqual(self.academic_class.academic_term, term)
+
+    def test_teacher_scores_use_registry_session_term_and_save_metadata(self):
+        session = AcademicSession.objects.create(institution=self.institution, name="2025/2026")
+        term = AcademicTerm.objects.create(session=session, term="first")
+        subject = Subject.objects.create(institution=self.institution, name="Mathematics", code="MTH")
+        teacher_user = get_user_model().objects.create_user(
+            username="teacher",
+            password="StrongPass123!",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        teacher_user.profile.institution = self.institution
+        teacher_user.profile.institution_type = "secondary"
+        teacher_user.profile.role = "teacher"
+        teacher_user.profile.is_approved = True
+        teacher_user.profile.save()
+        teacher = Staff.objects.create(
+            institution=self.institution,
+            user=teacher_user,
+            full_name="Teacher One",
+            staff_id="TCH/001",
+            role="teacher",
+        )
+        TeacherAssignment.objects.create(institution=self.institution, teacher=teacher, academic_class=self.academic_class)
+        ClassSubject.objects.create(academic_class=self.academic_class, subject=subject)
+        TeacherSubjectAssignment.objects.create(
+            institution=self.institution,
+            teacher=teacher,
+            academic_class=self.academic_class,
+            subject=subject,
+        )
+        self.client.force_login(teacher_user)
+
+        response = self.client.post(reverse("edu:secondary_save_scores"), {
+            "academic_session": str(session.id),
+            "academic_term": str(term.id),
+            "academic_class": str(self.academic_class.id),
+            "subject": str(subject.id),
+            "students": [str(self.student.id)],
+            f"test1_{self.student.id}": "10",
+            f"test2_{self.student.id}": "9",
+            f"assignment_{self.student.id}": "8",
+            f"exam_{self.student.id}": "60",
+        })
+        self.assertRedirects(response, reverse("edu:secondary_page", kwargs={"role": "teacher", "page": "enter-scores"}))
+        result = Result.objects.get(student=self.student, subject=subject)
+        self.assertEqual(result.academic_class, self.academic_class)
+        self.assertEqual(result.teacher, teacher)
+        self.assertEqual(result.academic_session, session)
+        self.assertEqual(result.academic_term, term)
+        self.assertEqual(result.session, "2025/2026")
+        self.assertEqual(result.term, "First Term")
+
+        response = self.client.post(reverse("edu:secondary_submit_results"), {
+            "academic_session": str(session.id),
+            "academic_term": str(term.id),
+            "academic_class": str(self.academic_class.id),
+            "subject": str(subject.id),
+        })
+        self.assertRedirects(response, reverse("edu:secondary_page", kwargs={"role": "teacher", "page": "submit-results"}))
+        submission = ResultSubmission.objects.get(submitted_by=teacher, subject=subject)
+        self.assertEqual(submission.academic_session, session)
+        self.assertEqual(submission.academic_term, term)
+
+    def test_registry_student_id_cards_page_is_active(self):
+        admin = get_user_model().objects.create_user(
+            username="id-admin",
+            password="StrongPass123!",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        admin.profile.institution = self.institution
+        admin.profile.institution_type = "secondary"
+        admin.profile.role = "registry"
+        admin.profile.is_approved = True
+        admin.profile.save()
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse("edu:secondary_page", kwargs={"role": "registry", "page": "student-ids"}))
+
+        self.assertContains(response, "Student ID Cards")
+        self.assertContains(response, "Ada Student")
+        self.assertContains(response, self.student.student_id)
+        self.assertNotContains(response, "Coming soon")
 
     def test_accountant_can_create_class_fee_and_record_payment(self):
         response = self.client.post(reverse("edu:secondary_create_fee"), {

@@ -260,10 +260,51 @@
     syncSubjects();
   }
 
+  const termMapEl = document.getElementById('academic-term-map');
+  const termMap = termMapEl ? JSON.parse(termMapEl.textContent || '{}') : {};
+  document.querySelectorAll('[data-term-filter-form]').forEach((form) => {
+    const sessionSelect = form.querySelector('[data-session-select]');
+    const termSelect = form.querySelector('[data-term-select]');
+    if (!sessionSelect || !termSelect) return;
+
+    const syncTerms = () => {
+      const selectedSession = sessionSelect.value;
+      const currentTerm = termSelect.dataset.currentTerm || termSelect.value;
+      const terms = termMap[selectedSession] || [];
+      termSelect.innerHTML = '<option value="">Select Term</option>';
+      terms.forEach((term) => {
+        const option = document.createElement('option');
+        option.value = term.id;
+        option.textContent = term.name;
+        if (String(term.id) === String(currentTerm)) {
+          option.selected = true;
+        }
+        termSelect.appendChild(option);
+      });
+      if (!terms.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No terms created for this session';
+        option.disabled = true;
+        termSelect.appendChild(option);
+      }
+      termSelect.dataset.currentTerm = '';
+    };
+
+    sessionSelect.addEventListener('change', syncTerms);
+    syncTerms();
+  });
+
+  document.querySelectorAll('[data-print-student-ids]').forEach((button) => {
+    button.addEventListener('click', () => window.print());
+  });
+
   const teacherSubjectMapEl = document.getElementById('teacher-subject-map');
   const teacherResultsMapEl = document.getElementById('teacher-results-map');
   const teacherClassSelect = document.getElementById('teacher-score-class');
   const teacherSubjectSelect = document.getElementById('teacher-score-subject');
+  const teacherSessionSelect = document.getElementById('teacher-score-session');
+  const teacherTermSelect = document.getElementById('teacher-score-term');
   const teacherFetchButton = document.getElementById('teacher-score-fetch');
   const teacherEmptyRow = document.getElementById('teacher-score-empty');
   const teacherSubmitClassSelect = document.getElementById('teacher-submit-class');
@@ -363,7 +404,9 @@
         const studentInput = row.querySelector('input[name="students"]');
         if (!studentInput) return;
         const studentId = studentInput.value;
-        const key = `${studentId}-${subjectId}`;
+        const sessionId = teacherSessionSelect ? teacherSessionSelect.value : '';
+        const termId = teacherTermSelect ? teacherTermSelect.value : '';
+        const key = `${studentId}-${subjectId}-${sessionId}-${termId}`;
         const scores = resultsMap[key];
         const statusEl = row.querySelector('.teacher-score-status');
         if (!scores) {
@@ -397,15 +440,23 @@
         populateSubjects(teacherClassSelect, teacherSubjectSelect);
         hasFetched = false;
         resetRows();
-        setEmptyMessage('Select class and subject, then click Fetch Students.');
+        setEmptyMessage('Select session, term, class, and subject, then click Fetch Students.');
       });
       teacherSubjectSelect.addEventListener('change', () => {
         if (!hasFetched) return;
         applyExistingScores();
       });
+      [teacherSessionSelect, teacherTermSelect].forEach((select) => {
+        if (!select) return;
+        select.addEventListener('change', () => {
+          hasFetched = false;
+          resetRows();
+          setEmptyMessage('Select session, term, class, and subject, then click Fetch Students.');
+        });
+      });
       populateSubjects(teacherClassSelect, teacherSubjectSelect);
       resetRows();
-      setEmptyMessage('Select class and subject, then click Fetch Students.');
+      setEmptyMessage('Select session, term, class, and subject, then click Fetch Students.');
     }
 
     if (searchInput) {
@@ -419,8 +470,8 @@
     if (teacherFetchButton) {
       teacherFetchButton.addEventListener('click', () => {
         if (!teacherClassSelect || !teacherSubjectSelect) return;
-        if (!teacherClassSelect.value || !teacherSubjectSelect.value) {
-          setEmptyMessage('Select class and subject before fetching students.');
+        if (!teacherSessionSelect.value || !teacherTermSelect.value || !teacherClassSelect.value || !teacherSubjectSelect.value) {
+          setEmptyMessage('Select session, term, class, and subject before fetching students.');
           return;
         }
         hasFetched = true;

@@ -285,6 +285,12 @@ def _get_secondary_accountant_profile(request):
     return profile
 
 
+def _get_selected_session_term(institution, session_id, term_id):
+    session = AcademicSession.objects.filter(id=session_id, institution=institution).first()
+    term = AcademicTerm.objects.filter(id=term_id, session=session).first() if session else None
+    return session, term
+
+
 def _ordinal(value):
     try:
         number = int(value)
@@ -915,19 +921,14 @@ def secondary_save_scores(request):
     if request.method == 'POST':
         class_id = request.POST.get('academic_class')
         subject_id = request.POST.get('subject')
-        session = request.POST.get('session', '').strip()
-        term = request.POST.get('term', '').strip()
-        if not session:
-            current_session = AcademicSession.objects.filter(institution=profile.institution, is_current=True).first()
-            session = current_session.name if current_session else ''
-        if not term:
-            current_term = AcademicTerm.objects.filter(session__institution=profile.institution, is_current=True).first()
-            term = current_term.term if current_term else ''
+        session_id = request.POST.get('academic_session')
+        term_id = request.POST.get('academic_term')
 
         academic_class = AcademicClass.objects.filter(id=class_id, institution=profile.institution).first()
         subject = Subject.objects.filter(id=subject_id, institution=profile.institution).first()
-        if not academic_class or not subject:
-            messages.error(request, 'Please select class and subject.')
+        session, term = _get_selected_session_term(profile.institution, session_id, term_id)
+        if not session or not term or not academic_class or not subject:
+            messages.error(request, 'Please select academic session, term, class, and subject.')
             return redirect('edu:secondary_page', role=profile.role, page='enter-scores')
 
         assigned = TeacherAssignment.objects.filter(teacher=staff, academic_class=academic_class).exists()
@@ -944,9 +945,9 @@ def secondary_save_scores(request):
         for student in students:
             def _to_decimal(value):
                 try:
-                    return float(value or 0)
-                except ValueError:
-                    return 0
+                    return Decimal(str(value or '0'))
+                except Exception:
+                    return Decimal('0.00')
 
             test1 = _to_decimal(request.POST.get(f'test1_{student.id}'))
             test2 = _to_decimal(request.POST.get(f'test2_{student.id}'))
@@ -957,9 +958,13 @@ def secondary_save_scores(request):
                 institution=profile.institution,
                 student=student,
                 subject=subject,
-                session=session,
-                term=term,
+                academic_session=session,
+                academic_term=term,
+                session=session.name,
+                term=term.get_term_display(),
                 defaults={
+                    'academic_class': academic_class,
+                    'teacher': staff,
                     'test1': test1,
                     'test2': test2,
                     'assignment': assignment,
@@ -986,19 +991,14 @@ def secondary_submit_results(request):
     if request.method == 'POST':
         class_id = request.POST.get('academic_class')
         subject_id = request.POST.get('subject')
-        session = request.POST.get('session', '').strip()
-        term = request.POST.get('term', '').strip()
-        if not session:
-            current_session = AcademicSession.objects.filter(institution=profile.institution, is_current=True).first()
-            session = current_session.name if current_session else ''
-        if not term:
-            current_term = AcademicTerm.objects.filter(session__institution=profile.institution, is_current=True).first()
-            term = current_term.term if current_term else ''
+        session_id = request.POST.get('academic_session')
+        term_id = request.POST.get('academic_term')
 
         academic_class = AcademicClass.objects.filter(id=class_id, institution=profile.institution).first()
         subject = Subject.objects.filter(id=subject_id, institution=profile.institution).first()
-        if not academic_class or not subject:
-            messages.error(request, 'Please select class and subject.')
+        session, term = _get_selected_session_term(profile.institution, session_id, term_id)
+        if not session or not term or not academic_class or not subject:
+            messages.error(request, 'Please select academic session, term, class, and subject.')
             return redirect('edu:secondary_page', role=profile.role, page='submit-results')
 
         assigned = TeacherAssignment.objects.filter(teacher=staff, academic_class=academic_class).exists()
@@ -1014,8 +1014,10 @@ def secondary_submit_results(request):
             academic_class=academic_class,
             subject=subject,
             submitted_by=staff,
-            session=session,
-            term=term,
+            academic_session=session,
+            academic_term=term,
+            session=session.name,
+            term=term.get_term_display(),
             status='submitted',
         )
         messages.success(request, 'Results submitted to Examiner.')
@@ -1162,6 +1164,31 @@ def secondary_add_session_term(request):
             defaults={'is_current': is_current},
         )
         messages.success(request, 'Session/term saved.')
+    return redirect('edu:secondary_page', role=creator_profile.role, page='sessions')
+
+
+@login_required(login_url='/edu/secondary/login/')
+def secondary_assign_class_session_term(request):
+    creator_profile = getattr(request.user, 'profile', None)
+    if not creator_profile or creator_profile.institution_type != 'secondary' or creator_profile.role not in ['admin', 'registry']:
+        messages.error(request, 'Only Admin/Registry can assign class sessions.')
+        return redirect('edu:secondary_dashboard', role=creator_profile.role if creator_profile else 'admin')
+
+    if request.method == 'POST':
+        class_id = request.POST.get('academic_class')
+        session_id = request.POST.get('academic_session')
+        term_id = request.POST.get('academic_term')
+        academic_class = AcademicClass.objects.filter(id=class_id, institution=creator_profile.institution).first()
+        session, term = _get_selected_session_term(creator_profile.institution, session_id, term_id)
+        if not academic_class or not session or not term:
+            messages.error(request, 'Class, academic session, and term are required.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='sessions')
+
+        academic_class.academic_session = session
+        academic_class.academic_term = term
+        academic_class.save(update_fields=['academic_session', 'academic_term'])
+        messages.success(request, f'{academic_class.name} assigned to {session.name} - {term.get_term_display()}.')
+
     return redirect('edu:secondary_page', role=creator_profile.role, page='sessions')
 
 
@@ -1601,7 +1628,7 @@ def secondary_page(request, role, page):
     students_all = Student.objects.filter(institution=institution).select_related('academic_class')
     teachers = Staff.objects.filter(institution=institution, role='teacher').prefetch_related('assignments__academic_class', 'subject_assignments__academic_class', 'subject_assignments__subject')
     sessions = AcademicSession.objects.filter(institution=institution).order_by('-name')
-    terms = AcademicTerm.objects.filter(session__institution=institution).select_related('session')
+    terms = AcademicTerm.objects.filter(session__institution=institution).select_related('session').order_by('-session__name', 'term')
     current_session = AcademicSession.objects.filter(institution=institution, is_current=True).first()
     current_term = AcademicTerm.objects.filter(session__institution=institution, is_current=True).first()
     subjects = Subject.objects.filter(institution=institution).order_by('name')
@@ -1616,6 +1643,12 @@ def secondary_page(request, role, page):
     teacher_results_map = {}
     teacher_submissions = ResultSubmission.objects.none()
     teacher_subject_assignments = TeacherSubjectAssignment.objects.filter(institution=institution).select_related('teacher', 'academic_class', 'subject')
+    term_map = {}
+    for term_obj in terms:
+        term_map.setdefault(term_obj.session_id, []).append({
+            'id': term_obj.id,
+            'name': term_obj.get_term_display(),
+        })
     examiner_submissions = ResultSubmission.objects.none()
     examiner_results = Result.objects.none()
     selected_submission = None
@@ -1623,6 +1656,14 @@ def secondary_page(request, role, page):
     result_sheet_class = None
     result_sheet_session = ''
     result_sheet_term = ''
+    id_card_students = students_all
+    selected_id_card_class_id = request.GET.get('class', '').strip()
+    selected_id_card_session_id = request.GET.get('session', '').strip()
+    if page == 'student-ids':
+        if selected_id_card_class_id:
+            id_card_students = id_card_students.filter(academic_class_id=selected_id_card_class_id)
+        if selected_id_card_session_id:
+            id_card_students = id_card_students.filter(academic_class__academic_session_id=selected_id_card_session_id)
 
     if role == 'teacher':
         staff = Staff.objects.filter(user=request.user, institution=institution).first()
@@ -1645,7 +1686,7 @@ def secondary_page(request, role, page):
 
             results = Result.objects.filter(student__in=teacher_students, subject__in=subjects, institution=institution).order_by('id')
             for res in results:
-                key = f"{res.student_id}-{res.subject_id}"
+                key = f"{res.student_id}-{res.subject_id}-{res.academic_session_id or ''}-{res.academic_term_id or ''}"
                 teacher_results_map[key] = {
                     'test1': float(res.test1),
                     'test2': float(res.test2),
@@ -1673,7 +1714,7 @@ def secondary_page(request, role, page):
         result_sheet_session = request.GET.get('session', '').strip()
         result_sheet_term = request.GET.get('term', '').strip()
         current_session_name = current_session.name if current_session else ''
-        current_term_name = current_term.term if current_term else ''
+        current_term_name = current_term.get_term_display() if current_term else ''
         if not result_sheet_session:
             result_sheet_session = current_session_name
         if not result_sheet_term:
@@ -1730,6 +1771,7 @@ def secondary_page(request, role, page):
         'assign-teachers',
         'register',
         'sessions',
+        'student-ids',
         'approve-results',
         'fees',
         'my-classes',
@@ -1757,6 +1799,7 @@ def secondary_page(request, role, page):
         'subjects': subjects,
         'class_subjects': class_subjects,
         'class_subject_map': class_subject_map,
+        'term_map': term_map,
         'fees_total': fees_total,
         'fees_pending': fees_pending,
         'fees_expected': fee_summary['expected_total'],
@@ -1766,7 +1809,7 @@ def secondary_page(request, role, page):
         'online_payment_enabled': institution.allow_online_payment and bool(institution.payment_public_key),
         'pending_profiles': pending_profiles,
         'role_options': SECONDARY_ROLES,
-        'classes': AcademicClass.objects.filter(institution=institution),
+        'classes': AcademicClass.objects.filter(institution=institution).select_related('academic_session', 'academic_term'),
         'institution_id': institution.id if institution else '',
         'teacher_classes': teacher_classes,
         'teacher_students': teacher_students,
@@ -1781,8 +1824,13 @@ def secondary_page(request, role, page):
         'result_sheet_class': result_sheet_class,
         'result_sheet_session': result_sheet_session,
         'result_sheet_term': result_sheet_term,
+        'id_card_students': id_card_students,
+        'selected_id_card_class_id': selected_id_card_class_id,
+        'selected_id_card_session_id': selected_id_card_session_id,
         'current_session_name': current_session.name if current_session else '',
-        'current_term_name': current_term.term if current_term else '',
+        'current_term_name': current_term.get_term_display() if current_term else '',
+        'current_session_id': current_session.id if current_session else '',
+        'current_term_id': current_term.id if current_term else '',
     })
 
 

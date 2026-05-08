@@ -136,6 +136,8 @@ class AcademicClass(models.Model):
     institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='classes')
     name = models.CharField(max_length=50)
     level = models.IntegerField(default=1)
+    academic_session = models.ForeignKey(AcademicSession, on_delete=models.SET_NULL, null=True, blank=True, related_name='classes')
+    academic_term = models.ForeignKey(AcademicTerm, on_delete=models.SET_NULL, null=True, blank=True, related_name='classes')
     subjects = models.ManyToManyField('Subject', through='ClassSubject', blank=True)
 
     def __str__(self):
@@ -263,7 +265,11 @@ class Payment(models.Model):
 class Result(models.Model):
     institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='results')
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    academic_class = models.ForeignKey(AcademicClass, on_delete=models.SET_NULL, null=True, blank=True, related_name='results')
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    teacher = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='results')
+    academic_session = models.ForeignKey(AcademicSession, on_delete=models.SET_NULL, null=True, blank=True, related_name='results')
+    academic_term = models.ForeignKey(AcademicTerm, on_delete=models.SET_NULL, null=True, blank=True, related_name='results')
     test1 = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     test2 = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     assignment = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -275,17 +281,16 @@ class Result(models.Model):
 
     def save(self, *args, **kwargs):
         self.total = self.test1 + self.test2 + self.assignment + self.exam
-        if not self.grade:
-            if self.total >= 70:
-                self.grade = 'A'
-            elif self.total >= 60:
-                self.grade = 'B'
-            elif self.total >= 50:
-                self.grade = 'C'
-            elif self.total >= 45:
-                self.grade = 'D'
-            else:
-                self.grade = 'F'
+        if self.total >= 70:
+            self.grade = 'A'
+        elif self.total >= 60:
+            self.grade = 'B'
+        elif self.total >= 50:
+            self.grade = 'C'
+        elif self.total >= 45:
+            self.grade = 'D'
+        else:
+            self.grade = 'F'
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -303,6 +308,8 @@ class ResultSubmission(models.Model):
     academic_class = models.ForeignKey(AcademicClass, on_delete=models.CASCADE)
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
     submitted_by = models.ForeignKey(Staff, on_delete=models.CASCADE, related_name='result_submissions')
+    academic_session = models.ForeignKey(AcademicSession, on_delete=models.SET_NULL, null=True, blank=True, related_name='result_submissions')
+    academic_term = models.ForeignKey(AcademicTerm, on_delete=models.SET_NULL, null=True, blank=True, related_name='result_submissions')
     session = models.CharField(max_length=20, blank=True)
     term = models.CharField(max_length=50, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='submitted')

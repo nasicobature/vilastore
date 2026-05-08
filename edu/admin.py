@@ -104,8 +104,8 @@ class AcademicTermAdmin(admin.ModelAdmin):
 
 @admin.register(AcademicClass)
 class AcademicClassAdmin(admin.ModelAdmin):
-    list_display = ('name', 'institution', 'level')
-    list_filter = ('institution',)
+    list_display = ('name', 'institution', 'level', 'academic_session', 'academic_term')
+    list_filter = ('institution', 'academic_session', 'academic_term')
 
 
 @admin.register(Subject)
@@ -149,8 +149,8 @@ class PaymentAdmin(admin.ModelAdmin):
 
 @admin.register(Result)
 class ResultAdmin(admin.ModelAdmin):
-    list_display = ('student', 'subject', 'total', 'grade', 'term', 'session')
-    list_filter = ('institution', 'term', 'session', 'grade')
+    list_display = ('student', 'academic_class', 'subject', 'teacher', 'total', 'grade', 'term', 'session')
+    list_filter = ('institution', 'academic_class', 'academic_session', 'academic_term', 'grade')
 
 
 @admin.register(TeacherAssignment)
