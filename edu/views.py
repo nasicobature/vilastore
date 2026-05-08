@@ -114,6 +114,51 @@ def _generate_user_id(institution):
         return f"{short}/{year}/{inst.user_sequence:03d}"
 
 
+def _verification_uploads(request):
+    return {
+        'cac_certificate': request.FILES.get('cac_certificate'),
+        'cac_status_report': request.FILES.get('cac_status_report'),
+        'ministry_approval': request.FILES.get('ministry_approval'),
+        'operating_license': request.FILES.get('operating_license'),
+        'tin_certificate': request.FILES.get('tin_certificate'),
+        'school_letterhead': request.FILES.get('school_letterhead'),
+        'school_stamp': request.FILES.get('school_stamp'),
+        'owner_valid_id': request.FILES.get('owner_valid_id'),
+        'utility_bill': request.FILES.get('utility_bill'),
+        'proof_of_address': request.FILES.get('proof_of_address'),
+    }
+
+
+def _missing_verification_requirements(request):
+    uploads = _verification_uploads(request)
+    missing = []
+
+    required_uploads = {
+        'cac_certificate': 'CAC Certificate',
+        'cac_status_report': 'CAC Status Report',
+        'tin_certificate': 'TIN or Tax Certificate',
+        'school_letterhead': 'Official School Letterhead',
+        'school_stamp': 'School Stamp/Seal',
+        'owner_valid_id': 'Owner/Admin Valid ID',
+    }
+    for field_name, label in required_uploads.items():
+        if not uploads[field_name]:
+            missing.append(label)
+
+    if not uploads['ministry_approval'] and not uploads['operating_license']:
+        missing.append('Ministry of Education approval or school operating license')
+
+    if not uploads['utility_bill'] and not uploads['proof_of_address']:
+        missing.append('Utility bill or proof of address')
+
+    if not request.POST.get('admin_email', '').strip():
+        missing.append('Owner/Admin email address')
+    if not request.POST.get('admin_phone', '').strip():
+        missing.append('Owner/Admin phone number')
+
+    return missing, uploads
+
+
 def _ordinal(value):
     try:
         number = int(value)
@@ -305,9 +350,12 @@ def secondary_school_register(request):
         school_code = request.POST.get('school_code', '').strip().upper()
         admin_full_name = request.POST.get('admin_full_name', '').strip()
         admin_password = request.POST.get('admin_password', '').strip()
+        missing_verification, verification_uploads = _missing_verification_requirements(request)
 
         if not all([institution_name, admin_full_name, admin_password]):
             messages.error(request, 'Please fill all required fields.')
+        elif missing_verification:
+            messages.error(request, 'Please complete verification requirements: ' + ', '.join(missing_verification) + '.')
         else:
             try:
                 institution = Institution.objects.create(
@@ -339,6 +387,8 @@ def secondary_school_register(request):
                     theme_color=request.POST.get('theme_color', '').strip(),
                     logo=request.FILES.get('logo'),
                     favicon=request.FILES.get('favicon'),
+                    verification_status='pending',
+                    **verification_uploads,
                 )
 
                 User = get_user_model()
@@ -352,9 +402,9 @@ def secondary_school_register(request):
                 profile.institution_type = 'secondary'
                 profile.role = 'admin'
                 profile.created_via = 'school-register'
-                profile.is_approved = True
-                profile.approved_by = user
-                profile.approved_at = timezone.now()
+                profile.is_approved = False
+                profile.approved_by = None
+                profile.approved_at = None
                 profile.save()
 
                 Staff.objects.create(
@@ -366,7 +416,7 @@ def secondary_school_register(request):
                     department='',
                 )
 
-                messages.success(request, f'School registered. Admin account created. School code: {institution.school_code}. Admin ID: {admin_username}')
+                messages.success(request, f'School verification submitted. VilaStore will review your documents before portal access is granted. School code: {institution.school_code}. Admin ID: {admin_username}')
                 return redirect('edu:secondary_login')
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
@@ -1117,9 +1167,12 @@ def tertiary_school_register(request):
         vc_full_name = request.POST.get('vc_full_name', '').strip()
         vc_password = request.POST.get('vc_password', '').strip()
         vc_role = request.POST.get('vc_role', 'vc')
+        missing_verification, verification_uploads = _missing_verification_requirements(request)
 
         if not all([institution_name, vc_full_name, vc_password]):
             messages.error(request, 'Please fill all required fields.')
+        elif missing_verification:
+            messages.error(request, 'Please complete verification requirements: ' + ', '.join(missing_verification) + '.')
         else:
             try:
                 institution = Institution.objects.create(
@@ -1153,6 +1206,8 @@ def tertiary_school_register(request):
                     theme_color=request.POST.get('theme_color', '').strip(),
                     logo=request.FILES.get('logo'),
                     favicon=request.FILES.get('favicon'),
+                    verification_status='pending',
+                    **verification_uploads,
                 )
 
                 User = get_user_model()
@@ -1166,9 +1221,9 @@ def tertiary_school_register(request):
                 profile.institution_type = 'tertiary'
                 profile.role = vc_role if vc_role in ['vc', 'provost'] else 'vc'
                 profile.created_via = 'school-register'
-                profile.is_approved = True
-                profile.approved_by = user
-                profile.approved_at = timezone.now()
+                profile.is_approved = False
+                profile.approved_by = None
+                profile.approved_at = None
                 profile.save()
 
                 Staff.objects.create(
@@ -1180,7 +1235,7 @@ def tertiary_school_register(request):
                     department='',
                 )
 
-                messages.success(request, f'School registered. VC/Provost account created. School code: {institution.school_code}. ID: {vc_username}')
+                messages.success(request, f'Institution verification submitted. VilaStore will review your documents before portal access is granted. School code: {institution.school_code}. ID: {vc_username}')
                 return redirect('edu:tertiary_login')
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')

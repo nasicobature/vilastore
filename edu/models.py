@@ -18,6 +18,11 @@ class Institution(models.Model):
         ('gpa', 'GPA'),
         ('custom', 'Custom'),
     ]
+    VERIFICATION_STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
 
     name = models.CharField(max_length=200)
     school_code = models.CharField(max_length=20, unique=True, null=True, blank=True)
@@ -49,6 +54,19 @@ class Institution(models.Model):
     logo = models.FileField(upload_to='institutions/logos/', blank=True, null=True)
     favicon = models.FileField(upload_to='institutions/favicons/', blank=True, null=True)
     theme_color = models.CharField(max_length=20, blank=True)
+    verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUS_CHOICES, default='pending')
+    verification_review_note = models.TextField(blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    cac_certificate = models.FileField(upload_to='institutions/verification/cac_certificates/', blank=True, null=True)
+    cac_status_report = models.FileField(upload_to='institutions/verification/cac_status_reports/', blank=True, null=True)
+    ministry_approval = models.FileField(upload_to='institutions/verification/ministry_approvals/', blank=True, null=True)
+    operating_license = models.FileField(upload_to='institutions/verification/operating_licenses/', blank=True, null=True)
+    tin_certificate = models.FileField(upload_to='institutions/verification/tax_documents/', blank=True, null=True)
+    school_letterhead = models.FileField(upload_to='institutions/verification/letterheads/', blank=True, null=True)
+    school_stamp = models.FileField(upload_to='institutions/verification/stamps/', blank=True, null=True)
+    owner_valid_id = models.FileField(upload_to='institutions/verification/owner_ids/', blank=True, null=True)
+    utility_bill = models.FileField(upload_to='institutions/verification/address_documents/', blank=True, null=True)
+    proof_of_address = models.FileField(upload_to='institutions/verification/address_documents/', blank=True, null=True)
     user_sequence = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(default=timezone.now)
 
