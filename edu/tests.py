@@ -471,6 +471,8 @@ class EduPortalFeesTests(TestCase):
             + f"?submission={submission.id}"
         )
         self.assertContains(review_page, "Review Results")
+        self.assertContains(review_page, "Report Card Template Preview")
+        self.assertContains(review_page, "Report Card Preview")
         self.assertContains(review_page, "Ada Student")
         self.assertContains(review_page, "90.00")
         self.client.post(reverse("edu:secondary_review_results"), {
@@ -492,6 +494,8 @@ class EduPortalFeesTests(TestCase):
             + f"?submission={submission.id}"
         )
         self.assertContains(admin_review_page, "Review Before Publishing")
+        self.assertContains(admin_review_page, "Report Card Template Preview")
+        self.assertContains(admin_review_page, "Report Card Preview")
         self.assertContains(admin_review_page, "Ada Student")
         self.assertContains(admin_review_page, "90.00")
         self.assertContains(admin_review_page, "Checked")

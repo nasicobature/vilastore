@@ -300,6 +300,76 @@ def _results_for_submission(submission):
     return Result.objects.filter(filters).select_related('student').order_by('student__full_name')
 
 
+def _results_for_report_scope(institution, academic_class, academic_session, academic_term, session_name='', term_name=''):
+    filters = Q(institution=institution, academic_class=academic_class)
+    if academic_session:
+        filters &= Q(academic_session=academic_session)
+    elif session_name:
+        filters &= Q(session=session_name)
+    if academic_term:
+        filters &= Q(academic_term=academic_term)
+    elif term_name:
+        filters &= Q(term=term_name)
+    return Result.objects.filter(filters).select_related('student', 'subject', 'academic_class', 'academic_session', 'academic_term').order_by('student__full_name', 'subject__name')
+
+
+def _report_card_previews_for_submission(submission):
+    if not submission:
+        return []
+
+    students = Student.objects.filter(
+        institution=submission.institution,
+        academic_class=submission.academic_class,
+    ).order_by('full_name')
+    results = list(_results_for_report_scope(
+        submission.institution,
+        submission.academic_class,
+        submission.academic_session,
+        submission.academic_term,
+        submission.session,
+        submission.term,
+    ))
+    results_by_student = {}
+    totals = {}
+    for result in results:
+        results_by_student.setdefault(result.student_id, []).append(result)
+        totals[result.student_id] = totals.get(result.student_id, Decimal('0.00')) + result.total
+
+    ranked_ids = sorted(totals, key=lambda student_id: totals[student_id], reverse=True)
+    positions = {}
+    last_score = None
+    last_rank = 0
+    for index, student_id in enumerate(ranked_ids, start=1):
+        score = totals[student_id]
+        if last_score is None or score != last_score:
+            last_rank = index
+            last_score = score
+        positions[student_id] = _ordinal(last_rank)
+
+    previews = []
+    for student in students:
+        student_results = results_by_student.get(student.id, [])
+        total = totals.get(student.id, Decimal('0.00'))
+        count = len(student_results)
+        average = (total / Decimal(count)).quantize(Decimal('0.01')) if count else Decimal('0.00')
+        previews.append({
+            'student': student,
+            'results': student_results,
+            'total': total,
+            'average': average,
+            'position': positions.get(student.id, '-'),
+            'academic_class': submission.academic_class,
+            'session': submission.session,
+            'term': submission.term,
+            'teacher_comment': submission.teacher_comment,
+            'examiner_comment': submission.examiner_comment,
+            'admin_comment': submission.admin_comment,
+            'approval_status': submission.get_status_display(),
+            'is_preview': True,
+        })
+    return previews
+
+
 def _get_secondary_accountant_profile(request):
     profile = getattr(request.user, 'profile', None)
     if not profile or profile.institution_type != 'secondary' or profile.role != 'accountant':
@@ -1861,6 +1931,7 @@ def secondary_page(request, role, page):
     admin_result_submissions = ResultSubmission.objects.none()
     selected_admin_submission = None
     admin_review_results = Result.objects.none()
+    admin_report_previews = []
     term_map = {}
     for term_obj in terms:
         term_map.setdefault(term_obj.session_id, []).append({
@@ -1870,6 +1941,7 @@ def secondary_page(request, role, page):
     examiner_submissions = ResultSubmission.objects.none()
     examiner_results = Result.objects.none()
     selected_submission = None
+    examiner_report_previews = []
     result_sheet_rows = []
     result_sheet_class = None
     result_sheet_session = ''
@@ -1885,6 +1957,7 @@ def secondary_page(request, role, page):
     student_report_position = ''
     student_report_submission = None
     student_report_first_result = None
+    student_report_card = None
     student_class_rows = []
     selected_student_class = None
     selected_class_subjects = Subject.objects.none()
@@ -1894,6 +1967,7 @@ def secondary_page(request, role, page):
     selected_class_report_position = ''
     selected_class_report_submission = None
     selected_class_first_result = None
+    selected_class_report_card = None
     student_payments = Payment.objects.none()
     student_fee_rows = []
     student_fee_total = Decimal('0.00')
@@ -1919,6 +1993,7 @@ def secondary_page(request, role, page):
             selected_admin_submission = admin_result_submissions.first()
         if selected_admin_submission:
             admin_review_results = _results_for_submission(selected_admin_submission)
+            admin_report_previews = _report_card_previews_for_submission(selected_admin_submission)
 
     if role == 'teacher':
         staff = Staff.objects.filter(user=request.user, institution=institution).first()
@@ -2020,6 +2095,21 @@ def secondary_page(request, role, page):
                         if item['student_id'] == student_record.id:
                             student_report_position = _ordinal(index)
                             break
+                    student_report_card = {
+                        'student': student_record,
+                        'results': student_report_results,
+                        'total': student_report_total,
+                        'average': student_report_average,
+                        'position': student_report_position or '-',
+                        'academic_class': first_result.academic_class,
+                        'session': first_result.session,
+                        'term': first_result.term,
+                        'teacher_comment': student_report_submission.teacher_comment if student_report_submission else '',
+                        'examiner_comment': student_report_submission.examiner_comment if student_report_submission else '',
+                        'admin_comment': student_report_submission.admin_comment if student_report_submission else '',
+                        'approval_status': student_report_submission.get_status_display() if student_report_submission else 'Published',
+                        'is_preview': False,
+                    }
             class_entries = {}
             if student_record.academic_class:
                 class_entries[(student_record.academic_class_id, student_record.academic_class.academic_session_id, student_record.academic_class.academic_term_id)] = {
@@ -2130,6 +2220,21 @@ def secondary_page(request, role, page):
                         if item['student_id'] == student_record.id:
                             selected_class_report_position = _ordinal(index)
                             break
+                    selected_class_report_card = {
+                        'student': student_record,
+                        'results': selected_class_results,
+                        'total': selected_class_report_total,
+                        'average': selected_class_report_average,
+                        'position': selected_class_report_position or '-',
+                        'academic_class': selected_class,
+                        'session': selected_session.name if selected_session else '',
+                        'term': selected_term.get_term_display() if selected_term else '',
+                        'teacher_comment': selected_class_report_submission.teacher_comment if selected_class_report_submission else '',
+                        'examiner_comment': selected_class_report_submission.examiner_comment if selected_class_report_submission else '',
+                        'admin_comment': selected_class_report_submission.admin_comment if selected_class_report_submission else '',
+                        'approval_status': selected_class_report_submission.get_status_display() if selected_class_report_submission else 'Published',
+                        'is_preview': False,
+                    }
             student_payments = Payment.objects.filter(
                 institution=institution,
                 student=student_record,
@@ -2163,6 +2268,7 @@ def secondary_page(request, role, page):
             selected_submission = examiner_submissions.filter(id=submission_id).first()
             if selected_submission:
                 examiner_results = _results_for_submission(selected_submission)
+                examiner_report_previews = _report_card_previews_for_submission(selected_submission)
         result_sheet_class_id = request.GET.get('class')
         result_sheet_session = request.GET.get('session', '').strip()
         result_sheet_term = request.GET.get('term', '').strip()
@@ -2278,9 +2384,11 @@ def secondary_page(request, role, page):
         'admin_result_submissions': admin_result_submissions,
         'selected_admin_submission': selected_admin_submission,
         'admin_review_results': admin_review_results,
+        'admin_report_previews': admin_report_previews,
         'examiner_submissions': examiner_submissions,
         'examiner_results': examiner_results,
         'selected_submission': selected_submission,
+        'examiner_report_previews': examiner_report_previews,
         'result_sheet_rows': result_sheet_rows,
         'result_sheet_class': result_sheet_class,
         'result_sheet_session': result_sheet_session,
@@ -2296,6 +2404,7 @@ def secondary_page(request, role, page):
         'student_report_position': student_report_position,
         'student_report_submission': student_report_submission,
         'student_report_first_result': student_report_first_result,
+        'student_report_card': student_report_card,
         'student_class_rows': student_class_rows,
         'selected_student_class': selected_student_class,
         'selected_class_subjects': selected_class_subjects,
@@ -2305,6 +2414,7 @@ def secondary_page(request, role, page):
         'selected_class_report_position': selected_class_report_position,
         'selected_class_report_submission': selected_class_report_submission,
         'selected_class_first_result': selected_class_first_result,
+        'selected_class_report_card': selected_class_report_card,
         'student_payments': student_payments,
         'student_fee_rows': student_fee_rows,
         'student_fee_total': student_fee_total,

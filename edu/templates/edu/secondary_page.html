@@ -1102,6 +1102,14 @@
       {% endif %}
 
       {% if active_page == 'approve-results' and role == 'admin' %}
+        <style>
+          @media print {
+            body * { visibility: hidden; }
+            .report-preview-print, .report-preview-print * { visibility: visible; }
+            .report-preview-print { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none !important; }
+          }
+        </style>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div class="bg-card rounded-xl border border-border overflow-hidden lg:col-span-1">
             <div class="flex items-center justify-between p-4 border-b border-border">
@@ -1193,6 +1201,25 @@
                   </table>
                 </div>
               </div>
+
+              <div class="space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h4 class="font-display font-semibold">Report Card Template Preview</h4>
+                    <p class="text-xs text-muted-foreground">Preview the final printable report card before publishing it to students.</p>
+                  </div>
+                  <button type="button" class="no-print inline-flex items-center justify-center gap-2 rounded-lg bg-secondary text-secondary-foreground px-4 py-2.5 text-sm font-medium hover:bg-secondary/80 transition-colors" data-print-student-ids>
+                    Print Preview
+                  </button>
+                </div>
+                <div class="report-preview-print space-y-5">
+                  {% for card in admin_report_previews %}
+                    {% include 'edu/partials/report_card.html' with card=card %}
+                  {% empty %}
+                    <div class="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">No report card preview is available yet.</div>
+                  {% endfor %}
+                </div>
+              </div>
             {% else %}
               <div class="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">No result submission is ready for Admin review.</div>
             {% endif %}
@@ -1231,6 +1258,14 @@
       {% endif %}
 
       {% if active_page == 'review-results' and role == 'examiner' %}
+        <style>
+          @media print {
+            body * { visibility: hidden; }
+            .report-preview-print, .report-preview-print * { visibility: visible; }
+            .report-preview-print { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none !important; }
+          }
+        </style>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div class="bg-card rounded-xl border border-border overflow-hidden lg:col-span-1">
             <div class="flex items-center justify-between p-4 border-b border-border">
@@ -1327,6 +1362,25 @@
                       {% endfor %}
                     </tbody>
                   </table>
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h4 class="font-display font-semibold">Report Card Template Preview</h4>
+                    <p class="text-xs text-muted-foreground">Preview the printable report card before sending the result to Admin.</p>
+                  </div>
+                  <button type="button" class="no-print inline-flex items-center justify-center gap-2 rounded-lg bg-secondary text-secondary-foreground px-4 py-2.5 text-sm font-medium hover:bg-secondary/80 transition-colors" data-print-student-ids>
+                    Print Preview
+                  </button>
+                </div>
+                <div class="report-preview-print space-y-5">
+                  {% for card in examiner_report_previews %}
+                    {% include 'edu/partials/report_card.html' with card=card %}
+                  {% empty %}
+                    <div class="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">No report card preview is available yet.</div>
+                  {% endfor %}
                 </div>
               </div>
             {% endif %}
@@ -1826,56 +1880,12 @@
               .no-print { display: none !important; }
             }
           </style>
-          <div class="bg-card rounded-xl border border-border p-5 space-y-4 report-card-print">
-            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div>
-                <h3 class="font-display font-semibold text-xl">{{ user.profile.institution.name }}</h3>
-                <p class="text-sm text-muted-foreground">Student Report Card</p>
-              </div>
+          <div class="space-y-4">
+            <div class="flex justify-end">
               <button type="button" class="no-print inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors" data-print-student-ids>Print / Download</button>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-              <div><span class="text-muted-foreground">Student:</span> {{ student_record.full_name }}</div>
-              <div><span class="text-muted-foreground">Admission No:</span> {{ student_record.student_id }}</div>
-              <div><span class="text-muted-foreground">Class:</span> {{ student_record.academic_class.name }}</div>
-              <div><span class="text-muted-foreground">Session:</span> {{ student_report_first_result.session }}</div>
-              <div><span class="text-muted-foreground">Term:</span> {{ student_report_first_result.term }}</div>
-              <div><span class="text-muted-foreground">Position:</span> {{ student_report_position|default:"-" }}</div>
-            </div>
-            <div class="overflow-x-auto rounded-xl border border-border">
-              <table class="w-full">
-                <thead>
-                  <tr class="bg-muted/50">
-                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
-                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 1</th>
-                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 2</th>
-                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Assignment</th>
-                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Exam</th>
-                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Total</th>
-                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Grade</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-border">
-                  {% for result in student_report_results %}
-                    <tr>
-                      <td class="px-4 py-3 text-sm">{{ result.subject.name }}</td>
-                      <td class="px-4 py-3 text-sm">{{ result.test1 }}</td>
-                      <td class="px-4 py-3 text-sm">{{ result.test2 }}</td>
-                      <td class="px-4 py-3 text-sm">{{ result.assignment }}</td>
-                      <td class="px-4 py-3 text-sm">{{ result.exam }}</td>
-                      <td class="px-4 py-3 text-sm">{{ result.total }}</td>
-                      <td class="px-4 py-3 text-sm">{{ result.grade }}</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-              <div><span class="text-muted-foreground">Total Score:</span> {{ student_report_total }}</div>
-              <div><span class="text-muted-foreground">Average:</span> {{ student_report_average }}</div>
-              <div><span class="text-muted-foreground">Approval:</span> {{ student_report_submission.get_status_display|default:"Published" }}</div>
-              <div class="md:col-span-3"><span class="text-muted-foreground">Teacher Comment:</span> {{ student_report_submission.teacher_comment|default:"-" }}</div>
-              <div class="md:col-span-3"><span class="text-muted-foreground">Examiner/Admin:</span> {{ student_report_submission.examiner_comment|default:"Approved" }} / {{ student_report_submission.admin_comment|default:"Approved" }}</div>
+            <div class="report-card-print">
+              {% include 'edu/partials/report_card.html' with card=student_report_card %}
             </div>
           </div>
         {% else %}
