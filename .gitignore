@@ -1,0 +1,27 @@
+# Python / Django
+__pycache__/
+*.py[cod]
+*.sqlite3
+db.sqlite3
+.env
+.venv/
+venv/
+env/
+
+# Django runtime files
+media/
+staticfiles/
+
+# Node / Vite
+node_modules/
+dist/
+.vite/
+.env.local
+.env.*.local
+
+# Tooling and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
