@@ -1,8 +1,12 @@
+from datetime import timedelta
+
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 
-from .models import Institution, Profile
+from .models import AcademicClass, AcademicSession, AcademicTerm, Fee, Institution, Payment, Profile, Student
 
 
 class EduPortalRoutingTests(TestCase):
@@ -94,3 +98,90 @@ class EduPortalVerificationRegistrationTests(TestCase):
         self.assertFalse(profile.is_approved)
         self.assertTrue(institution.cac_certificate)
         self.assertTrue(institution.owner_valid_id)
+
+
+class EduPortalFeesTests(TestCase):
+    def setUp(self):
+        self.institution = Institution.objects.create(
+            name="Fees Academy",
+            institution_type="secondary",
+            verification_status="approved",
+        )
+        self.accountant = get_user_model().objects.create_user(
+            username="acct",
+            password="StrongPass123!",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        profile = self.accountant.profile
+        profile.institution = self.institution
+        profile.institution_type = "secondary"
+        profile.role = "accountant"
+        profile.is_approved = True
+        profile.save()
+        self.client.force_login(self.accountant)
+        self.academic_class = AcademicClass.objects.create(
+            institution=self.institution,
+            name="JSS1",
+            level=1,
+        )
+        self.student = Student.objects.create(
+            institution=self.institution,
+            full_name="Ada Student",
+            student_id="FA/2026/001",
+            academic_class=self.academic_class,
+        )
+
+    def test_school_can_add_current_session_and_term(self):
+        admin = get_user_model().objects.create_user(
+            username="admin",
+            password="StrongPass123!",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        admin.profile.institution = self.institution
+        admin.profile.institution_type = "secondary"
+        admin.profile.role = "admin"
+        admin.profile.is_approved = True
+        admin.profile.save()
+        self.client.force_login(admin)
+
+        response = self.client.post(reverse("edu:secondary_add_session_term"), {
+            "session_name": "2026/2027",
+            "term": "first",
+            "is_current": "on",
+        })
+
+        self.assertRedirects(response, reverse("edu:secondary_page", kwargs={"role": "admin", "page": "sessions"}))
+        session = AcademicSession.objects.get(institution=self.institution, name="2026/2027")
+        term = AcademicTerm.objects.get(session=session, term="first")
+        self.assertTrue(session.is_current)
+        self.assertTrue(term.is_current)
+
+    def test_accountant_can_create_class_fee_and_record_payment(self):
+        response = self.client.post(reverse("edu:secondary_create_fee"), {
+            "name": "First Term Tuition",
+            "fee_type": "Tuition",
+            "amount": "15000",
+            "session": "2026/2027",
+            "term": "First Term",
+            "classes": [str(self.academic_class.id)],
+        })
+
+        self.assertRedirects(response, reverse("edu:secondary_page", kwargs={"role": "accountant", "page": "fees"}))
+        fee = Fee.objects.get(institution=self.institution, name="First Term Tuition")
+        self.assertEqual(fee.classes.count(), 1)
+
+        response = self.client.post(reverse("edu:secondary_record_payment"), {
+            "fee": str(fee.id),
+            "student": str(self.student.id),
+            "amount": "10000",
+            "status": "Paid",
+        })
+
+        self.assertRedirects(response, reverse("edu:secondary_page", kwargs={"role": "accountant", "page": "fees"}))
+        payment = Payment.objects.get(institution=self.institution, fee=fee, student=self.student)
+        self.assertEqual(str(payment.amount), "10000.00")
+        self.assertEqual(payment.status, "Paid")
+
+        page = self.client.get(reverse("edu:secondary_page", kwargs={"role": "accountant", "page": "fees"}))
+        self.assertContains(page, "₦10000.00")
+        self.assertContains(page, "₦5000.00")

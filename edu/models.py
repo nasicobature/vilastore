@@ -234,6 +234,7 @@ class Fee(models.Model):
 
 class Payment(models.Model):
     institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='payments')
+    fee = models.ForeignKey(Fee, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
     student = models.ForeignKey(Student, on_delete=models.SET_NULL, null=True, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=20, default='Paid')

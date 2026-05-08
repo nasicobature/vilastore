@@ -20,6 +20,7 @@ urlpatterns = [
     path('secondary/classes/subjects/remove/', views.secondary_remove_class_subject, name='secondary_remove_class_subject'),
     path('secondary/fees/create/', views.secondary_create_fee, name='secondary_create_fee'),
     path('secondary/fees/<int:fee_id>/delete/', views.secondary_delete_fee, name='secondary_delete_fee'),
+    path('secondary/payments/record/', views.secondary_record_payment, name='secondary_record_payment'),
     path('secondary/payment/settings/', views.secondary_payment_settings, name='secondary_payment_settings'),
     path('secondary/teacher/scores/save/', views.secondary_save_scores, name='secondary_save_scores'),
     path('secondary/teacher/results/submit/', views.secondary_submit_results, name='secondary_submit_results'),

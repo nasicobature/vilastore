@@ -1129,20 +1129,20 @@
         <div class="bg-card rounded-xl border border-border p-5">
           <div class="flex items-center justify-between mb-4">
             <h3 class="font-display font-semibold">Fees Summary</h3>
-            <button class="text-sm text-muted-foreground hover:text-foreground">Record Payment</button>
+            <span class="text-sm text-muted-foreground">Expected: ₦{{ fees_expected|floatformat:2 }}</span>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <p class="text-sm text-muted-foreground">Collected</p>
-              <p class="text-xl font-display font-bold">?{{ fees_total|floatformat:2 }}</p>
+              <p class="text-xl font-display font-bold">₦{{ fees_total|floatformat:2 }}</p>
             </div>
             <div>
               <p class="text-sm text-muted-foreground">Outstanding</p>
-              <p class="text-xl font-display font-bold">?{{ fees_pending|floatformat:2 }}</p>
+              <p class="text-xl font-display font-bold">₦{{ fees_pending|floatformat:2 }}</p>
             </div>
             <div>
-              <p class="text-sm text-muted-foreground">Receipts</p>
-              <p class="text-xl font-display font-bold">{{ students|length }}</p>
+              <p class="text-sm text-muted-foreground">Recent Payments</p>
+              <p class="text-xl font-display font-bold">{{ payments|length }}</p>
             </div>
           </div>
         </div>
@@ -1223,7 +1223,7 @@
                     <tr class="hover:bg-muted/30 transition-colors">
                       <td class="px-4 py-3 text-sm">{{ fee.name }}</td>
                       <td class="px-4 py-3 text-sm">{{ fee.fee_type|default:"-" }}</td>
-                      <td class="px-4 py-3 text-sm">?{{ fee.amount }}</td>
+                      <td class="px-4 py-3 text-sm">₦{{ fee.amount }}</td>
                       <td class="px-4 py-3 text-sm">{% if fee.due_date %}{{ fee.due_date }}{% else %}-{% endif %}</td>
                       <td class="px-4 py-3 text-sm">
                         {% if fee.applies_to_all %}
@@ -1245,6 +1245,82 @@
                     </tr>
                   {% empty %}
                     <tr><td colspan="6" class="px-4 py-3 text-sm">No fees yet.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="font-display font-semibold">Record Student Payment</h3>
+              <span class="text-xs text-muted-foreground">Accountant access</span>
+            </div>
+            <form method="post" action="/edu/secondary/payments/record/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {% csrf_token %}
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Fee *</label>
+                <select name="fee" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">Select Fee</option>
+                  {% for fee in fees %}
+                    <option value="{{ fee.id }}">{{ fee.name }} - ₦{{ fee.amount }} {% if fee.session %}({{ fee.session }}{% if fee.term %}, {{ fee.term }}{% endif %}){% endif %}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Student *</label>
+                <select name="student" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">Select Student</option>
+                  {% for student in students_all %}
+                    <option value="{{ student.id }}">{{ student.full_name }} - {{ student.student_id }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Amount *</label>
+                <input type="number" step="0.01" name="amount" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Status</label>
+                <select name="status" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="Paid">Paid</option>
+                  <option value="Pending">Pending</option>
+                </select>
+              </div>
+              <div class="md:col-span-2">
+                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                  Record Payment
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border overflow-hidden">
+            <div class="flex items-center justify-between p-4 border-b border-border">
+              <h3 class="font-display font-semibold">Recent Payments</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="bg-muted/50">
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Student</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Fee</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Amount</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Status</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Date</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  {% for payment in payments %}
+                    <tr class="hover:bg-muted/30 transition-colors">
+                      <td class="px-4 py-3 text-sm">{% if payment.student %}{{ payment.student.full_name }}{% else %}-{% endif %}</td>
+                      <td class="px-4 py-3 text-sm">{% if payment.fee %}{{ payment.fee.name }}{% else %}-{% endif %}</td>
+                      <td class="px-4 py-3 text-sm">₦{{ payment.amount }}</td>
+                      <td class="px-4 py-3 text-sm">{{ payment.status }}</td>
+                      <td class="px-4 py-3 text-sm">{{ payment.paid_at|date:"M j, Y" }}</td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="5" class="px-4 py-3 text-sm">No payments recorded yet.</td></tr>
                   {% endfor %}
                 </tbody>
               </table>
@@ -1296,4 +1372,3 @@
   </div>
 </div>
 {% endblock %}
-

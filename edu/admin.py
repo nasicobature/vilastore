@@ -142,8 +142,8 @@ class FeeAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ('student', 'institution', 'amount', 'status', 'paid_at')
-    list_filter = ('institution', 'status')
+    list_display = ('student', 'fee', 'institution', 'amount', 'status', 'paid_at')
+    list_filter = ('institution', 'fee', 'status')
 
 
 @admin.register(Result)

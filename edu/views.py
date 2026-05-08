@@ -159,6 +159,37 @@ def _missing_verification_requirements(request):
     return missing, uploads
 
 
+def _fee_student_queryset(fee):
+    students = Student.objects.filter(institution=fee.institution)
+    if fee.applies_to_all:
+        return students
+
+    class_ids = list(fee.classes.values_list('id', flat=True))
+    if class_ids:
+        return students.filter(academic_class_id__in=class_ids)
+
+    if fee.academic_class_id:
+        return students.filter(academic_class=fee.academic_class)
+
+    return students.none()
+
+
+def _school_fee_summary(institution):
+    fees = Fee.objects.filter(institution=institution).prefetch_related('classes', 'departments')
+    expected_total = sum(fee.amount * _fee_student_queryset(fee).count() for fee in fees)
+    paid_total = Payment.objects.filter(institution=institution, status='Paid').aggregate(total=Sum('amount'))['total'] or 0
+    pending_total = Payment.objects.filter(institution=institution, status='Pending').aggregate(total=Sum('amount'))['total'] or 0
+    outstanding = expected_total - paid_total
+    if outstanding < 0:
+        outstanding = 0
+    return {
+        'expected_total': expected_total,
+        'paid_total': paid_total,
+        'pending_total': pending_total,
+        'outstanding_total': outstanding + pending_total,
+    }
+
+
 def _ordinal(value):
     try:
         number = int(value)
@@ -606,6 +637,45 @@ def secondary_delete_fee(request, fee_id):
     if request.method == 'POST':
         Fee.objects.filter(id=fee_id, institution=creator_profile.institution).delete()
         messages.success(request, 'Fee deleted.')
+    return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+
+@login_required
+def secondary_record_payment(request):
+    creator_profile = getattr(request.user, 'profile', None)
+    if not creator_profile or creator_profile.institution_type != 'secondary' or creator_profile.role != 'accountant':
+        messages.error(request, 'Only Accountants can record payments.')
+        return redirect('edu:secondary_dashboard', role=creator_profile.role if creator_profile else 'accountant')
+
+    if request.method == 'POST':
+        fee_id = request.POST.get('fee')
+        student_id = request.POST.get('student')
+        amount = request.POST.get('amount', '').strip()
+        status = request.POST.get('status', 'Paid').strip() or 'Paid'
+        fee = Fee.objects.filter(id=fee_id, institution=creator_profile.institution).first()
+        student = Student.objects.filter(id=student_id, institution=creator_profile.institution).first()
+
+        if not fee or not student or not amount:
+            messages.error(request, 'Fee, student, and amount are required.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+        if status not in ['Paid', 'Pending']:
+            status = 'Paid'
+
+        eligible_students = _fee_student_queryset(fee)
+        if not eligible_students.filter(id=student.id).exists():
+            messages.error(request, 'Selected fee does not apply to this student.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+        Payment.objects.create(
+            institution=creator_profile.institution,
+            fee=fee,
+            student=student,
+            amount=amount,
+            status=status,
+        )
+        messages.success(request, 'Payment recorded.')
+
     return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
 
 
@@ -1299,9 +1369,11 @@ def secondary_page(request, role, page):
 
     institution = profile.institution
     students = Student.objects.filter(institution=institution).select_related('academic_class')[:5]
-    fees_total = Payment.objects.filter(institution=institution, status='Paid').aggregate(total=Sum('amount'))['total'] or 0
-    fees_pending = Payment.objects.filter(institution=institution, status='Pending').aggregate(total=Sum('amount'))['total'] or 0
+    fee_summary = _school_fee_summary(institution)
+    fees_total = fee_summary['paid_total']
+    fees_pending = fee_summary['outstanding_total']
     fees = Fee.objects.filter(institution=institution).prefetch_related('classes', 'departments').order_by('-id')
+    payments = Payment.objects.filter(institution=institution).select_related('student', 'fee').order_by('-paid_at')[:20]
 
     stats = [
         {"label": "Total Students", "value": str(Student.objects.filter(institution=institution).count())},
@@ -1480,7 +1552,9 @@ def secondary_page(request, role, page):
         'class_subject_map': class_subject_map,
         'fees_total': fees_total,
         'fees_pending': fees_pending,
+        'fees_expected': fee_summary['expected_total'],
         'fees': fees,
+        'payments': payments,
         'pending_profiles': pending_profiles,
         'role_options': SECONDARY_ROLES,
         'classes': AcademicClass.objects.filter(institution=institution),
