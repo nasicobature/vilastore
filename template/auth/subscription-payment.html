@@ -25,7 +25,7 @@
         <div class="auth-features">
           <div class="auth-feature">
             <i data-lucide="shield-check"></i>
-            <span>Secure Paystack checkout</span>
+            <span>Secure Flutterwave checkout</span>
           </div>
           <div class="auth-feature">
             <i data-lucide="clock"></i>
@@ -89,11 +89,14 @@
   </div>
 
   <script>
-    window.PAYSTACK_PUBLIC_KEY = "{{ PAYSTACK_PUBLIC_KEY|default:''|escapejs }}";
+    window.FLUTTERWAVE_PUBLIC_KEY = "{{ FLUTTERWAVE_PUBLIC_KEY|default:''|escapejs }}";
     window.SUBSCRIPTION_EMAIL = "{{ subscription_email|default:''|escapejs }}";
-    window.SUBSCRIPTION_AMOUNT_KOBO = {{ amount_due_kobo|default:0 }};
+    window.SUBSCRIPTION_AMOUNT = {{ amount_due|default:0 }};
+    window.SUBSCRIPTION_CUSTOMER_NAME = "{{ subscription_customer_name|default:'VilaStore customer'|escapejs }}";
+    window.SUBSCRIPTION_PHONE = "{{ subscription_phone|default:''|escapejs }}";
+    window.SUBSCRIPTION_DESCRIPTION = "{{ plan.name|default:'VilaStore'|escapejs }} plan payment";
   </script>
-  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
   <script src="{% static 'js/subscription.js' %}?v=20260303"></script>
 </body>
 </html>

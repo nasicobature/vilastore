@@ -372,9 +372,10 @@
   <script>
     window.CURRENT_STEP = parseInt('{{ current_step|default:"1" }}', 10);
     window.EMAIL_VERIFIED = {{ email_verified|yesno:"true,false" }};
-    window.PAYSTACK_PUBLIC_KEY = "{{ PAYSTACK_PUBLIC_KEY|default:''|escapejs }}";
+    window.FLUTTERWAVE_PUBLIC_KEY = "{{ FLUTTERWAVE_PUBLIC_KEY|default:''|escapejs }}";
     window.SIGNUP_EMAIL = "{{ prefill_email|default:''|escapejs }}";
   </script>
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
   <script src="{% static 'js/storage.js' %}"></script>
   <script src="{% static 'js/utils.js' %}"></script>
   <script src="{% static 'js/auth.js' %}?v=20260303"></script>

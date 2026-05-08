@@ -7,9 +7,9 @@ function notify(message) {
 }
 
 function startSubscriptionPayment() {
-    const paystackKey = (window.PAYSTACK_PUBLIC_KEY || "").trim();
-    if (!paystackKey) {
-        notify("Paystack public key is missing. Please configure PAYSTACK_PUBLIC_KEY.");
+    const flutterwaveKey = (window.FLUTTERWAVE_PUBLIC_KEY || "").trim();
+    if (!flutterwaveKey) {
+        notify("Flutterwave public key is missing. Please configure FLUTTERWAVE_PUBLIC_KEY.");
         return;
     }
 
@@ -19,35 +19,45 @@ function startSubscriptionPayment() {
         return;
     }
 
-    const amount = Number(window.SUBSCRIPTION_AMOUNT_KOBO || 0);
+    const amount = Number(window.SUBSCRIPTION_AMOUNT || 0);
     if (!amount || amount <= 0) {
         notify("Payment amount is missing.");
         return;
     }
 
-    if (typeof PaystackPop === "undefined" || typeof PaystackPop.setup !== "function") {
-        notify("Paystack library not loaded.");
+    if (typeof FlutterwaveCheckout !== "function") {
+        notify("Flutterwave checkout library not loaded.");
         return;
     }
 
-    const handler = PaystackPop.setup({
-        key: paystackKey,
-        email: email,
+    const txRef = `VILASTORE-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    FlutterwaveCheckout({
+        public_key: flutterwaveKey,
+        tx_ref: txRef,
         amount: amount,
         currency: "NGN",
+        payment_options: "card,banktransfer,ussd",
+        customer: {
+            email: email,
+            name: window.SUBSCRIPTION_CUSTOMER_NAME || "VilaStore customer",
+            phone_number: window.SUBSCRIPTION_PHONE || "",
+        },
+        customizations: {
+            title: "VilaStore Subscription",
+            description: window.SUBSCRIPTION_DESCRIPTION || "Subscription payment",
+            logo: window.VILASTORE_LOGO_URL || "",
+        },
         callback: function (response) {
             const refInput = document.getElementById("subscriptionPaymentReference");
             if (refInput) {
-                refInput.value = response.reference || "";
+                refInput.value = response.transaction_id || response.id || "";
             }
             document.getElementById("subscriptionPaymentForm")?.submit();
         },
-        onClose: function () {
+        onclose: function () {
             notify("Payment was cancelled.");
         }
     });
-
-    handler.openIframe();
 }
 
 document.addEventListener("DOMContentLoaded", function () {

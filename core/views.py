@@ -2,6 +2,7 @@ from django.shortcuts import render,redirect
 from django.urls import reverse
 from django.conf import settings as django_settings
 import requests
+import os
 from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -2539,6 +2540,22 @@ def _plan_limit_message(limit_name, plan_name):
     return f"Your {plan_name} plan has reached its {limit_name} limit. Upgrade your plan to add more."
 
 
+def _flutterwave_public_key():
+    return (
+        getattr(django_settings, "FLUTTERWAVE_PUBLIC_KEY", "")
+        or os.getenv("FLUTTERWAVE_PUBLIC_KEY", "")
+        or "a2b97709-9d73-42ec-a850-766eda997e6b"
+    ).strip()
+
+
+def _flutterwave_secret_key():
+    return (
+        getattr(django_settings, "FLUTTERWAVE_SECRET_KEY", "")
+        or os.getenv("FLUTTERWAVE_SECRET_KEY", "")
+        or os.getenv("FLUTTERWAVE_CLIENT_SECRET", "")
+    ).strip()
+
+
 def _accounts_for_identifier(identifier):
     identity = (identifier or "").strip()
     if not identity:
@@ -2917,7 +2934,7 @@ def signup(request):
         current_step = default_step
 
     return render(request, "auth/signup.html", {
-        "PAYSTACK_PUBLIC_KEY": getattr(django_settings, "PAYSTACK_PUBLIC_KEY", ""),
+        "FLUTTERWAVE_PUBLIC_KEY": _flutterwave_public_key(),
         "current_step": current_step,
         "email_verified": bool(signup_user and signup_user.is_email_verified),
         "prefill_ref_code": (
@@ -3073,7 +3090,7 @@ def housing_signup(request):
         current_step = default_step
 
     return render(request, "auth/signup.html", {
-        "PAYSTACK_PUBLIC_KEY": getattr(django_settings, "PAYSTACK_PUBLIC_KEY", ""),
+        "FLUTTERWAVE_PUBLIC_KEY": _flutterwave_public_key(),
         "current_step": current_step,
         "email_verified": bool(signup_user and signup_user.is_email_verified),
         "prefill_ref_code": (
@@ -3782,15 +3799,15 @@ def subscription_payment(request):
             messages.error(request, "Payment reference is missing. Complete payment to continue.")
             return redirect("subscription_payment")
 
-        paystack_secret = (getattr(django_settings, "PAYSTACK_SECRET_KEY", "") or "").strip()
-        if not paystack_secret:
-            messages.error(request, "Paystack secret key is not configured.")
+        flutterwave_secret = _flutterwave_secret_key()
+        if not flutterwave_secret:
+            messages.error(request, "Flutterwave secret key is not configured.")
             return redirect("subscription_payment")
 
         try:
             verify_response = requests.get(
-                f"https://api.paystack.co/transaction/verify/{payment_reference}",
-                headers={"Authorization": f"Bearer {paystack_secret}"},
+                f"https://api.flutterwave.com/v3/transactions/{payment_reference}/verify",
+                headers={"Authorization": f"Bearer {flutterwave_secret}"},
                 timeout=15,
             )
             verify_payload = verify_response.json()
@@ -3800,22 +3817,26 @@ def subscription_payment(request):
 
         tx_data = verify_payload.get("data") or {}
         tx_status = (tx_data.get("status") or "").strip().lower()
-        if not verify_payload.get("status") or tx_status != "success":
+        if (verify_payload.get("status") or "").strip().lower() != "success" or tx_status != "successful":
             messages.error(request, "Payment was not successful.")
             return redirect("subscription_payment")
 
-        expected_amount_kobo = amount_due * 100
         try:
-            paid_amount_kobo = int(tx_data.get("amount") or 0)
-        except (TypeError, ValueError):
-            paid_amount_kobo = 0
-        if paid_amount_kobo < expected_amount_kobo:
+            paid_amount = Decimal(str(tx_data.get("amount") or "0"))
+        except Exception:
+            paid_amount = Decimal("0.00")
+        if paid_amount < amount_due:
             messages.error(request, "Paid amount does not match the required subscription fee.")
             return redirect("subscription_payment")
 
+        currency = (tx_data.get("currency") or "").strip().upper()
+        if currency and currency != "NGN":
+            messages.error(request, "Payment currency does not match the required currency.")
+            return redirect("subscription_payment")
+
         customer = tx_data.get("customer") or {}
-        paystack_email = (customer.get("email") or "").strip().lower()
-        if paystack_email and paystack_email != (user.email or "").strip().lower():
+        flutterwave_email = (customer.get("email") or "").strip().lower()
+        if flutterwave_email and flutterwave_email != (user.email or "").strip().lower():
             messages.error(request, "Payment email does not match your account email.")
             return redirect("subscription_payment")
 
@@ -3837,9 +3858,8 @@ def subscription_payment(request):
         return redirect("index")
 
     context = {
-        "PAYSTACK_PUBLIC_KEY": getattr(django_settings, "PAYSTACK_PUBLIC_KEY", ""),
+        "FLUTTERWAVE_PUBLIC_KEY": _flutterwave_public_key(),
         "amount_due": amount_due,
-        "amount_due_kobo": amount_due * 100,
         "registration_due": registration_due,
         "base_fee": registration_fee,
         "monthly_fee": monthly_fee,
@@ -3847,6 +3867,8 @@ def subscription_payment(request):
         "plan": plan,
         "subscription_active_until": user.subscription_active_until,
         "subscription_email": user.email,
+        "subscription_customer_name": user.get_full_name() or user.username or "VilaStore customer",
+        "subscription_phone": user.phone or "",
     }
     return render(request, "auth/subscription-payment.html", context)
 

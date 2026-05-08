@@ -43,10 +43,10 @@ function getPlanAmount(plan) {
     return prices[plan] || prices.starter;
 }
 
-function startPaystackPayment() {
-    const paystackKey = (window.PAYSTACK_PUBLIC_KEY || "pk_test_66cf9af7a9821d093c1d2c8d6f65e8f8f238b994").trim();
-    if (!paystackKey) {
-        notify("Paystack public key is missing. Please configure PAYSTACK_PUBLIC_KEY.");
+function startFlutterwavePayment() {
+    const flutterwaveKey = (window.FLUTTERWAVE_PUBLIC_KEY || "").trim();
+    if (!flutterwaveKey) {
+        notify("Flutterwave public key is missing. Please configure FLUTTERWAVE_PUBLIC_KEY.");
         return;
     }
 
@@ -58,32 +58,41 @@ function startPaystackPayment() {
     }
 
     const plan = getSelectedPlan();
-    const amount = getPlanAmount(plan) * 100;
+    const amount = getPlanAmount(plan);
 
-    if (typeof PaystackPop === "undefined" || typeof PaystackPop.setup !== "function") {
-        notify("Paystack library not loaded.");
+    if (typeof FlutterwaveCheckout !== "function") {
+        notify("Flutterwave checkout library not loaded.");
         return;
     }
 
-    const handler = PaystackPop.setup({
-        key: paystackKey,
-        email: email,
+    const txRef = `VILASTORE-SIGNUP-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    FlutterwaveCheckout({
+        public_key: flutterwaveKey,
+        tx_ref: txRef,
         amount: amount,
         currency: "NGN",
+        payment_options: "card,banktransfer,ussd",
+        customer: {
+            email: email,
+            name: "VilaStore customer",
+        },
+        customizations: {
+            title: "VilaStore Subscription",
+            description: `${plan} plan subscription`,
+            logo: window.VILASTORE_LOGO_URL || "",
+        },
         callback: function (response) {
             const refInput = document.getElementById("paymentReferenceInput");
             if (refInput) {
-                refInput.value = response.reference || "";
+                refInput.value = response.transaction_id || response.id || "";
             }
             paymentReady = true;
             document.getElementById("shopSetupForm")?.submit();
         },
-        onClose: function () {
+        onclose: function () {
             notify("Payment was cancelled.");
         }
     });
-
-    handler.openIframe();
 }
 
 function validateAccountForm(event) {
@@ -151,3 +160,4 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 window.goToStep = goToStep;
+window.startFlutterwavePayment = startFlutterwavePayment;
