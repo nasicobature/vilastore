@@ -33,6 +33,8 @@ class Institution(models.Model):
     year_established = models.PositiveIntegerField(null=True, blank=True)
     license_number = models.CharField(max_length=100, blank=True)
     cac_number = models.CharField(max_length=100, blank=True)
+    tin_number = models.CharField(max_length=100, blank=True)
+    owner_id_number = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, default='Nigeria')
     state = models.CharField(max_length=100, blank=True)
     city = models.CharField(max_length=100, blank=True)
@@ -89,6 +91,50 @@ class Institution(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.get_institution_type_display()})"
+
+
+class InstitutionDocumentVerification(models.Model):
+    DOCUMENT_TYPE_CHOICES = [
+        ('cac_certificate', 'CAC Certificate'),
+        ('cac_status_report', 'CAC Status Report'),
+        ('ministry_approval', 'Ministry Approval'),
+        ('operating_license', 'Operating License'),
+        ('tin_certificate', 'TIN or Tax Certificate'),
+        ('school_letterhead', 'School Letterhead'),
+        ('school_stamp', 'School Stamp/Seal'),
+        ('owner_valid_id', 'Owner/Admin Valid ID'),
+        ('utility_bill', 'Utility Bill'),
+        ('proof_of_address', 'Proof of Address'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending API Check'),
+        ('api_verified', 'API Verified'),
+        ('api_failed', 'API Failed'),
+        ('manual_review', 'Manual Review'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='document_verifications')
+    document_type = models.CharField(max_length=40, choices=DOCUMENT_TYPE_CHOICES)
+    document_file = models.FileField(upload_to='institutions/document_verifications/', blank=True, null=True)
+    reference_value = models.CharField(max_length=150, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    provider = models.CharField(max_length=100, blank=True)
+    api_checked_at = models.DateTimeField(null=True, blank=True)
+    api_response = models.JSONField(default=dict, blank=True)
+    review_note = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='edu_document_reviews')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('institution', 'document_type')
+        ordering = ['institution__name', 'document_type']
+
+    def __str__(self):
+        return f"{self.institution.name} - {self.get_document_type_display()}"
 
 
 class Faculty(models.Model):

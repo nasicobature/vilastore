@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import Institution, Student, Staff, Fee, Payment, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
+from .verification import create_document_verifications
 
 SECONDARY_ROLES = [
     {"slug": "admin", "label": "Admin"},
@@ -506,6 +507,8 @@ def secondary_school_register(request):
                     year_established=request.POST.get('year_established') or None,
                     license_number=request.POST.get('license_number', '').strip(),
                     cac_number=request.POST.get('cac_number', '').strip(),
+                    tin_number=request.POST.get('tin_number', '').strip(),
+                    owner_id_number=request.POST.get('owner_id_number', '').strip(),
                     country=request.POST.get('country', 'Nigeria').strip() or 'Nigeria',
                     state=request.POST.get('state', '').strip(),
                     city=request.POST.get('city', '').strip(),
@@ -529,6 +532,7 @@ def secondary_school_register(request):
                     verification_status='pending',
                     **verification_uploads,
                 )
+                create_document_verifications(institution)
 
                 User = get_user_model()
                 admin_username = _generate_user_id(institution)
@@ -1671,6 +1675,8 @@ def tertiary_school_register(request):
                     year_established=request.POST.get('year_established') or None,
                     license_number=request.POST.get('license_number', '').strip(),
                     cac_number=request.POST.get('cac_number', '').strip(),
+                    tin_number=request.POST.get('tin_number', '').strip(),
+                    owner_id_number=request.POST.get('owner_id_number', '').strip(),
                     country=request.POST.get('country', 'Nigeria').strip() or 'Nigeria',
                     state=request.POST.get('state', '').strip(),
                     city=request.POST.get('city', '').strip(),
@@ -1696,6 +1702,7 @@ def tertiary_school_register(request):
                     verification_status='pending',
                     **verification_uploads,
                 )
+                create_document_verifications(institution)
 
                 User = get_user_model()
                 vc_username = _generate_user_id(institution)

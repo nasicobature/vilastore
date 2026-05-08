@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.utils import timezone
 from .models import (
     Institution,
+    InstitutionDocumentVerification,
     Faculty,
     Department,
     AcademicSession,
@@ -17,6 +18,18 @@ from .models import (
     TeacherAssignment,
     ClassSubject,
 )
+from .verification import verify_document_with_api
+
+
+class InstitutionDocumentVerificationInline(admin.TabularInline):
+    model = InstitutionDocumentVerification
+    extra = 0
+    readonly_fields = ('document_type', 'status', 'provider', 'reference_value', 'api_checked_at', 'reviewed_by', 'reviewed_at')
+    fields = ('document_type', 'status', 'provider', 'reference_value', 'api_checked_at', 'reviewed_by', 'reviewed_at')
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Institution)
@@ -25,11 +38,12 @@ class InstitutionAdmin(admin.ModelAdmin):
     list_filter = ('institution_type', 'verification_status')
     search_fields = ('name', 'school_code', 'email', 'admin_email')
     readonly_fields = ('created_at', 'verified_at')
+    inlines = (InstitutionDocumentVerificationInline,)
     fieldsets = (
         (None, {
             'fields': (
                 'name', 'school_code', 'short_name', 'institution_type', 'ownership_type',
-                'year_established', 'license_number', 'cac_number',
+                'year_established', 'license_number', 'cac_number', 'tin_number', 'owner_id_number',
             )
         }),
         ('Contact and Location', {
@@ -76,6 +90,48 @@ class InstitutionAdmin(admin.ModelAdmin):
                 created_via='school-register',
                 is_approved=False,
             ).update(is_approved=True, approved_by=request.user, approved_at=timezone.now())
+
+
+@admin.register(InstitutionDocumentVerification)
+class InstitutionDocumentVerificationAdmin(admin.ModelAdmin):
+    list_display = (
+        'institution', 'document_type', 'status', 'provider',
+        'reference_value', 'api_checked_at', 'reviewed_by', 'reviewed_at',
+    )
+    list_filter = ('status', 'document_type', 'provider', 'institution__institution_type')
+    search_fields = ('institution__name', 'institution__school_code', 'reference_value')
+    readonly_fields = ('api_checked_at', 'api_response', 'created_at', 'updated_at')
+    actions = ('run_api_verification', 'approve_documents', 'reject_documents')
+    fieldsets = (
+        (None, {
+            'fields': ('institution', 'document_type', 'document_file', 'reference_value', 'status')
+        }),
+        ('API Verification', {
+            'fields': ('provider', 'api_checked_at', 'api_response')
+        }),
+        ('Agent/Admin Review', {
+            'fields': ('review_note', 'reviewed_by', 'reviewed_at')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+    @admin.action(description='Run CAC/TIN/NIN API verification')
+    def run_api_verification(self, request, queryset):
+        for document in queryset:
+            verify_document_with_api(document)
+        self.message_user(request, f'API verification checked for {queryset.count()} document(s).')
+
+    @admin.action(description='Approve selected documents')
+    def approve_documents(self, request, queryset):
+        queryset.update(status='approved', reviewed_by=request.user, reviewed_at=timezone.now())
+        self.message_user(request, f'{queryset.count()} document(s) approved.')
+
+    @admin.action(description='Reject selected documents')
+    def reject_documents(self, request, queryset):
+        queryset.update(status='rejected', reviewed_by=request.user, reviewed_at=timezone.now())
+        self.message_user(request, f'{queryset.count()} document(s) rejected.')
 
 
 @admin.register(Faculty)

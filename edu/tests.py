@@ -1,7 +1,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -14,6 +14,7 @@ from .models import (
     ClassSubject,
     Fee,
     Institution,
+    InstitutionDocumentVerification,
     Payment,
     Profile,
     Result,
@@ -104,6 +105,9 @@ class EduPortalVerificationRegistrationTests(TestCase):
             "admin_password": "StrongPass123!",
             "admin_email": "admin@example.com",
             "admin_phone": "08000000000",
+            "cac_number": "RC123456",
+            "tin_number": "TIN123456",
+            "owner_id_number": "12345678901",
         }
         data.update(self._verification_files())
 
@@ -117,6 +121,48 @@ class EduPortalVerificationRegistrationTests(TestCase):
         self.assertFalse(profile.is_approved)
         self.assertTrue(institution.cac_certificate)
         self.assertTrue(institution.owner_valid_id)
+        documents = InstitutionDocumentVerification.objects.filter(institution=institution)
+        self.assertEqual(documents.count(), 8)
+        self.assertEqual(
+            documents.get(document_type="cac_certificate").reference_value,
+            "RC123456",
+        )
+        self.assertEqual(
+            documents.get(document_type="tin_certificate").reference_value,
+            "TIN123456",
+        )
+        self.assertEqual(
+            documents.get(document_type="owner_valid_id").reference_value,
+            "12345678901",
+        )
+        self.assertTrue(documents.filter(status="manual_review").exists())
+
+    @override_settings(EDU_CAC_VERIFICATION_URL="https://verify.example.test/cac")
+    @patch("edu.verification.requests.post")
+    def test_configured_cac_api_marks_document_api_verified(self, mock_post):
+        mock_post.return_value.ok = True
+        mock_post.return_value.content = b'{"verified": true}'
+        mock_post.return_value.json.return_value = {"verified": True}
+
+        data = {
+            "institution_name": "API Verified Academy",
+            "admin_full_name": "School Admin",
+            "admin_password": "StrongPass123!",
+            "admin_email": "api-admin@example.com",
+            "admin_phone": "08000000001",
+            "cac_number": "RC654321",
+        }
+        data.update(self._verification_files())
+
+        response = self.client.post(reverse("edu:secondary_register"), data)
+
+        self.assertRedirects(response, reverse("edu:secondary_login"))
+        document = InstitutionDocumentVerification.objects.get(
+            institution__name="API Verified Academy",
+            document_type="cac_certificate",
+        )
+        self.assertEqual(document.status, "api_verified")
+        mock_post.assert_called()
 
     def test_pending_school_admin_login_shows_verification_message(self):
         data = {
