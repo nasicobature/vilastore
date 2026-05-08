@@ -529,9 +529,9 @@ class EduPortalFeesTests(TestCase):
 
         expectations = {
             "subjects-student": ["My Classes", "JSS1", "English Language"],
-            "test-scores": ["My Test Scores", "Your result is not yet published."],
+            "test-scores": ["My Test Scores", "English Language", "8.00"],
             "results": ["My Results", "Your result is not yet published."],
-            "pay-fees": ["My School Fees", "First Term Fee", "Receipt"],
+            "pay-fees": ["My School Fees", "First Term Fee", "Receipt", "Paid"],
             "profile": ["Ada Student", "Fees Academy", self.student.student_id],
         }
         for page, texts in expectations.items():
@@ -540,6 +540,23 @@ class EduPortalFeesTests(TestCase):
             self.assertNotContains(response, "Coming Soon")
             for text in texts:
                 self.assertContains(response, text)
+
+        response = self.client.post(reverse("edu:secondary_student_profile_update"), {
+            "email": "updated-student@example.com",
+            "phone": "08012345678",
+            "home_address": "12 Student Street",
+            "next_of_kin_name": "Parent One",
+            "next_of_kin_phone": "08087654321",
+            "next_of_kin_relationship": "Mother",
+        })
+        self.assertRedirects(response, reverse("edu:secondary_page", kwargs={"role": "student", "page": "profile"}))
+        student_user.refresh_from_db()
+        self.student.refresh_from_db()
+        self.assertEqual(student_user.email, "updated-student@example.com")
+        self.assertEqual(student_user.phone, "08012345678")
+        self.assertEqual(student_user.address, "12 Student Street")
+        self.assertEqual(self.student.next_of_kin_name, "Parent One")
+        self.assertEqual(self.student.student_id, "FA/2026/001")
 
     def test_student_my_classes_shows_previous_class_report_card(self):
         previous_class = AcademicClass.objects.create(institution=self.institution, name="Primary 6", level=6)

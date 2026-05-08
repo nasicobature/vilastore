@@ -1726,12 +1726,34 @@
       {% endif %}
 
       {% if active_page == 'test-scores' and role == 'student' %}
-        <div class="bg-card rounded-xl border border-border p-5">
-          <div class="flex items-center justify-between">
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
             <h3 class="font-display font-semibold">My Test Scores</h3>
+            <span class="text-xs text-muted-foreground">{{ current_session_name|default:"Current Session" }}{% if current_term_name %} / {{ current_term_name }}{% endif %}</span>
           </div>
-          <div class="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground mt-4">
-            Your result is not yet published. Scores will appear only inside your final report card after Admin approval.
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 1</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 2</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Assignment</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for result in student_current_results %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ result.subject.name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.test1 }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.test2 }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.assignment }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="4" class="px-4 py-3 text-sm text-muted-foreground">No current test scores available yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
         </div>
       {% endif %}
@@ -1885,6 +1907,7 @@
                 <tr class="bg-muted/50">
                   <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Fee</th>
                   <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Amount</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Status</th>
                   <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Method</th>
                   <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Date</th>
                   <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Receipt</th>
@@ -1895,12 +1918,13 @@
                   <tr class="hover:bg-muted/30 transition-colors">
                     <td class="px-4 py-3 text-sm">{% if payment.fee %}{{ payment.fee.name }}{% else %}-{% endif %}</td>
                     <td class="px-4 py-3 text-sm">₦{{ payment.amount }}</td>
+                    <td class="px-4 py-3 text-sm">{{ payment.status }}</td>
                     <td class="px-4 py-3 text-sm">{{ payment.payment_method }}</td>
                     <td class="px-4 py-3 text-sm">{{ payment.paid_at|date:"M j, Y" }}</td>
                     <td class="px-4 py-3 text-sm"><a class="text-xs text-primary hover:underline" href="/edu/secondary/payments/{{ payment.reference }}/receipt/" target="_blank" rel="noopener">Receipt</a></td>
                   </tr>
                 {% empty %}
-                  <tr><td colspan="5" class="px-4 py-3 text-sm">No payments yet.</td></tr>
+                  <tr><td colspan="6" class="px-4 py-3 text-sm">No payments yet.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -1942,6 +1966,42 @@
               <p class="font-medium">{{ student_record.next_of_kin_phone|default:"-" }}</p>
             </div>
           </div>
+
+          <form method="post" action="/edu/secondary/student/profile/update/" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Email Address</label>
+              <input type="email" name="email" value="{{ request.user.email }}" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Phone Number</label>
+              <input type="text" name="phone" value="{{ request.user.phone }}" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-sm font-medium mb-1.5">Home Address</label>
+              <textarea name="home_address" rows="3" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">{{ request.user.address }}</textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Parent/Guardian Name</label>
+              <input type="text" name="next_of_kin_name" value="{{ student_record.next_of_kin_name }}" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Parent/Guardian Phone</label>
+              <input type="text" name="next_of_kin_phone" value="{{ student_record.next_of_kin_phone }}" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Relationship</label>
+              <input type="text" name="next_of_kin_relationship" value="{{ student_record.next_of_kin_relationship }}" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div class="rounded-xl border border-border bg-muted/30 p-4 text-xs text-muted-foreground">
+              Admission number, class, results, and payment records are managed by the school and cannot be changed here.
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Save Profile
+              </button>
+            </div>
+          </form>
         </div>
       {% endif %}
 

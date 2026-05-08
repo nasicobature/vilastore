@@ -30,6 +30,7 @@ urlpatterns = [
     path('secondary/teacher/results/submit/', views.secondary_submit_results, name='secondary_submit_results'),
     path('secondary/examiner/results/review/', views.secondary_review_results, name='secondary_review_results'),
     path('secondary/admin/results/approve/', views.secondary_admin_result_approval, name='secondary_admin_result_approval'),
+    path('secondary/student/profile/update/', views.secondary_student_profile_update, name='secondary_student_profile_update'),
     path('tertiary/login/', views.tertiary_login, name='tertiary_login'),
     path('tertiary/register/', views.tertiary_school_register, name='tertiary_register'),
     path('tertiary/users/create/', views.tertiary_create_user, name='tertiary_create_user'),

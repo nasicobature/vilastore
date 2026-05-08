@@ -1201,6 +1201,38 @@ def secondary_admin_result_approval(request):
 
 
 @login_required
+def secondary_student_profile_update(request):
+    profile = _get_secondary_student_profile(request)
+    if not profile:
+        messages.error(request, 'Only Students can update this profile.')
+        return redirect('edu:secondary_dashboard', role='student')
+
+    student = Student.objects.filter(user=request.user, institution=profile.institution).first()
+    if not student:
+        messages.error(request, 'Student record not found.')
+        return redirect('edu:secondary_page', role=profile.role, page='profile')
+
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip()
+        if email and get_user_model().objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists():
+            messages.error(request, 'That email address is already used by another account.')
+            return redirect('edu:secondary_page', role=profile.role, page='profile')
+        if email:
+            request.user.email = email
+        request.user.phone = request.POST.get('phone', '').strip()
+        request.user.address = request.POST.get('home_address', '').strip()
+        request.user.save(update_fields=['email', 'phone', 'address'])
+
+        student.next_of_kin_name = request.POST.get('next_of_kin_name', '').strip()
+        student.next_of_kin_phone = request.POST.get('next_of_kin_phone', '').strip()
+        student.next_of_kin_relationship = request.POST.get('next_of_kin_relationship', '').strip()
+        student.save(update_fields=['next_of_kin_name', 'next_of_kin_phone', 'next_of_kin_relationship'])
+        messages.success(request, 'Profile updated.')
+
+    return redirect('edu:secondary_page', role=profile.role, page='profile')
+
+
+@login_required
 def tertiary_create_fee(request):
     creator_profile = getattr(request.user, 'profile', None)
     if not creator_profile or creator_profile.institution_type != 'tertiary' or creator_profile.role != 'accountant':
@@ -1816,6 +1848,7 @@ def secondary_page(request, role, page):
     student_record = None
     student_subjects = Subject.objects.none()
     student_results = Result.objects.none()
+    student_current_results = Result.objects.none()
     student_report_results = Result.objects.none()
     student_report_total = Decimal('0.00')
     student_report_average = Decimal('0.00')
@@ -1899,9 +1932,17 @@ def secondary_page(request, role, page):
                 institution=institution,
                 student=student_record,
             ).select_related('subject', 'academic_class', 'teacher', 'academic_session', 'academic_term').order_by('-session', 'subject__name')
+            if student_record.academic_class:
+                student_current_results = student_results.filter(
+                    academic_class=student_record.academic_class,
+                    academic_session=current_session,
+                    academic_term=current_term,
+                ).order_by('subject__name')
             published_submissions = ResultSubmission.objects.filter(
                 institution=institution,
                 academic_class=student_record.academic_class,
+                academic_session=current_session,
+                academic_term=current_term,
                 status='published',
             ).select_related('academic_class', 'subject', 'submitted_by').order_by('-published_at', 'subject__name')
             published_filters = Q()
@@ -2215,6 +2256,7 @@ def secondary_page(request, role, page):
         'student_record': student_record,
         'student_subjects': student_subjects,
         'student_results': student_results,
+        'student_current_results': student_current_results,
         'student_report_results': student_report_results,
         'student_report_total': student_report_total,
         'student_report_average': student_report_average,
