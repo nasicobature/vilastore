@@ -20,6 +20,7 @@ from .models import (
     ResultSubmission,
     Staff,
     Student,
+    StudentClassHistory,
     Subject,
     TeacherAssignment,
     TeacherSubjectAssignment,
@@ -527,7 +528,7 @@ class EduPortalFeesTests(TestCase):
         self.client.force_login(student_user)
 
         expectations = {
-            "subjects-student": ["My Subjects", "English Language"],
+            "subjects-student": ["My Classes", "JSS1", "English Language"],
             "test-scores": ["My Test Scores", "Your result is not yet published."],
             "results": ["My Results", "Your result is not yet published."],
             "pay-fees": ["My School Fees", "First Term Fee", "Receipt"],
@@ -539,6 +540,74 @@ class EduPortalFeesTests(TestCase):
             self.assertNotContains(response, "Coming Soon")
             for text in texts:
                 self.assertContains(response, text)
+
+    def test_student_my_classes_shows_previous_class_report_card(self):
+        previous_class = AcademicClass.objects.create(institution=self.institution, name="Primary 6", level=6)
+        previous_session = AcademicSession.objects.create(institution=self.institution, name="2024/2025")
+        previous_term = AcademicTerm.objects.create(session=previous_session, term="third")
+        current_session = AcademicSession.objects.create(institution=self.institution, name="2025/2026")
+        current_term = AcademicTerm.objects.create(session=current_session, term="first")
+        self.academic_class.academic_session = current_session
+        self.academic_class.academic_term = current_term
+        self.academic_class.save(update_fields=["academic_session", "academic_term"])
+        student_user = get_user_model().objects.create_user(username="history-student", password="StrongPass123!")
+        student_user.profile.institution = self.institution
+        student_user.profile.institution_type = "secondary"
+        student_user.profile.role = "student"
+        student_user.profile.is_approved = True
+        student_user.profile.save()
+        self.student.user = student_user
+        self.student.save(update_fields=["user"])
+        StudentClassHistory.objects.create(
+            student=self.student,
+            academic_class=previous_class,
+            academic_session=previous_session,
+            academic_term=previous_term,
+        )
+        subject = Subject.objects.create(institution=self.institution, name="Basic Science", code="BSC")
+        ClassSubject.objects.create(academic_class=previous_class, subject=subject)
+        teacher = Staff.objects.create(institution=self.institution, full_name="Science Teacher", staff_id="SCI/001", role="teacher")
+        Result.objects.create(
+            institution=self.institution,
+            student=self.student,
+            academic_class=previous_class,
+            subject=subject,
+            teacher=teacher,
+            academic_session=previous_session,
+            academic_term=previous_term,
+            session=previous_session.name,
+            term=previous_term.get_term_display(),
+            test1="10",
+            test2="10",
+            assignment="10",
+            exam="60",
+        )
+        ResultSubmission.objects.create(
+            institution=self.institution,
+            academic_class=previous_class,
+            subject=subject,
+            submitted_by=teacher,
+            academic_session=previous_session,
+            academic_term=previous_term,
+            session=previous_session.name,
+            term=previous_term.get_term_display(),
+            status="published",
+            teacher_comment="Promoted",
+            examiner_comment="Checked",
+            admin_comment="Approved",
+            published_at=timezone.now(),
+        )
+        self.client.force_login(student_user)
+
+        class_key = f"{previous_class.id}-{previous_session.id}-{previous_term.id}"
+        response = self.client.get(reverse("edu:secondary_page", kwargs={"role": "student", "page": "subjects-student"}) + f"?class_key={class_key}")
+
+        self.assertContains(response, "My Classes")
+        self.assertContains(response, "Primary 6")
+        self.assertContains(response, "Current Class")
+        self.assertContains(response, "Basic Science")
+        self.assertContains(response, "90.00")
+        self.assertContains(response, "Promoted")
 
     def test_accountant_can_create_class_fee_and_record_payment(self):
         response = self.client.post(reverse("edu:secondary_create_fee"), {

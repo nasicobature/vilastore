@@ -204,6 +204,21 @@ class Student(models.Model):
         return f"{self.full_name} ({self.student_id})"
 
 
+class StudentClassHistory(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='class_history')
+    academic_class = models.ForeignKey(AcademicClass, on_delete=models.CASCADE, related_name='student_history')
+    academic_session = models.ForeignKey(AcademicSession, on_delete=models.SET_NULL, null=True, blank=True, related_name='student_class_history')
+    academic_term = models.ForeignKey(AcademicTerm, on_delete=models.SET_NULL, null=True, blank=True, related_name='student_class_history')
+    is_current = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ('student', 'academic_class', 'academic_session', 'academic_term')
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.academic_class.name}"
+
+
 class Staff(models.Model):
     institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='staff')
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)

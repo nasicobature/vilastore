@@ -9,7 +9,7 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .models import Institution, Student, Staff, Fee, Payment, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment
+from .models import Institution, Student, Staff, Fee, Payment, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
 
 SECONDARY_ROLES = [
     {"slug": "admin", "label": "Admin"},
@@ -373,7 +373,7 @@ def _get_secondary_nav(role):
         'submit-results': 'Submit Results',
         'review-results': 'Review Results',
         'result-sheets': 'Result Sheets',
-        'subjects-student': 'My Subjects',
+        'subjects-student': 'My Classes',
         'test-scores': 'Test Scores',
         'results': 'Exam Results',
         'pay-fees': 'Pay Fees',
@@ -1822,6 +1822,15 @@ def secondary_page(request, role, page):
     student_report_position = ''
     student_report_submission = None
     student_report_first_result = None
+    student_class_rows = []
+    selected_student_class = None
+    selected_class_subjects = Subject.objects.none()
+    selected_class_results = Result.objects.none()
+    selected_class_report_total = Decimal('0.00')
+    selected_class_report_average = Decimal('0.00')
+    selected_class_report_position = ''
+    selected_class_report_submission = None
+    selected_class_first_result = None
     student_payments = Payment.objects.none()
     student_fee_rows = []
     student_fee_total = Decimal('0.00')
@@ -1874,6 +1883,14 @@ def secondary_page(request, role, page):
     elif role == 'student':
         student_record = Student.objects.filter(user=request.user, institution=institution).select_related('academic_class').first()
         if student_record:
+            if student_record.academic_class:
+                StudentClassHistory.objects.get_or_create(
+                    student=student_record,
+                    academic_class=student_record.academic_class,
+                    academic_session=student_record.academic_class.academic_session,
+                    academic_term=student_record.academic_class.academic_term,
+                    defaults={'is_current': True},
+                )
             student_subjects = Subject.objects.filter(
                 subject_classes__academic_class=student_record.academic_class,
                 institution=institution,
@@ -1924,6 +1941,116 @@ def secondary_page(request, role, page):
                     for index, item in enumerate(class_results, start=1):
                         if item['student_id'] == student_record.id:
                             student_report_position = _ordinal(index)
+                            break
+            class_entries = {}
+            if student_record.academic_class:
+                class_entries[(student_record.academic_class_id, student_record.academic_class.academic_session_id, student_record.academic_class.academic_term_id)] = {
+                    'class': student_record.academic_class,
+                    'session': student_record.academic_class.academic_session,
+                    'term': student_record.academic_class.academic_term,
+                    'is_current': True,
+                }
+            for history in StudentClassHistory.objects.filter(student=student_record).select_related('academic_class', 'academic_session', 'academic_term'):
+                key = (history.academic_class_id, history.academic_session_id, history.academic_term_id)
+                class_entries[key] = {
+                    'class': history.academic_class,
+                    'session': history.academic_session,
+                    'term': history.academic_term,
+                    'is_current': history.is_current or (student_record.academic_class_id == history.academic_class_id),
+                }
+            published_class_results = Result.objects.filter(
+                institution=institution,
+                student=student_record,
+                academic_class__isnull=False,
+                academic_session__isnull=False,
+                academic_term__isnull=False,
+                academic_class__in=ResultSubmission.objects.filter(
+                    institution=institution,
+                    status='published',
+                ).values('academic_class'),
+            ).select_related('academic_class', 'academic_session', 'academic_term').order_by('academic_class__level', 'session', 'term')
+            for result in published_class_results:
+                if not ResultSubmission.objects.filter(
+                    institution=institution,
+                    status='published',
+                    academic_class=result.academic_class,
+                    subject=result.subject,
+                    academic_session=result.academic_session,
+                    academic_term=result.academic_term,
+                ).exists():
+                    continue
+                key = (result.academic_class_id, result.academic_session_id, result.academic_term_id)
+                class_entries.setdefault(key, {
+                    'class': result.academic_class,
+                    'session': result.academic_session,
+                    'term': result.academic_term,
+                    'is_current': student_record.academic_class_id == result.academic_class_id,
+                })
+            selected_key = request.GET.get('class_key', '').strip()
+            for key, entry in class_entries.items():
+                class_key = f"{key[0]}-{key[1] or 0}-{key[2] or 0}"
+                entry['key'] = class_key
+                student_class_rows.append(entry)
+                if selected_key == class_key:
+                    selected_student_class = entry
+            student_class_rows.sort(key=lambda item: (item['class'].level, item['class'].name, item['session'].name if item['session'] else ''))
+            if not selected_student_class and student_class_rows:
+                selected_student_class = next((item for item in student_class_rows if item['is_current']), student_class_rows[-1])
+            if selected_student_class:
+                selected_class = selected_student_class['class']
+                selected_session = selected_student_class['session']
+                selected_term = selected_student_class['term']
+                selected_class_subjects = Subject.objects.filter(
+                    subject_classes__academic_class=selected_class,
+                    institution=institution,
+                ).distinct().order_by('name')
+                selected_class_filters = Q(
+                    institution=institution,
+                    student=student_record,
+                    academic_class=selected_class,
+                )
+                if selected_session:
+                    selected_class_filters &= Q(academic_session=selected_session)
+                if selected_term:
+                    selected_class_filters &= Q(academic_term=selected_term)
+                selected_class_results = Result.objects.filter(
+                    selected_class_filters,
+                    subject__in=ResultSubmission.objects.filter(
+                        institution=institution,
+                        status='published',
+                        academic_class=selected_class,
+                        academic_session=selected_session,
+                        academic_term=selected_term,
+                    ).values('subject'),
+                ).select_related('subject', 'academic_class', 'academic_session', 'academic_term').order_by('subject__name')
+                selected_class_report_total = sum((result.total for result in selected_class_results), Decimal('0.00'))
+                selected_count = selected_class_results.count()
+                if selected_count:
+                    selected_class_report_average = (selected_class_report_total / Decimal(selected_count)).quantize(Decimal('0.01'))
+                    selected_class_first_result = selected_class_results.first()
+                    selected_class_report_submission = ResultSubmission.objects.filter(
+                        institution=institution,
+                        status='published',
+                        academic_class=selected_class,
+                        academic_session=selected_session,
+                        academic_term=selected_term,
+                    ).select_related('academic_class').first()
+                    class_totals = Result.objects.filter(
+                        institution=institution,
+                        academic_class=selected_class,
+                        academic_session=selected_session,
+                        academic_term=selected_term,
+                        subject__in=ResultSubmission.objects.filter(
+                            institution=institution,
+                            status='published',
+                            academic_class=selected_class,
+                            academic_session=selected_session,
+                            academic_term=selected_term,
+                        ).values('subject'),
+                    ).values('student_id').annotate(total_score=Sum('total')).order_by('-total_score')
+                    for index, item in enumerate(class_totals, start=1):
+                        if item['student_id'] == student_record.id:
+                            selected_class_report_position = _ordinal(index)
                             break
             student_payments = Payment.objects.filter(
                 institution=institution,
@@ -2094,6 +2221,15 @@ def secondary_page(request, role, page):
         'student_report_position': student_report_position,
         'student_report_submission': student_report_submission,
         'student_report_first_result': student_report_first_result,
+        'student_class_rows': student_class_rows,
+        'selected_student_class': selected_student_class,
+        'selected_class_subjects': selected_class_subjects,
+        'selected_class_results': selected_class_results,
+        'selected_class_report_total': selected_class_report_total,
+        'selected_class_report_average': selected_class_report_average,
+        'selected_class_report_position': selected_class_report_position,
+        'selected_class_report_submission': selected_class_report_submission,
+        'selected_class_first_result': selected_class_first_result,
         'student_payments': student_payments,
         'student_fee_rows': student_fee_rows,
         'student_fee_total': student_fee_total,
