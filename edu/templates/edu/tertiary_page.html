@@ -86,7 +86,7 @@
             <h3 class="font-display font-semibold">Create User Account</h3>
             <span class="text-xs text-muted-foreground">VC/Provost access</span>
           </div>
-          <form method="post" action="/tertiary/users/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/tertiary/users/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Full Name *</label>
@@ -230,7 +230,7 @@
               <h3 class="font-display font-semibold">Create School Fee</h3>
               <span class="text-xs text-muted-foreground">Accountant access</span>
             </div>
-            <form method="post" action="/tertiary/fees/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form method="post" action="/edu/tertiary/fees/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
               {% csrf_token %}
               <div>
                 <label class="block text-sm font-medium mb-1.5">Fee Name *</label>
@@ -314,7 +314,7 @@
                         {% endif %}
                       </td>
                       <td class="px-4 py-3 text-sm">
-                        <form method="post" action="/tertiary/fees/{{ fee.id }}/delete/">
+                        <form method="post" action="/edu/tertiary/fees/{{ fee.id }}/delete/">
                           {% csrf_token %}
                           <button type="submit" class="text-xs text-destructive hover:underline">Delete</button>
                         </form>
@@ -332,7 +332,7 @@
             <div class="flex items-center justify-between">
               <h3 class="font-display font-semibold">Payment Gateway Settings</h3>
             </div>
-            <form method="post" action="/tertiary/payment/settings/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form method="post" action="/edu/tertiary/payment/settings/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
               {% csrf_token %}
               <div>
                 <label class="block text-sm font-medium mb-1.5">Payment Provider</label>

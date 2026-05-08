@@ -16,7 +16,7 @@
     card.addEventListener('click', () => {
       const institution = card.getAttribute('data-institution');
       if (institution) {
-        window.location.href = `/${institution}/login/`;
+        window.location.href = `/edu/${institution}/login/`;
       }
     });
   });

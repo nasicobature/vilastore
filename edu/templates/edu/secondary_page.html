@@ -91,7 +91,7 @@
             <h3 class="font-display font-semibold">Create User Account</h3>
             <span class="text-xs text-muted-foreground">Admin-only access</span>
           </div>
-          <form method="post" action="/secondary/users/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/users/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Full Name *</label>
@@ -135,7 +135,7 @@
             <h3 class="font-display font-semibold">Create Teacher Account</h3>
             <span class="text-xs text-muted-foreground">Admin access</span>
           </div>
-          <form method="post" action="/secondary/teachers/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/teachers/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Full Name *</label>
@@ -236,7 +236,7 @@
             <h3 class="font-display font-semibold">Create Teacher Account</h3>
             <span class="text-xs text-muted-foreground">Registry access</span>
           </div>
-          <form method="post" action="/secondary/teachers/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/teachers/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Full Name *</label>
@@ -269,7 +269,7 @@
           <div class="flex items-center justify-between">
             <h3 class="font-display font-semibold">Add Class</h3>
           </div>
-          <form method="post" action="/secondary/classes/add/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/classes/add/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Class Name *</label>
@@ -291,7 +291,7 @@
           <div class="flex items-center justify-between">
             <h3 class="font-display font-semibold">Assign Subjects to Class</h3>
           </div>
-          <form method="post" action="/secondary/classes/subjects/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/classes/subjects/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Class *</label>
@@ -342,7 +342,7 @@
                       {% for rel in cls.class_subjects.all %}
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary mr-1">
                           {{ rel.subject.name }}
-                          <form method="post" action="/secondary/classes/subjects/remove/" class="inline ml-2">
+                          <form method="post" action="/edu/secondary/classes/subjects/remove/" class="inline ml-2">
                             {% csrf_token %}
                             <input type="hidden" name="academic_class" value="{{ cls.id }}" />
                             <input type="hidden" name="subject" value="{{ rel.subject.id }}" />
@@ -369,7 +369,7 @@
             <h3 class="font-display font-semibold">Create Teacher Account</h3>
             <span class="text-xs text-muted-foreground">{% if role == 'admin' %}Admin access{% else %}Registry access{% endif %}</span>
           </div>
-          <form method="post" action="/secondary/teachers/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/teachers/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Full Name *</label>
@@ -439,7 +439,7 @@
           <div class="flex items-center justify-between">
             <h3 class="font-display font-semibold">Add Subject</h3>
           </div>
-          <form method="post" action="/secondary/subjects/add/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/subjects/add/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Subject Name *</label>
@@ -488,7 +488,7 @@
           <div class="flex items-center justify-between">
             <h3 class="font-display font-semibold">Add Session & Term</h3>
           </div>
-          <form method="post" action="/secondary/sessions/add/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/sessions/add/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Session Name *</label>
@@ -546,7 +546,7 @@
           <div class="flex items-center justify-between">
             <h3 class="font-display font-semibold">Register Student</h3>
           </div>
-          <form method="post" action="/secondary/students/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/students/add/" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Full Name *</label>
@@ -608,7 +608,7 @@
           <div class="flex items-center justify-between">
             <h3 class="font-display font-semibold">Assign Teacher to Class</h3>
           </div>
-          <form method="post" action="/secondary/teachers/assign/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/teachers/assign/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Teacher *</label>
@@ -641,7 +641,7 @@
             <h3 class="font-display font-semibold">Assign Teacher to Subject</h3>
             <span class="text-xs text-muted-foreground">Class + Subject</span>
           </div>
-          <form method="post" action="/secondary/teachers/assign-subject/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/teachers/assign-subject/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Teacher *</label>
@@ -772,7 +772,7 @@
             <h3 class="font-display font-semibold">Enter Scores</h3>
             <span class="text-xs text-muted-foreground">Only your assigned classes</span>
           </div>
-          <form method="post" action="/secondary/teacher/scores/save/" class="space-y-4">
+          <form method="post" action="/edu/secondary/teacher/scores/save/" class="space-y-4">
             {% csrf_token %}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -866,7 +866,7 @@
           <div class="flex items-center justify-between">
             <h3 class="font-display font-semibold">Submit Results to Examiner</h3>
           </div>
-          <form method="post" action="/secondary/teacher/results/submit/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/teacher/results/submit/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Class *</label>
@@ -986,7 +986,7 @@
                   {% for submission in examiner_submissions %}
                     <tr class="hover:bg-muted/30 transition-colors">
                       <td class="px-4 py-3 text-sm">
-                        <a href="/secondary/examiner/review-results/?submission={{ submission.id }}" class="text-primary hover:underline">
+                        <a href="/edu/secondary/examiner/review-results/?submission={{ submission.id }}" class="text-primary hover:underline">
                           {{ submission.academic_class.name }}
                         </a>
                       </td>
@@ -1010,7 +1010,7 @@
                 <p class="text-xs text-muted-foreground">Select a submission on the left to view results.</p>
               </div>
               {% if selected_submission %}
-                <form method="post" action="/secondary/examiner/results/review/">
+                <form method="post" action="/edu/secondary/examiner/results/review/">
                   {% csrf_token %}
                   <input type="hidden" name="submission_id" value="{{ selected_submission.id }}" />
                   <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
@@ -1070,7 +1070,7 @@
             <h3 class="font-display font-semibold">Class Result Sheet</h3>
             <span class="text-xs text-muted-foreground">Overall class ranking</span>
           </div>
-          <form method="get" action="/secondary/examiner/result-sheets/" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <form method="get" action="/edu/secondary/examiner/result-sheets/" class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium mb-1.5">Class *</label>
               <select name="class" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
@@ -1153,7 +1153,7 @@
               <h3 class="font-display font-semibold">Create School Fee</h3>
               <span class="text-xs text-muted-foreground">Accountant access</span>
             </div>
-            <form method="post" action="/secondary/fees/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form method="post" action="/edu/secondary/fees/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
               {% csrf_token %}
               <div>
                 <label class="block text-sm font-medium mb-1.5">Fee Name *</label>
@@ -1237,7 +1237,7 @@
                         {% endif %}
                       </td>
                       <td class="px-4 py-3 text-sm">
-                        <form method="post" action="/secondary/fees/{{ fee.id }}/delete/">
+                        <form method="post" action="/edu/secondary/fees/{{ fee.id }}/delete/">
                           {% csrf_token %}
                           <button type="submit" class="text-xs text-destructive hover:underline">Delete</button>
                         </form>
@@ -1255,7 +1255,7 @@
             <div class="flex items-center justify-between">
               <h3 class="font-display font-semibold">Payment Gateway Settings</h3>
             </div>
-            <form method="post" action="/secondary/payment/settings/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form method="post" action="/edu/secondary/payment/settings/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
               {% csrf_token %}
               <div>
                 <label class="block text-sm font-medium mb-1.5">Payment Provider</label>

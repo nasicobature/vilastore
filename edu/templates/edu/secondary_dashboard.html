@@ -63,7 +63,7 @@
         <div class="flex items-center justify-between mb-4">
           <h2 class="font-display text-2xl font-bold">{{ role_label }} Dashboard</h2>
           {% if role == 'admin' %}
-            <a href="/secondary/admin/register/" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors">
+            <a href="/edu/secondary/admin/register/" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors">
               Create User
             </a>
           {% endif %}
@@ -91,7 +91,7 @@
             <h3 class="font-display font-semibold">Create User Account</h3>
             <span class="text-xs text-muted-foreground">Admin-only access</span>
           </div>
-          <form method="post" action="/secondary/users/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form method="post" action="/edu/secondary/users/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% csrf_token %}
             <div>
               <label class="block text-sm font-medium mb-1.5">Full Name *</label>
