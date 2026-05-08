@@ -745,3 +745,55 @@ class EduPortalFeesTests(TestCase):
         self.assertEqual(payment.payment_method, "Flutterwave")
         self.assertEqual(payment.gateway_reference, "123456789")
         self.assertRedirects(response, reverse("edu:secondary_payment_receipt", kwargs={"reference": payment.reference}))
+
+    @patch("edu.views.requests.get")
+    def test_student_can_pay_assigned_fee_online_from_portal(self, mock_get):
+        self.institution.payment_public_key = "FLWPUBK_TEST"
+        self.institution.payment_secret_key = "FLWSECK_TEST"
+        self.institution.allow_online_payment = True
+        self.institution.save(update_fields=["payment_public_key", "payment_secret_key", "allow_online_payment"])
+        student_user = get_user_model().objects.create_user(
+            username="student-pay",
+            password="StrongPass123!",
+            email="student-pay@example.com",
+        )
+        student_user.profile.institution = self.institution
+        student_user.profile.institution_type = "secondary"
+        student_user.profile.role = "student"
+        student_user.profile.is_approved = True
+        student_user.profile.save()
+        self.student.user = student_user
+        self.student.save(update_fields=["user"])
+        fee = Fee.objects.create(
+            institution=self.institution,
+            name="Second Term Fee",
+            amount="15000",
+            session="2026/2027",
+            term="Second Term",
+        )
+        fee.classes.set([self.academic_class])
+        mock_get.return_value.json.return_value = {
+            "status": "success",
+            "data": {
+                "status": "successful",
+                "amount": 15000,
+                "currency": "NGN",
+            },
+        }
+        self.client.force_login(student_user)
+
+        page = self.client.get(reverse("edu:secondary_page", kwargs={"role": "student", "page": "pay-fees"}))
+        self.assertContains(page, "Second Term Fee")
+        self.assertContains(page, "Pay Now")
+
+        response = self.client.post(reverse("edu:secondary_student_online_payment"), {
+            "fee": str(fee.id),
+            "amount": "15000",
+            "payment_reference": "987654321",
+        })
+
+        payment = Payment.objects.get(institution=self.institution, fee=fee, student=self.student)
+        self.assertEqual(payment.status, "Paid")
+        self.assertEqual(payment.payment_method, "Flutterwave")
+        self.assertEqual(payment.gateway_reference, "987654321")
+        self.assertRedirects(response, reverse("edu:secondary_payment_receipt", kwargs={"reference": payment.reference}))

@@ -2240,7 +2240,7 @@ def secondary_page(request, role, page):
         'fees': fees,
         'payments': payments,
         'payment_public_key': institution.payment_public_key,
-        'online_payment_enabled': institution.allow_online_payment and bool(institution.payment_public_key),
+        'online_payment_enabled': institution.allow_online_payment and bool(institution.payment_public_key) and bool(institution.payment_secret_key),
         'pending_profiles': pending_profiles,
         'role_options': SECONDARY_ROLES,
         'classes': AcademicClass.objects.filter(institution=institution).select_related('academic_session', 'academic_term'),
