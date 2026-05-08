@@ -736,3 +736,264 @@ textarea {
     grid-column: auto;
   }
 }
+
+.edu-product-page {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 34px 0 48px;
+}
+
+.edu-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 24px;
+  align-items: stretch;
+  margin-bottom: 22px;
+}
+
+.edu-hero-copy,
+.edu-launch-panel,
+.pricing-section,
+.coming-soon-section {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  border-radius: 16px;
+  padding: 26px;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.07);
+}
+
+.edu-hero-copy {
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.edu-hero-mark {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+  margin-bottom: 18px;
+}
+
+.edu-hero h1 {
+  margin: 0;
+  max-width: 720px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 44px;
+  line-height: 1.05;
+}
+
+.edu-hero p {
+  color: hsl(var(--muted-foreground));
+}
+
+.edu-hero-copy > p:not(.registration-eyebrow) {
+  max-width: 720px;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.edu-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.edu-launch-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.launch-badge,
+.coming-soon-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+
+.edu-launch-panel h2 {
+  margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px;
+}
+
+.launch-feature-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.launch-feature-grid span,
+.portal-option div,
+.pricing-notes span,
+.coming-soon-grid span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.launch-feature-grid span {
+  padding: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--background));
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.portal-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.portal-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  padding: 18px;
+  background: hsl(var(--card));
+}
+
+.portal-option.is-primary {
+  border-color: hsl(var(--primary) / 0.35);
+}
+
+.portal-option i {
+  color: hsl(var(--primary));
+}
+
+.portal-option h2 {
+  margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+}
+
+.portal-option p {
+  margin: 4px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+
+.portal-option > span {
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: hsl(var(--muted));
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pricing-section,
+.coming-soon-section {
+  margin-top: 22px;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pricing-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  padding: 18px;
+  background: hsl(var(--background));
+}
+
+.pricing-card.is-featured {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 16px 34px hsl(var(--primary) / 0.12);
+}
+
+.plan-name {
+  margin: 0;
+  color: hsl(var(--primary));
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.pricing-card h3 {
+  margin: 8px 0 4px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 25px;
+}
+
+.pricing-card h3 span {
+  color: hsl(var(--muted-foreground));
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.student-limit {
+  margin: 0 0 14px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+
+.pricing-card ul {
+  margin: 0;
+  padding-left: 18px;
+  color: hsl(var(--foreground));
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.pricing-notes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.pricing-notes span,
+.coming-soon-grid span {
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: hsl(var(--muted) / 0.65);
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.coming-soon-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 980px) {
+  .edu-hero,
+  .portal-options,
+  .pricing-grid,
+  .pricing-notes,
+  .coming-soon-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .edu-hero h1 {
+    font-size: 32px;
+  }
+}

@@ -15,6 +15,19 @@ class EduPortalRoutingTests(TestCase):
         self.assertNotContains(response, 'href="/secondary/login/"')
         self.assertNotContains(response, 'href="/tertiary/login/"')
 
+    def test_index_shows_launch_pricing_and_coming_soon_modules(self):
+        response = self.client.get(reverse("edu:index"))
+
+        self.assertContains(response, "Starter School")
+        self.assertContains(response, "₦50,000")
+        self.assertContains(response, "Up to 250 students")
+        self.assertContains(response, "Growth School")
+        self.assertContains(response, "Up to 700 students")
+        self.assertContains(response, "Professional School")
+        self.assertContains(response, "Up to 1,500 students")
+        self.assertContains(response, "Enterprise / Tertiary")
+        self.assertContains(response, "Coming Soon Modules")
+
     def test_edu_login_pages_exist(self):
         secondary = self.client.get(reverse("edu:secondary_login"))
         tertiary = self.client.get(reverse("edu:tertiary_login"))

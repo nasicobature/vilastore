@@ -1,60 +1,138 @@
 {% extends 'edu/base.html' %}
 
 {% block content %}
-<div class="min-h-screen bg-background flex flex-col items-center justify-center p-6">
-  <div class="text-center mb-12">
-    <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
-      <i data-lucide="graduation-cap" class="text-primary-foreground"></i>
+<div class="edu-product-page">
+  <section class="edu-hero">
+    <div class="edu-hero-copy">
+      <div class="edu-hero-mark">
+        <i data-lucide="graduation-cap"></i>
+      </div>
+      <p class="registration-eyebrow">EduPortal for Schools</p>
+      <h1>Launch with verified secondary schools first.</h1>
+      <p>
+        Manage students, staff, classes, subjects, fees, scores, result review, and role-based school operations after VilaStore verifies the institution.
+      </p>
+      <div class="edu-hero-actions">
+        <a href="/edu/secondary/register/" class="wizard-btn wizard-btn-primary">Register Secondary School</a>
+        <a href="#pricing" class="wizard-btn wizard-btn-secondary">View Pricing</a>
+      </div>
     </div>
-    <h1 class="font-display text-4xl font-bold mb-2">EduPortal</h1>
-    <p class="text-muted-foreground text-lg">School Management System</p>
-  </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl w-full">
-    <a
-      href="/edu/secondary/login/"
-      class="group bg-card border-2 border-border rounded-2xl p-8 text-left hover:border-primary hover:shadow-lg transition-all duration-300"
-    >
-      <div class="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-        <i data-lucide="school" class="text-primary group-hover:text-primary-foreground"></i>
+    <div class="edu-launch-panel">
+      <div class="launch-badge">Primary launch product</div>
+      <h2>Secondary School Portal</h2>
+      <p>Built for nursery, primary, and secondary schools that need verified administration, fees, results, and staff workflow.</p>
+      <div class="launch-feature-grid">
+        <span><i data-lucide="users"></i> Student and staff records</span>
+        <span><i data-lucide="book-open"></i> Classes and subjects</span>
+        <span><i data-lucide="clipboard-check"></i> Result workflow</span>
+        <span><i data-lucide="credit-card"></i> Fees management</span>
       </div>
-      <h2 class="font-display text-xl font-bold mb-2">Secondary School</h2>
-      <p class="text-sm text-muted-foreground">
-        Manage JSS1–SS3 classes, teachers, exams, results, and school fees with role-based access.
-      </p>
-      <div class="mt-4 flex flex-wrap gap-1.5">
-        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Admin</span>
-        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Registry</span>
-        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Teacher</span>
-        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Student</span>
+    </div>
+  </section>
+
+  <section class="portal-options">
+    <a href="/edu/secondary/login/" class="portal-option is-primary">
+      <div>
+        <i data-lucide="school"></i>
+        <h2>Secondary School Login</h2>
+        <p>For verified schools using the live EduPortal secondary workflow.</p>
       </div>
+      <span>Open Portal</span>
     </a>
 
-    <a
-      href="/edu/tertiary/login/"
-      class="group bg-card border-2 border-border rounded-2xl p-8 text-left hover:border-secondary hover:shadow-lg transition-all duration-300"
-    >
-      <div class="w-14 h-14 rounded-xl bg-secondary/10 flex items-center justify-center mb-4 group-hover:bg-secondary group-hover:text-secondary-foreground transition-colors">
-        <i data-lucide="building-2" class="text-secondary group-hover:text-secondary-foreground"></i>
+    <a href="/edu/tertiary/login/" class="portal-option">
+      <div>
+        <i data-lucide="building-2"></i>
+        <h2>Tertiary Pilot Login</h2>
+        <p>For approved pilot institutions. Some tertiary modules are still being completed.</p>
       </div>
-      <h2 class="font-display text-xl font-bold mb-2">Tertiary Institution</h2>
-      <p class="text-sm text-muted-foreground">
-        University and polytechnic management with faculties, departments, CBT, and hierarchical approval.
-      </p>
-      <div class="mt-4 flex flex-wrap gap-1.5">
-        <span class="text-xs bg-muted rounded-full px-2.5 py-1">VC</span>
-        <span class="text-xs bg-muted rounded-full px-2.5 py-1">ICT Admin</span>
-        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Lecturer</span>
-        <span class="text-xs bg-muted rounded-full px-2.5 py-1">Student</span>
-      </div>
+      <span>Custom / Pilot</span>
     </a>
-  </div>
+  </section>
 
-  <div class="mt-8 text-sm text-muted-foreground">
-    <a class="hover:text-foreground transition-colors" href="/edu/secondary/register/">Register Secondary School</a>
-    <span class="mx-2">•</span>
-    <a class="hover:text-foreground transition-colors" href="/edu/tertiary/register/">Register Tertiary Institution</a>
-  </div>
+  <section id="pricing" class="pricing-section">
+    <div class="section-heading">
+      <h2>EduPortal Pricing</h2>
+      <p>Simple per-term pricing with higher student limits for Nigerian schools.</p>
+    </div>
+
+    <div class="pricing-grid">
+      <article class="pricing-card">
+        <p class="plan-name">Starter School</p>
+        <h3>₦50,000 <span>/ term</span></h3>
+        <p class="student-limit">Up to 250 students</p>
+        <ul>
+          <li>School verification</li>
+          <li>Admin dashboard</li>
+          <li>Students and staff</li>
+          <li>Classes and subjects</li>
+          <li>Basic fees and results</li>
+        </ul>
+      </article>
+
+      <article class="pricing-card is-featured">
+        <p class="plan-name">Growth School</p>
+        <h3>₦120,000 <span>/ term</span></h3>
+        <p class="student-limit">Up to 700 students</p>
+        <ul>
+          <li>Everything in Starter</li>
+          <li>Registry, accountant, teacher, examiner roles</li>
+          <li>Teacher score entry</li>
+          <li>Result submission and review</li>
+          <li>Better fee tracking</li>
+        </ul>
+      </article>
+
+      <article class="pricing-card">
+        <p class="plan-name">Professional School</p>
+        <h3>₦250,000 <span>/ term</span></h3>
+        <p class="student-limit">Up to 1,500 students</p>
+        <ul>
+          <li>Everything in Growth</li>
+          <li>Advanced result sheets</li>
+          <li>Full role-based workflow</li>
+          <li>Data import support</li>
+          <li>Priority setup and support</li>
+        </ul>
+      </article>
+
+      <article class="pricing-card">
+        <p class="plan-name">Enterprise / Tertiary</p>
+        <h3>From ₦500,000 <span>/ term</span></h3>
+        <p class="student-limit">1,501+ students or tertiary institutions</p>
+        <ul>
+          <li>Custom onboarding</li>
+          <li>Faculties and departments</li>
+          <li>VC/Provost structure</li>
+          <li>Custom reports</li>
+          <li>Dedicated support</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="pricing-notes">
+      <span>One-time verification/onboarding: ₦20,000</span>
+      <span>Data migration and staff training quoted separately</span>
+      <span>SMS, WhatsApp, and online payment charges billed separately</span>
+    </div>
+  </section>
+
+  <section class="coming-soon-section">
+    <div class="section-heading">
+      <h2>Coming Soon Modules</h2>
+      <p>These should be sold as upcoming or custom features until they are fully wired.</p>
+    </div>
+    <div class="coming-soon-grid">
+      <span>CBT exams</span>
+      <span>Question bank</span>
+      <span>Transcript</span>
+      <span>Parent portal</span>
+      <span>Student online payment</span>
+      <span>Advanced analytics</span>
+      <span>Tertiary course registration</span>
+      <span>Full tertiary lecturer workflow</span>
+    </div>
+  </section>
 </div>
 {% endblock %}
-
