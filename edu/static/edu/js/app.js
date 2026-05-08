@@ -147,6 +147,68 @@
     setStep(0);
   });
 
+  const onlinePaymentForms = document.querySelectorAll('[data-edu-online-payment]');
+  onlinePaymentForms.forEach((form) => {
+    const feeSelect = form.querySelector('select[name="fee"]');
+    const studentSelect = form.querySelector('select[name="student"]');
+    const amountInput = form.querySelector('input[name="amount"]');
+    const referenceInput = form.querySelector('[data-payment-reference]');
+    const publicKeyInput = form.querySelector('input[name="public_key"]');
+    const payButton = form.querySelector('[data-pay-online]');
+
+    if (feeSelect && amountInput) {
+      feeSelect.addEventListener('change', () => {
+        const option = feeSelect.options[feeSelect.selectedIndex];
+        if (option && option.dataset.amount) {
+          amountInput.value = option.dataset.amount;
+        }
+      });
+    }
+
+    if (payButton) {
+      payButton.addEventListener('click', () => {
+        if (!feeSelect.value || !studentSelect.value || !amountInput.value) {
+          alert('Select fee, student, and amount before payment.');
+          return;
+        }
+        if (!window.FlutterwaveCheckout) {
+          alert('Flutterwave checkout is not available. Check your internet connection and try again.');
+          return;
+        }
+
+        const studentOption = studentSelect.options[studentSelect.selectedIndex];
+        const feeOption = feeSelect.options[feeSelect.selectedIndex];
+        const publicKey = publicKeyInput ? publicKeyInput.value : '';
+        const amount = Number(amountInput.value || 0);
+        if (!publicKey || amount <= 0) {
+          alert('Payment key or amount is missing.');
+          return;
+        }
+
+        FlutterwaveCheckout({
+          public_key: publicKey,
+          tx_ref: `EDU-${Date.now()}`,
+          amount: amount,
+          currency: 'NGN',
+          payment_options: 'card,banktransfer,ussd',
+          customer: {
+            email: studentOption.dataset.email || 'student@edupayment.local',
+            name: studentOption.dataset.name || studentOption.textContent.trim(),
+          },
+          customizations: {
+            title: 'EduPortal School Fees',
+            description: feeOption.textContent.trim(),
+          },
+          callback: function (response) {
+            referenceInput.value = response.transaction_id || response.tx_ref || '';
+            form.submit();
+          },
+          onclose: function () {},
+        });
+      });
+    }
+  });
+
   const navLinks = document.querySelectorAll('.nav-item');
   const activeClasses = ['bg-sidebar-accent', 'text-sidebar-accent-foreground', 'font-medium'];
   const inactiveClasses = ['text-sidebar-foreground/70'];

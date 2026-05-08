@@ -238,7 +238,23 @@ class Payment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.SET_NULL, null=True, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=20, default='Paid')
+    payment_method = models.CharField(max_length=30, default='Manual')
+    reference = models.CharField(max_length=80, unique=True, null=True, blank=True)
+    gateway_reference = models.CharField(max_length=120, blank=True)
     paid_at = models.DateTimeField(default=timezone.now)
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            prefix = 'EDURCPT'
+            timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+            base = f"{prefix}-{timestamp}"
+            reference = base
+            counter = 1
+            while Payment.objects.filter(reference=reference).exclude(pk=self.pk).exists():
+                counter += 1
+                reference = f"{base}-{counter}"
+            self.reference = reference
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.student} - {self.amount}"

@@ -142,8 +142,9 @@ class FeeAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ('student', 'fee', 'institution', 'amount', 'status', 'paid_at')
-    list_filter = ('institution', 'fee', 'status')
+    list_display = ('student', 'fee', 'institution', 'amount', 'status', 'payment_method', 'reference', 'paid_at')
+    list_filter = ('institution', 'fee', 'status', 'payment_method')
+    search_fields = ('reference', 'gateway_reference', 'student__full_name', 'student__student_id')
 
 
 @admin.register(Result)

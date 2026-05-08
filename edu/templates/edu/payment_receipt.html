@@ -1,0 +1,156 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payment Receipt - {{ payment.reference }}</title>
+  <style>
+    body {
+      margin: 0;
+      background: #f4f7fb;
+      color: #172033;
+      font-family: Arial, sans-serif;
+    }
+    .receipt {
+      width: min(760px, calc(100% - 32px));
+      margin: 32px auto;
+      background: #fff;
+      border: 1px solid #d9e2ef;
+      border-radius: 14px;
+      padding: 28px;
+      box-shadow: 0 18px 48px rgba(15, 23, 42, 0.1);
+    }
+    .receipt-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      border-bottom: 1px solid #e6edf5;
+      padding-bottom: 18px;
+    }
+    h1, h2, p {
+      margin: 0;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 6px;
+    }
+    .muted {
+      color: #687386;
+      font-size: 14px;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 7px 10px;
+      background: #e8f8ef;
+      color: #147a3d;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 22px;
+    }
+    .item {
+      border: 1px solid #e6edf5;
+      border-radius: 10px;
+      padding: 12px;
+      background: #fbfdff;
+    }
+    .item span {
+      display: block;
+      color: #687386;
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+    .item strong {
+      font-size: 15px;
+    }
+    .amount {
+      margin-top: 22px;
+      padding: 18px;
+      border-radius: 12px;
+      background: #0f63d6;
+      color: #fff;
+    }
+    .amount span {
+      display: block;
+      font-size: 13px;
+      opacity: 0.85;
+      margin-bottom: 4px;
+    }
+    .amount strong {
+      font-size: 30px;
+    }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 22px;
+    }
+    .btn {
+      border: 1px solid #d9e2ef;
+      background: #fff;
+      border-radius: 9px;
+      padding: 10px 14px;
+      color: #172033;
+      text-decoration: none;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    @media print {
+      body { background: #fff; }
+      .receipt { box-shadow: none; margin: 0 auto; border: 0; }
+      .actions { display: none; }
+    }
+    @media (max-width: 620px) {
+      .receipt-header, .grid {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="receipt">
+    <header class="receipt-header">
+      <div>
+        <h1>{{ institution.name }}</h1>
+        <p class="muted">{{ institution.address|default:institution.city }}</p>
+        <p class="muted">{{ institution.email }}{% if institution.phone_number %} • {{ institution.phone_number }}{% endif %}</p>
+      </div>
+      <div>
+        <span class="status">{{ payment.status }}</span>
+        <p class="muted" style="margin-top:10px;">Receipt No.</p>
+        <h2>{{ payment.reference }}</h2>
+      </div>
+    </header>
+
+    <section class="grid">
+      <div class="item"><span>Student</span><strong>{% if payment.student %}{{ payment.student.full_name }}{% else %}-{% endif %}</strong></div>
+      <div class="item"><span>Student ID</span><strong>{% if payment.student %}{{ payment.student.student_id }}{% else %}-{% endif %}</strong></div>
+      <div class="item"><span>Fee</span><strong>{% if payment.fee %}{{ payment.fee.name }}{% else %}-{% endif %}</strong></div>
+      <div class="item"><span>Session / Term</span><strong>{% if payment.fee %}{{ payment.fee.session|default:"-" }}{% if payment.fee.term %} / {{ payment.fee.term }}{% endif %}{% else %}-{% endif %}</strong></div>
+      <div class="item"><span>Payment Method</span><strong>{{ payment.payment_method }}</strong></div>
+      <div class="item"><span>Payment Date</span><strong>{{ payment.paid_at|date:"M j, Y g:i A" }}</strong></div>
+      <div class="item"><span>Gateway Reference</span><strong>{{ payment.gateway_reference|default:"-" }}</strong></div>
+      <div class="item"><span>School Code</span><strong>{{ institution.school_code }}</strong></div>
+    </section>
+
+    <section class="amount">
+      <span>Amount Paid</span>
+      <strong>₦{{ payment.amount }}</strong>
+    </section>
+
+    <div class="actions">
+      <button class="btn" onclick="window.print()">Print Receipt</button>
+      <a class="btn" href="/edu/secondary/accountant/fees/">Back to Fees</a>
+    </div>
+  </main>
+</body>
+</html>

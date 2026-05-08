@@ -1,10 +1,13 @@
+from decimal import Decimal
+
+import requests
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import Institution, Student, Staff, Fee, Payment, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment
 
@@ -188,6 +191,17 @@ def _school_fee_summary(institution):
         'pending_total': pending_total,
         'outstanding_total': outstanding + pending_total,
     }
+
+
+def _payment_receipt_url(payment):
+    return f"/edu/secondary/payments/{payment.reference}/receipt/"
+
+
+def _get_secondary_accountant_profile(request):
+    profile = getattr(request.user, 'profile', None)
+    if not profile or profile.institution_type != 'secondary' or profile.role != 'accountant':
+        return None
+    return profile
 
 
 def _ordinal(value):
@@ -642,10 +656,10 @@ def secondary_delete_fee(request, fee_id):
 
 @login_required
 def secondary_record_payment(request):
-    creator_profile = getattr(request.user, 'profile', None)
-    if not creator_profile or creator_profile.institution_type != 'secondary' or creator_profile.role != 'accountant':
+    creator_profile = _get_secondary_accountant_profile(request)
+    if not creator_profile:
         messages.error(request, 'Only Accountants can record payments.')
-        return redirect('edu:secondary_dashboard', role=creator_profile.role if creator_profile else 'accountant')
+        return redirect('edu:secondary_dashboard', role='accountant')
 
     if request.method == 'POST':
         fee_id = request.POST.get('fee')
@@ -673,10 +687,114 @@ def secondary_record_payment(request):
             student=student,
             amount=amount,
             status=status,
+            payment_method='Manual',
         )
         messages.success(request, 'Payment recorded.')
 
     return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+
+@login_required
+def secondary_online_payment(request):
+    creator_profile = _get_secondary_accountant_profile(request)
+    if not creator_profile:
+        messages.error(request, 'Only Accountants can collect online payments.')
+        return redirect('edu:secondary_dashboard', role='accountant')
+
+    institution = creator_profile.institution
+
+    if request.method == 'POST':
+        fee_id = request.POST.get('fee')
+        student_id = request.POST.get('student')
+        amount_raw = request.POST.get('amount', '').strip()
+        payment_reference = request.POST.get('payment_reference', '').strip()
+
+        fee = Fee.objects.filter(id=fee_id, institution=institution).first()
+        student = Student.objects.filter(id=student_id, institution=institution).first()
+        if not fee or not student or not amount_raw or not payment_reference:
+            messages.error(request, 'Fee, student, amount, and payment reference are required.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+        if not institution.payment_secret_key:
+            messages.error(request, 'Payment secret key is not configured for this school.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+        if not _fee_student_queryset(fee).filter(id=student.id).exists():
+            messages.error(request, 'Selected fee does not apply to this student.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+        try:
+            expected_amount = Decimal(amount_raw)
+        except Exception:
+            messages.error(request, 'Payment amount is invalid.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+        try:
+            verify_response = requests.get(
+                f"https://api.flutterwave.com/v3/transactions/{payment_reference}/verify",
+                headers={"Authorization": f"Bearer {institution.payment_secret_key}"},
+                timeout=15,
+            )
+            verify_payload = verify_response.json()
+        except Exception:
+            messages.error(request, 'Could not verify payment right now. Please try again.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+        tx_data = verify_payload.get('data') or {}
+        tx_status = (tx_data.get('status') or '').strip().lower()
+        if (verify_payload.get('status') or '').strip().lower() != 'success' or tx_status != 'successful':
+            messages.error(request, 'Payment was not successful.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+        try:
+            paid_amount = Decimal(str(tx_data.get('amount') or '0'))
+        except Exception:
+            paid_amount = Decimal('0.00')
+        if paid_amount < expected_amount:
+            messages.error(request, 'Paid amount is less than the required fee amount.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+        currency = (tx_data.get('currency') or '').strip().upper()
+        if currency and currency != (institution.currency or 'NGN').upper():
+            messages.error(request, 'Payment currency does not match school currency.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+        payment, created = Payment.objects.get_or_create(
+            institution=institution,
+            gateway_reference=payment_reference,
+            defaults={
+                'fee': fee,
+                'student': student,
+                'amount': paid_amount,
+                'status': 'Paid',
+                'payment_method': 'Flutterwave',
+            },
+        )
+        if not created:
+            messages.info(request, 'This payment was already recorded.')
+        else:
+            messages.success(request, f'Online payment confirmed. Receipt: {payment.reference}')
+        return redirect(_payment_receipt_url(payment))
+
+    return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+
+@login_required
+def secondary_payment_receipt(request, reference):
+    profile = getattr(request.user, 'profile', None)
+    if not profile or profile.institution_type != 'secondary':
+        messages.error(request, 'Access denied.')
+        return redirect('edu:index')
+
+    payment = get_object_or_404(
+        Payment.objects.select_related('institution', 'student', 'fee'),
+        reference=reference,
+        institution=profile.institution,
+    )
+    return render(request, 'edu/payment_receipt.html', {
+        'payment': payment,
+        'institution': payment.institution,
+    })
 
 
 @login_required
@@ -1555,6 +1673,8 @@ def secondary_page(request, role, page):
         'fees_expected': fee_summary['expected_total'],
         'fees': fees,
         'payments': payments,
+        'payment_public_key': institution.payment_public_key,
+        'online_payment_enabled': institution.allow_online_payment and bool(institution.payment_public_key),
         'pending_profiles': pending_profiles,
         'role_options': SECONDARY_ROLES,
         'classes': AcademicClass.objects.filter(institution=institution),

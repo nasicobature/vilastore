@@ -1295,6 +1295,51 @@
             </form>
           </div>
 
+          <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="font-display font-semibold">Collect Online Payment</h3>
+              <span class="text-xs text-muted-foreground">Flutterwave</span>
+            </div>
+            {% if online_payment_enabled %}
+              <form method="post" action="/edu/secondary/payments/online/" class="grid grid-cols-1 md:grid-cols-2 gap-4" data-edu-online-payment>
+                {% csrf_token %}
+                <input type="hidden" name="payment_reference" data-payment-reference>
+                <input type="hidden" name="public_key" value="{{ payment_public_key }}">
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Fee *</label>
+                  <select name="fee" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="">Select Fee</option>
+                    {% for fee in fees %}
+                      <option value="{{ fee.id }}" data-amount="{{ fee.amount }}">{{ fee.name }} - ₦{{ fee.amount }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Student *</label>
+                  <select name="student" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="">Select Student</option>
+                    {% for student in students_all %}
+                      <option value="{{ student.id }}" data-email="{% if student.user %}{{ student.user.email }}{% endif %}" data-name="{{ student.full_name }}">{{ student.full_name }} - {{ student.student_id }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Amount *</label>
+                  <input type="number" step="0.01" name="amount" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div class="md:col-span-2">
+                  <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors" data-pay-online>
+                    Pay With Flutterwave
+                  </button>
+                </div>
+              </form>
+            {% else %}
+              <div class="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                Enable online payments and add the school Flutterwave public/secret keys in Payment Gateway Settings first.
+              </div>
+            {% endif %}
+          </div>
+
           <div class="bg-card rounded-xl border border-border overflow-hidden">
             <div class="flex items-center justify-between p-4 border-b border-border">
               <h3 class="font-display font-semibold">Recent Payments</h3>
@@ -1308,6 +1353,7 @@
                     <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Amount</th>
                     <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Status</th>
                     <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Date</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Receipt</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
@@ -1318,9 +1364,12 @@
                       <td class="px-4 py-3 text-sm">₦{{ payment.amount }}</td>
                       <td class="px-4 py-3 text-sm">{{ payment.status }}</td>
                       <td class="px-4 py-3 text-sm">{{ payment.paid_at|date:"M j, Y" }}</td>
+                      <td class="px-4 py-3 text-sm">
+                        <a class="text-xs text-primary hover:underline" href="/edu/secondary/payments/{{ payment.reference }}/receipt/" target="_blank" rel="noopener">Receipt</a>
+                      </td>
                     </tr>
                   {% empty %}
-                    <tr><td colspan="5" class="px-4 py-3 text-sm">No payments recorded yet.</td></tr>
+                    <tr><td colspan="6" class="px-4 py-3 text-sm">No payments recorded yet.</td></tr>
                   {% endfor %}
                 </tbody>
               </table>
