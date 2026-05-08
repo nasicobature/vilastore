@@ -3,6 +3,7 @@ from django.utils import timezone
 
 from core.models import Customer
 from core.utils.notifications import send_email, send_sms
+from core.views import _plan_has_feature
 
 
 class Command(BaseCommand):
@@ -22,6 +23,8 @@ class Command(BaseCommand):
 
         customers = Customer.objects.select_related("user")
         for customer in customers:
+            if not _plan_has_feature(customer.user, "customer_automation"):
+                continue
             shop_name = (customer.user.business_name or customer.user.username or "VilaStore").strip()
             outbound_messages = []
 

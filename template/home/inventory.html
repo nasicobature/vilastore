@@ -74,10 +74,17 @@
       </div>
 
       <div style="display:flex; gap:10px;">
+        {% if entitlements.barcode.allowed %}
         <a href="{% url 'product_labels' %}" class="btn btn-outline">
           <i data-lucide="printer"></i>
           Print Labels
         </a>
+        {% else %}
+        <button class="btn btn-outline" type="button" disabled title="{{ entitlements.barcode.message }}">
+          <i data-lucide="lock"></i>
+          Labels locked
+        </button>
+        {% endif %}
         <button class="btn btn-outline" onclick="openCategoryModal()">
           <i data-lucide="folder-plus"></i>
           Add Category
@@ -92,7 +99,7 @@
 
     <form method="GET" action="{% url 'inventory' %}" style="margin-bottom:1rem;">
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
-        <select name="branch" class="input" style="min-width:220px;">
+        <select name="branch" class="input" style="min-width:220px;" {% if not entitlements.multi_branch.allowed %}disabled title="{{ entitlements.multi_branch.message }}"{% endif %}>
           <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
           {% for branch in branches %}
             <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}{% if branch.is_default %} (Default){% endif %}</option>
@@ -254,10 +261,16 @@
       {% csrf_token %}
 
       <input type="text" name="name" placeholder="Product Name" class="input" required>
+      {% if entitlements.barcode.allowed %}
       <div style="display:flex;gap:0.5rem;align-items:center;">
         <input type="text" name="code" id="newProductCode" placeholder="Product Code (Barcode/SKU)" class="input" style="flex:1;">
         <button type="button" class="btn btn-outline" id="generateNewProductCode">Generate</button>
       </div>
+      {% else %}
+      <div class="card" style="padding:0.75rem 1rem;color:var(--muted-foreground);">
+        Barcode/SKU tools are locked. {{ entitlements.barcode.message }}
+      </div>
+      {% endif %}
 
       <select name="category" class="input">
         <option value="">No category</option>
@@ -265,6 +278,7 @@
           <option value="{{ category.id }}">{{ category.name }}</option>
         {% endfor %}
       </select>
+      {% if entitlements.multi_branch.allowed %}
       <select name="branch_id" class="input">
         <option value="">Apply to overall store</option>
         {% for branch in branches %}
@@ -272,15 +286,20 @@
         {% endfor %}
       </select>
       <small style="color:var(--muted-foreground);">Choose a branch if this stock should belong to one location only.</small>
+      {% endif %}
 
       <input type="number" name="cost_price" placeholder="Cost Price" class="input" required>
       <input type="number" name="selling_price" placeholder="Selling Price" class="input" required>
+      {% if entitlements.tax_tools.allowed %}
       <select name="vat_status" class="input">
         <option value="standard">VAT: Standard (7.5%)</option>
         <option value="zero">VAT: Zero-rated (0%)</option>
         <option value="exempt">VAT: Exempt</option>
       </select>
       <small style="color:var(--muted-foreground);">Use VAT schedules for exempt or zero-rated goods.</small>
+      {% else %}
+      <input type="hidden" name="vat_status" value="standard">
+      {% endif %}
       <input type="number" name="stock" min="0" step="0.01" placeholder="Stock" class="input" required>
       <input type="number" name="low_stock_threshold" value="5" class="input">
 
@@ -312,10 +331,14 @@
       {% csrf_token %}
 
       <input type="text" name="name" id="editProductName" placeholder="Product Name" class="input" required>
+      {% if entitlements.barcode.allowed %}
       <div style="display:flex;gap:0.5rem;align-items:center;">
         <input type="text" name="code" id="editProductCode" placeholder="Product Code (Barcode/SKU)" class="input" style="flex:1;">
         <button type="button" class="btn btn-outline" id="generateEditProductCode">Generate</button>
       </div>
+      {% else %}
+      <input type="hidden" name="code" id="editProductCode" value="">
+      {% endif %}
 
       <select name="category" id="editProductCategory" class="input">
         <option value="">No category</option>
@@ -323,6 +346,7 @@
           <option value="{{ category.id }}">{{ category.name }}</option>
         {% endfor %}
       </select>
+      {% if entitlements.multi_branch.allowed %}
       <select name="branch_id" id="editProductBranch" class="input">
         <option value="">Apply to overall store</option>
         {% for branch in branches %}
@@ -330,15 +354,22 @@
         {% endfor %}
       </select>
       <small style="color:var(--muted-foreground);">When a branch is selected, stock and branch price update for that location.</small>
+      {% else %}
+      <input type="hidden" name="branch_id" id="editProductBranch" value="">
+      {% endif %}
 
       <input type="number" name="cost_price" id="editProductCostPrice" placeholder="Cost Price" class="input" required>
       <input type="number" name="selling_price" id="editProductSellingPrice" placeholder="Selling Price" class="input" required>
+      {% if entitlements.tax_tools.allowed %}
       <select name="vat_status" id="editProductVatStatus" class="input">
         <option value="standard">VAT: Standard (7.5%)</option>
         <option value="zero">VAT: Zero-rated (0%)</option>
         <option value="exempt">VAT: Exempt</option>
       </select>
       <small style="color:var(--muted-foreground);">Use VAT schedules for exempt or zero-rated goods.</small>
+      {% else %}
+      <input type="hidden" name="vat_status" id="editProductVatStatus" value="standard">
+      {% endif %}
       <input type="number" name="stock" id="editProductStock" min="0" step="0.01" placeholder="Stock" class="input" required>
       <input type="number" name="low_stock_threshold" id="editProductLowStockThreshold" class="input">
 

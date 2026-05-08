@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Product, Sale, SaleItem, ShopBranch, User
+from .models import Customer, Product, Sale, SaleItem, ShopBranch, ShopBoy, User
 
 
 class MobileOwnerLoginTests(TestCase):
@@ -233,3 +233,87 @@ class ShopOwnerDashboardTests(TestCase):
         self.assertEqual(response.context["total_transactions"], 1)
         self.assertIsNone(response.context["selected_branch"])
         self.assertContains(response, "Old Sale Product")
+
+
+class SubscriptionEntitlementTests(TestCase):
+    def setUp(self):
+        self.password = "TestPass123!"
+        self.future_date = timezone.localdate() + timedelta(days=30)
+        self.owner = User.objects.create_user(
+            username="starter-owner",
+            email="starter@example.com",
+            password=self.password,
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Starter Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000002001",
+            address="20 Market Road",
+            country="Nigeria",
+            plan="starter",
+            subscription_active_until=self.future_date,
+        )
+        ShopBranch.objects.create(user=self.owner, name="Main Branch", address=self.owner.address, is_default=True)
+
+    def test_starter_cannot_use_barcode_generation(self):
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("generate_product_code"))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(response.json()["success"])
+
+    def test_business_can_use_barcode_generation(self):
+        self.owner.plan = "business"
+        self.owner.save(update_fields=["plan"])
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("generate_product_code"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
+        self.assertTrue(response.json()["code"])
+
+    def test_starter_cannot_add_shopboy(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse("add_shopboy"),
+            data={"full_name": "Staff One", "username": "staffone", "password": "Pass123!"},
+            follow=True,
+        )
+
+        self.assertEqual(ShopBoy.objects.filter(user=self.owner).count(), 0)
+        self.assertContains(response, "staff")
+
+    def test_growth_allows_customer_profile_details(self):
+        self.owner.plan = "growth"
+        self.owner.save(update_fields=["plan"])
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse("add_customer"),
+            data={
+                "first_name": "Amina",
+                "last_name": "Bello",
+                "phone": "08030000000",
+                "email": "amina@example.com",
+                "religion": "muslim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        customer = Customer.objects.get(user=self.owner)
+        self.assertEqual(customer.email, "amina@example.com")
+
+    def test_starter_blocks_customer_profile_details(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse("add_customer"),
+            data={
+                "first_name": "Amina",
+                "last_name": "Bello",
+                "phone": "08030000000",
+                "email": "amina@example.com",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(Customer.objects.filter(user=self.owner).count(), 0)
+        self.assertContains(response, "Full customer management")

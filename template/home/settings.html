@@ -859,6 +859,7 @@
                   <input type="tel" name="phone" class="input" value="{{ request.user.phone|default:'' }}" required>
                 </div>
 
+                {% if entitlements.tax_tools.allowed %}
                 <div class="form-row">
                   <div class="form-group">
                     <label>Fixed Assets</label>
@@ -876,6 +877,12 @@
                     </label>
                   </div>
                 </div>
+                {% else %}
+                <div class="settings-note">
+                  <i data-lucide="lock"></i>
+                  <span>{{ entitlements.tax_tools.message }}</span>
+                </div>
+                {% endif %}
 
                 <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Profile</button>
               </form>
@@ -889,8 +896,15 @@
                 </div>
               </div>
               <div class="settings-primary-action">
+                {% if entitlements.multi_branch.allowed %}
                 <button class="btn btn-primary" type="button" onclick="openBranchModal()"><i data-lucide="plus-circle"></i> Add Branch</button>
+                {% else %}
+                <button class="btn btn-outline" type="button" disabled title="{{ entitlements.multi_branch.message }}"><i data-lucide="lock"></i> Branches locked</button>
+                {% endif %}
               </div>
+              {% if not entitlements.multi_branch.allowed %}
+              <div class="settings-note" style="margin-bottom:1rem;"><i data-lucide="lock"></i><span>{{ entitlements.multi_branch.message }}</span></div>
+              {% endif %}
               <div class="settings-section-list">
                 {% for item in branch_summaries %}
                 <div class="settings-list-item">
@@ -928,8 +942,15 @@
                   <h3>Shop boy management</h3>
                   <p>Add team members, decide who can handle marketplace activity, and keep staff access organized.</p>
                 </div>
+                {% if can_add_shopboy %}
                 <button class="btn btn-primary" type="button" onclick="openShopBoyModal()"><i data-lucide="user-plus"></i> Add Shop Boy</button>
+                {% else %}
+                <button class="btn btn-outline" type="button" disabled title="Your current plan has reached its staff limit."><i data-lucide="lock"></i> Staff locked</button>
+                {% endif %}
               </div>
+              {% if not can_add_shopboy %}
+              <div class="settings-note" style="margin-bottom:1rem;"><i data-lucide="lock"></i><span>Your {{ current_plan.name }} plan has reached its staff/shopboy limit. Upgrade your plan to add more staff.</span></div>
+              {% endif %}
 
               {% if shopboys %}
               <div class="table-container settings-responsive-table">
@@ -1093,7 +1114,7 @@
                     <strong>Tax profile</strong>
                     <p>Fixed assets and professional-service status help with cleaner financial records.</p>
                   </div>
-                  <div class="settings-value">{% if request.user.fixed_assets %}Set{% else %}Pending{% endif %}</div>
+                  <div class="settings-value">{% if entitlements.tax_tools.allowed %}{% if request.user.fixed_assets %}Set{% else %}Pending{% endif %}{% else %}Locked{% endif %}</div>
                 </div>
               </div>
             </section>
@@ -1228,12 +1249,17 @@
           </div>
           <div class="form-group">
             <label>Assigned Branch</label>
+            {% if entitlements.multi_branch.allowed %}
             <select name="branch_id" class="input">
               <option value="">Main / Unassigned</option>
               {% for branch in branches %}
               <option value="{{ branch.id }}">{{ branch.name }}</option>
               {% endfor %}
             </select>
+            {% else %}
+            <input type="hidden" name="branch_id" value="">
+            <div class="settings-note"><i data-lucide="lock"></i><span>{{ entitlements.multi_branch.message }}</span></div>
+            {% endif %}
           </div>
         </div>
         <div class="form-group">

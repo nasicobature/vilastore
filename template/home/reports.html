@@ -58,7 +58,7 @@
           <i data-lucide="settings"></i>
           <span>Settings</span>
         </a>
-        {% if is_nigeria %}
+        {% if is_nigeria and has_tax_tools %}
         <a href="#nrs-tax-filing" class="nav-link" onclick="scrollToTaxFiling(event)">
           <i data-lucide="file-text"></i>
           <span>NRS Tax Filing</span>
@@ -224,7 +224,7 @@
         </div>
       </section>
 
-      {% if is_nigeria %}
+      {% if is_nigeria and has_tax_tools %}
       <section class="tax-filing-section" id="nrs-tax-filing">
         <div class="section-header-box">
           <div class="section-header-icon">
@@ -329,6 +329,11 @@
             </div>
           </div>
         </div>
+      </section>
+      {% elif is_nigeria %}
+      <section class="card" style="padding:1rem 1.25rem;margin-top:1.5rem;">
+        <h3 style="margin-bottom:0.35rem;">Tax tools locked</h3>
+        <p style="color:var(--muted-foreground);">{{ tax_upgrade_message }}</p>
       </section>
       {% endif %}
     </main>

@@ -35,7 +35,7 @@
       <header class="page-header">
         <div class="page-header-content">
           <h1>Customer Management</h1>
-          <p>Manage your customers in database</p>
+          <p>{% if entitlements.full_customer_management.allowed %}Manage full customer profiles and automation details{% else %}Starter plan includes basic customer names and phone numbers{% endif %}</p>
         </div>
         <button class="btn btn-primary" type="button" onclick="openCustomerModal()">
           <i data-lucide="user-plus"></i> Add Customer
@@ -65,10 +65,12 @@
               <tr>
                 <th>Name</th>
                 <th>Phone</th>
+                {% if entitlements.full_customer_management.allowed %}
                 <th>Email</th>
                 <th>Birthday</th>
                 <th>Religion</th>
                 <th>Tribe</th>
+                {% endif %}
                 <th>Actions</th>
               </tr>
             </thead>
@@ -77,6 +79,7 @@
               <tr>
                 <td data-label="Name"><strong>{{ c.first_name }} {{ c.last_name }}</strong></td>
                 <td data-label="Phone">{{ c.phone }}</td>
+                {% if entitlements.full_customer_management.allowed %}
                 <td data-label="Email">{{ c.email|default:"-" }}</td>
                 <td data-label="Birthday">{{ c.birthday|date:"Y-m-d"|default:"-" }}</td>
                 <td data-label="Religion">
@@ -87,6 +90,7 @@
                   {% endif %}
                 </td>
                 <td data-label="Tribe">{{ c.tribe|default:"-" }}</td>
+                {% endif %}
                 <td data-label="Actions">
                   <div class="action-buttons">
                     <button
@@ -104,7 +108,7 @@
               </tr>
               {% empty %}
               <tr>
-                <td colspan="7" class="empty-state"><i data-lucide="users"></i><p>No customers yet</p></td>
+                <td colspan="{% if entitlements.full_customer_management.allowed %}7{% else %}3{% endif %}" class="empty-state"><i data-lucide="users"></i><p>No customers yet</p></td>
               </tr>
               {% endfor %}
             </tbody>
@@ -136,6 +140,7 @@
           <label for="customerPhone">Phone Number</label>
           <input type="tel" id="customerPhone" name="phone" class="input" required>
         </div>
+        {% if entitlements.full_customer_management.allowed %}
         <div class="form-group">
           <label for="customerEmail">Email (Optional)</label>
           <input type="email" id="customerEmail" name="email" class="input">
@@ -163,6 +168,16 @@
           <label for="customerNotes">Notes (Optional)</label>
           <textarea id="customerNotes" name="notes" class="input textarea" rows="2"></textarea>
         </div>
+        {% else %}
+        <div class="card" style="padding:0.75rem 1rem;color:var(--muted-foreground);">
+          {{ entitlements.full_customer_management.message }}
+        </div>
+        <input type="hidden" id="customerEmail" name="email" value="">
+        <input type="hidden" id="customerReligion" name="religion" value="">
+        <input type="hidden" id="customerTribe" name="tribe" value="">
+        <input type="hidden" id="customerBirthday" name="birthday" value="">
+        <input type="hidden" id="customerNotes" name="notes" value="">
+        {% endif %}
         <div class="form-buttons">
           <button type="button" class="btn btn-outline" onclick="closeCustomerModal()">Cancel</button>
           <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Customer</button>

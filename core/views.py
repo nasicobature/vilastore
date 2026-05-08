@@ -169,6 +169,13 @@ def _default_branch_for_user(user):
 
 def _selected_branch_for_request(request, *, session_key="owner_selected_branch_id", query_key="branch", default_to_all=False):
     branches = _owner_branches(request.user)
+    if not _plan_has_feature(request.user, "multi_branch"):
+        if default_to_all:
+            return branches, None, False
+        default_branch = next((branch for branch in branches if branch.is_default), branches[0] if branches else None)
+        if default_branch:
+            request.session[session_key] = str(default_branch.id)
+        return branches, default_branch, False
     branch_map = {str(branch.id): branch for branch in branches}
     branch_id = (request.GET.get(query_key) or request.POST.get(query_key) or "").strip()
 
@@ -276,7 +283,8 @@ def _vat_registered_for_sale(user, sale_date, additional_turnover):
 
 def _calculate_item_vat(product, line_total, vat_registered):
     vat_status = getattr(product, "vat_status", "standard")
-    vat_applicable = bool(vat_registered and vat_status == "standard")
+    tax_enabled = _plan_has_feature(product.user, "tax_tools") if getattr(product, "user_id", None) else True
+    vat_applicable = bool(tax_enabled and vat_registered and vat_status == "standard")
     vat_rate = VAT_RATE if vat_applicable else Decimal("0.00")
     vat_amount = (line_total * vat_rate).quantize(Decimal("0.01"))
     return vat_status, vat_applicable, vat_rate, vat_amount
@@ -495,6 +503,7 @@ def index(request):
         'migration_warning': _check_migrations(),
         'branches': branches,
         'selected_branch': selected_branch,
+        'entitlements': _feature_entitlements(request.user),
     }
     return render(request, 'home/index.html', context)
 
@@ -609,6 +618,10 @@ def add_to_cart(request, product_id):
 @login_required
 @require_POST
 def add_to_cart_by_code(request):
+    feature_redirect = _require_feature_or_redirect(request, "barcode", "product")
+    if feature_redirect:
+        return feature_redirect
+
     code = (request.POST.get("code") or "").strip()
     qty_raw = request.POST.get("quantity")
 
@@ -674,6 +687,8 @@ def product_lookup_by_code(request):
             user = shopboy.user
     if not user:
         return JsonResponse({"success": False, "message": "Unauthorized."}, status=403)
+    if not _plan_has_feature(user, "barcode"):
+        return JsonResponse({"success": False, "message": _feature_upgrade_message("barcode")}, status=403)
 
     product = Product.objects.filter(user=user, code__iexact=code).first()
     if not product:
@@ -681,6 +696,8 @@ def product_lookup_by_code(request):
 
     branch = None
     if branch_id:
+        if not _plan_has_feature(user, "multi_branch"):
+            return JsonResponse({"success": False, "message": _feature_upgrade_message("multi_branch")}, status=403)
         branch = ShopBranch.objects.filter(user=user, id=branch_id, is_active=True).first()
         if branch:
             product._branch_inventory = BranchInventory.objects.filter(branch=branch, product=product).first()
@@ -694,6 +711,8 @@ def product_lookup_by_code(request):
 
 @login_required
 def generate_product_code(request):
+    if not _plan_has_feature(request.user, "barcode"):
+        return JsonResponse({"success": False, "message": _feature_upgrade_message("barcode")}, status=403)
     code = _generate_product_code(request.user)
     if not code:
         return JsonResponse({"success": False, "message": "Unable to generate code."}, status=500)
@@ -701,6 +720,10 @@ def generate_product_code(request):
 
 @login_required
 def product_labels(request):
+    feature_redirect = _require_feature_or_redirect(request, "barcode", "inventory")
+    if feature_redirect:
+        return feature_redirect
+
     products = Product.objects.filter(user=request.user).order_by("name")
     updated = False
     for product in products:
@@ -997,6 +1020,10 @@ def add_product(request):
         messages.error(request, _plan_limit_message("product", plan["name"]))
         return redirect('inventory')
 
+    if code and not _plan_has_feature(request.user, "barcode"):
+        messages.error(request, _feature_upgrade_message("barcode"))
+        return redirect('inventory')
+
     if code:
         existing_code = Product.objects.filter(user=request.user, code__iexact=code).exists()
         if existing_code:
@@ -1019,6 +1046,9 @@ def add_product(request):
 
     branch = None
     if branch_id:
+        feature_redirect = _require_feature_or_redirect(request, "multi_branch", "inventory")
+        if feature_redirect:
+            return feature_redirect
         branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
         if not branch:
             messages.error(request, "Selected branch is invalid.")
@@ -1027,6 +1057,9 @@ def add_product(request):
     valid_vat_status = {choice[0] for choice in Product.VAT_STATUS_CHOICES}
     if vat_status not in valid_vat_status:
         vat_status = Product.VAT_STANDARD
+    if vat_status != Product.VAT_STANDARD and not _plan_has_feature(request.user, "tax_tools"):
+        messages.error(request, _feature_upgrade_message("tax_tools"))
+        return redirect('inventory')
 
     product = Product.objects.create(
         user=request.user,
@@ -1084,6 +1117,9 @@ def adjust_stock(request, pk):
     branch_id = (request.POST.get("branch") or "").strip()
     branch = None
     if branch_id:
+        feature_redirect = _require_feature_or_redirect(request, "multi_branch", "inventory")
+        if feature_redirect:
+            return feature_redirect
         branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
 
     adjustment = Decimal(str(request.POST.get('adjustment', 0)))
@@ -1123,6 +1159,9 @@ def edit_product(request, pk):
     branch_id = (request.POST.get("branch_id") or "").strip()
     branch = None
     if branch_id:
+        feature_redirect = _require_feature_or_redirect(request, "multi_branch", "inventory")
+        if feature_redirect:
+            return feature_redirect
         branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
         if not branch:
             messages.error(request, "Selected branch is invalid.")
@@ -1141,6 +1180,9 @@ def edit_product(request, pk):
         return redirect('inventory')
     vat_status = (request.POST.get("vat_status") or "").strip()
     if vat_status:
+        if vat_status != Product.VAT_STANDARD and not _plan_has_feature(request.user, "tax_tools"):
+            messages.error(request, _feature_upgrade_message("tax_tools"))
+            return redirect('inventory')
         valid_vat_status = {choice[0] for choice in Product.VAT_STATUS_CHOICES}
         if vat_status in valid_vat_status:
             product.vat_status = vat_status
@@ -1149,6 +1191,9 @@ def edit_product(request, pk):
         product.image = request.FILES.get('image')
 
     if code:
+        if not _plan_has_feature(request.user, "barcode"):
+            messages.error(request, _feature_upgrade_message("barcode"))
+            return redirect('inventory')
         existing_code = Product.objects.filter(user=request.user, code__iexact=code).exclude(id=product.id).exists()
         if existing_code:
             messages.error(request, f"A product with code {code} already exists.")
@@ -1470,6 +1515,7 @@ def expenses(request):
 def reports(request):
 
     now = timezone.now()
+    has_tax_tools = _plan_has_feature(request.user, "tax_tools")
     period = request.GET.get("period", "month")
     branches, selected_branch, _ = _selected_branch_for_request(request, default_to_all=True)
     start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
@@ -1696,6 +1742,9 @@ def reports(request):
         "vat_registered": vat_registered,
         "vat_registration_note": vat_registration_note,
         "is_nigeria": (request.user.country or "").strip().lower() == "nigeria",
+        "has_tax_tools": has_tax_tools,
+        "tax_upgrade_message": _feature_upgrade_message("tax_tools"),
+        "entitlements": _feature_entitlements(request.user),
         "branches": branches,
         "selected_branch": selected_branch,
     }
@@ -1728,6 +1777,7 @@ def customer(request):
     return render(request, 'home/customer.html', {
         "customers": customers,
         "q": q,
+        "entitlements": _feature_entitlements(request.user),
     })
 
 
@@ -1745,6 +1795,12 @@ def add_customer(request):
 
     if not first_name or not last_name or not phone:
         messages.error(request, "First name, last name and phone are required.")
+        return redirect("customer")
+
+    has_full_customer_management = _plan_has_feature(request.user, "full_customer_management")
+    advanced_values = [email, birthday, religion, tribe, notes]
+    if any(advanced_values) and not has_full_customer_management:
+        messages.error(request, _feature_upgrade_message("full_customer_management"))
         return redirect("customer")
 
     valid_religions = {choice[0] for choice in Customer.RELIGION_CHOICES}
@@ -1782,6 +1838,12 @@ def edit_customer(request, pk):
 
     if not first_name or not last_name or not phone:
         messages.error(request, "First name, last name and phone are required.")
+        return redirect("customer")
+
+    has_full_customer_management = _plan_has_feature(request.user, "full_customer_management")
+    advanced_values = [email, birthday, religion, tribe, notes]
+    if any(advanced_values) and not has_full_customer_management:
+        messages.error(request, _feature_upgrade_message("full_customer_management"))
         return redirect("customer")
 
     valid_religions = {choice[0] for choice in Customer.RELIGION_CHOICES}
@@ -1829,6 +1891,7 @@ def settings(request):
     marketplace_settings = _get_marketplace_settings(request.user)
     marketplace_profile, _ = MarketplaceShopProfile.objects.get_or_create(user=request.user)
     _ensure_shop_code(request.user)
+    staff_limit = _plan_limit(request.user, "staff_limit")
     branch_summaries = []
     total_branch_revenue = Decimal("0.00")
     for branch in branches:
@@ -1853,6 +1916,10 @@ def settings(request):
         "marketplace_profile": marketplace_profile,
         "active_shopboy_count": shopboys.filter(is_active=True).count(),
         "marketplace_ready_shopboy_count": shopboys.filter(is_active=True, can_use_marketplace=True).count(),
+        "entitlements": _feature_entitlements(request.user),
+        "current_plan": _plan_for_slug(request.user.plan),
+        "staff_limit": staff_limit,
+        "can_add_shopboy": staff_limit is None or shopboys.count() < staff_limit,
     })
 
 
@@ -1868,21 +1935,29 @@ def update_profile(request):
     if profile_image:
         user.profile_image = profile_image
     fixed_assets_raw = (request.POST.get("fixed_assets") or "").strip()
-    if fixed_assets_raw:
-        try:
-            fixed_assets_value = Decimal(fixed_assets_raw)
-            if fixed_assets_value < 0:
-                raise ValueError
-            user.fixed_assets = fixed_assets_value
-        except Exception:
-            messages.error(request, "Fixed assets must be a valid non-negative amount.")
+    tax_fields_posted = "fixed_assets" in request.POST or "is_professional_services" in request.POST
+    save_fields = ["business_name", "country", "address", "phone", "profile_image"]
+    if tax_fields_posted:
+        if not _plan_has_feature(user, "tax_tools"):
+            messages.error(request, _feature_upgrade_message("tax_tools"))
             return redirect("settings")
-    else:
-        user.fixed_assets = None
 
-    user.is_professional_services = request.POST.get("is_professional_services") == "on"
+        if fixed_assets_raw:
+            try:
+                fixed_assets_value = Decimal(fixed_assets_raw)
+                if fixed_assets_value < 0:
+                    raise ValueError
+                user.fixed_assets = fixed_assets_value
+            except Exception:
+                messages.error(request, "Fixed assets must be a valid non-negative amount.")
+                return redirect("settings")
+        else:
+            user.fixed_assets = None
 
-    user.save(update_fields=["business_name", "country", "address", "phone", "profile_image", "fixed_assets", "is_professional_services"])
+        user.is_professional_services = request.POST.get("is_professional_services") == "on"
+        save_fields.extend(["fixed_assets", "is_professional_services"])
+
+    user.save(update_fields=save_fields)
     marketplace_profile, _ = MarketplaceShopProfile.objects.get_or_create(user=user)
     marketplace_logo = request.FILES.get("marketplace_logo")
     if marketplace_logo:
@@ -1925,6 +2000,9 @@ def add_shopboy(request):
         role = ShopBoy.ROLE_STAFF
     branch = None
     if branch_id:
+        feature_redirect = _require_feature_or_redirect(request, "multi_branch", "settings")
+        if feature_redirect:
+            return feature_redirect
         branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
         if not branch:
             messages.error(request, "Selected branch is not available.")
@@ -1955,6 +2033,9 @@ def add_branch(request):
 
     plan = _plan_for_slug(request.user.plan)
     branch_limit = _plan_limit(request.user, "branch_limit")
+    if not _plan_has_feature(request.user, "multi_branch") and ShopBranch.objects.filter(user=request.user, is_active=True).count() >= 1:
+        messages.error(request, _feature_upgrade_message("multi_branch"))
+        return redirect("settings")
     if branch_limit is not None and ShopBranch.objects.filter(user=request.user, is_active=True).count() >= branch_limit:
         messages.error(request, _plan_limit_message("branch", plan["name"]))
         return redirect("settings")
@@ -1976,6 +2057,9 @@ def add_branch(request):
 @login_required
 @require_POST
 def set_default_branch(request, pk):
+    feature_redirect = _require_feature_or_redirect(request, "multi_branch", "settings")
+    if feature_redirect:
+        return feature_redirect
     branch = get_object_or_404(ShopBranch, pk=pk, user=request.user)
     branch.is_default = True
     branch.save()
@@ -1986,6 +2070,9 @@ def set_default_branch(request, pk):
 @login_required
 @require_POST
 def delete_branch(request, pk):
+    feature_redirect = _require_feature_or_redirect(request, "multi_branch", "settings")
+    if feature_redirect:
+        return feature_redirect
     branch = get_object_or_404(ShopBranch, pk=pk, user=request.user)
     remaining = ShopBranch.objects.filter(user=request.user).exclude(pk=pk).order_by("-is_default", "id")
     fallback = remaining.first()
@@ -2009,6 +2096,13 @@ def delete_branch(request, pk):
 @require_POST
 def toggle_shopboy(request, pk):
     shopboy = get_object_or_404(ShopBoy, pk=pk, user=request.user)
+    if not shopboy.is_active:
+        plan = _plan_for_slug(request.user.plan)
+        staff_limit = _plan_limit(request.user, "staff_limit")
+        active_count = ShopBoy.objects.filter(user=request.user, is_active=True).exclude(pk=pk).count()
+        if staff_limit is not None and active_count >= staff_limit:
+            messages.error(request, _plan_limit_message("active staff", plan["name"]))
+            return redirect("settings")
     shopboy.is_active = not shopboy.is_active
     shopboy.save(update_fields=["is_active"])
     messages.success(request, "Shop boy status updated.")
@@ -2538,6 +2632,58 @@ def _plan_limit(user, key):
 
 def _plan_limit_message(limit_name, plan_name):
     return f"Your {plan_name} plan has reached its {limit_name} limit. Upgrade your plan to add more."
+
+
+PLAN_FEATURE_RULES = {
+    "barcode": {"minimum_plan": "business", "label": "Barcode system"},
+    "multi_branch": {"minimum_plan": "business", "label": "Multi-branch management"},
+    "customer_automation": {"minimum_plan": "growth", "label": "Automated customer messaging"},
+    "full_customer_management": {"minimum_plan": "growth", "label": "Full customer management"},
+    "tax_tools": {"minimum_plan": "business", "label": "Tax tools"},
+    "advanced_tax_tools": {"minimum_plan": "pro", "label": "Advanced tax tools"},
+    "advanced_reports": {"minimum_plan": "business", "label": "Advanced reports and analytics"},
+}
+PLAN_ORDER = ["starter", "growth", "business", "pro"]
+
+
+def _plan_rank(slug):
+    try:
+        return PLAN_ORDER.index((slug or "starter").lower())
+    except ValueError:
+        return 0
+
+
+def _plan_has_feature(user, feature):
+    rule = PLAN_FEATURE_RULES.get(feature)
+    if not rule:
+        return True
+    return _plan_rank(getattr(user, "plan", "starter")) >= _plan_rank(rule["minimum_plan"])
+
+
+def _feature_upgrade_message(feature):
+    rule = PLAN_FEATURE_RULES.get(feature, {})
+    label = rule.get("label", "This feature")
+    minimum = _plan_for_slug(rule.get("minimum_plan", "business"))["name"]
+    return f"{label} is available on the {minimum} plan and above. Upgrade your plan to use it."
+
+
+def _feature_entitlements(user):
+    return {
+        key: {
+            "allowed": _plan_has_feature(user, key),
+            "message": _feature_upgrade_message(key),
+            "minimum_plan": PLAN_FEATURE_RULES[key]["minimum_plan"],
+            "label": PLAN_FEATURE_RULES[key]["label"],
+        }
+        for key in PLAN_FEATURE_RULES
+    }
+
+
+def _require_feature_or_redirect(request, feature, redirect_name):
+    if _plan_has_feature(request.user, feature):
+        return None
+    messages.error(request, _feature_upgrade_message(feature))
+    return redirect(redirect_name)
 
 
 def _flutterwave_public_key():

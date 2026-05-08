@@ -61,6 +61,12 @@ def _plan_limit(owner, key):
 
 def _plan_limit_error(limit_name, plan_name):
     return f"Your {plan_name} plan has reached its {limit_name} limit. Upgrade your plan to add more."
+
+
+def _json_feature_required(owner, feature):
+    if _plan_has_feature(owner, feature):
+        return None
+    return _json_error(_feature_upgrade_message(feature), status=403, feature=feature, upgrade_required=True)
 from .views import (
     _authenticate_with_identifier,
     _calculate_item_vat,
@@ -77,6 +83,9 @@ from .views import (
     _is_vat_registered,
     _vat_registration_note,
     _generate_product_code,
+    _plan_has_feature,
+    _feature_upgrade_message,
+    _feature_entitlements,
     _marketplace_house_queryset,
     VAT_RATE,
     _send_marketplace_reset_code,
@@ -2512,6 +2521,11 @@ def api_owner_products(request):
         return _json_error(_plan_limit_error("product", plan["name"]), status=403)
 
     if code:
+        feature_error = _json_feature_required(owner, "barcode")
+        if feature_error:
+            return feature_error
+
+    if code:
         existing_code = Product.objects.filter(user=owner, code__iexact=code).exists()
         if existing_code:
             return _json_error(f"A product with code {code} already exists.", status=409)
@@ -2524,6 +2538,10 @@ def api_owner_products(request):
     valid_vat_status = {choice[0] for choice in Product.VAT_STATUS_CHOICES}
     if vat_status not in valid_vat_status:
         vat_status = Product.VAT_STANDARD
+    if vat_status != Product.VAT_STANDARD:
+        feature_error = _json_feature_required(owner, "tax_tools")
+        if feature_error:
+            return feature_error
 
     product = Product.objects.create(
         user=owner,
@@ -2572,6 +2590,9 @@ def api_owner_product_detail(request, pk):
     if "code" in data:
         code = (data.get("code") or "").strip()
         if code:
+            feature_error = _json_feature_required(owner, "barcode")
+            if feature_error:
+                return feature_error
             existing_code = Product.objects.filter(user=owner, code__iexact=code).exclude(id=product.id).exists()
             if existing_code:
                 return _json_error(f"A product with code {code} already exists.", status=409)
@@ -2593,6 +2614,10 @@ def api_owner_product_detail(request, pk):
 
     vat_status = (data.get("vat_status") or "").strip()
     if vat_status:
+        if vat_status != Product.VAT_STANDARD:
+            feature_error = _json_feature_required(owner, "tax_tools")
+            if feature_error:
+                return feature_error
         valid_vat_status = {choice[0] for choice in Product.VAT_STATUS_CHOICES}
         if vat_status in valid_vat_status:
             product.vat_status = vat_status
@@ -2623,6 +2648,9 @@ def api_owner_adjust_stock(request, pk):
     branch_id = data.get("branch_id") or None
     branch = None
     if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
         branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
         if not branch:
             return _json_error("Branch not found.", status=404)
@@ -2653,6 +2681,9 @@ def api_owner_dashboard(request):
         branch_id = (request.GET.get("branch_id") or "").strip()
         selected_branch = None
         if branch_id:
+            feature_error = _json_feature_required(owner, "multi_branch")
+            if feature_error:
+                return feature_error
             selected_branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
             if not selected_branch:
                 return _json_error("Branch not found.", status=404)
@@ -3198,6 +3229,9 @@ def api_owner_cart_add_by_code(request):
     owner = _require_owner(request)
     if not owner or not token_obj:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "barcode")
+    if feature_error:
+        return feature_error
 
     data = _get_body_data(request)
     if data is None:
@@ -3353,6 +3387,9 @@ def api_owner_cart_checkout(request):
     line_items = []
     branch = None
     if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
         branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
         if not branch:
             return _json_error("Branch not found.", status=404)
@@ -3481,6 +3518,9 @@ def api_owner_inventory(request):
     branch_id = (request.GET.get("branch_id") or "").strip()
     branch = None
     if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
         branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
         if not branch:
             return _json_error("Branch not found.", status=404)
@@ -3524,6 +3564,9 @@ def api_owner_generate_product_code(request):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "barcode")
+    if feature_error:
+        return feature_error
 
     code = _generate_product_code(owner)
     if not code:
@@ -3537,6 +3580,9 @@ def api_owner_product_labels(request):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "barcode")
+    if feature_error:
+        return feature_error
 
     products = Product.objects.filter(user=owner).order_by("name")
     updated = False
@@ -3903,6 +3949,9 @@ def api_owner_reports(request):
     expenses = Expense.objects.filter(user=owner)
     selected_branch = None
     if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
         selected_branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
         if not selected_branch:
             return _json_error("Branch not found.", status=404)
@@ -4061,6 +4110,8 @@ def api_owner_reports(request):
             for row in expense_breakdown
         ],
         "cit": {
+            "available": _plan_has_feature(owner, "tax_tools"),
+            "upgrade_message": "" if _plan_has_feature(owner, "tax_tools") else _feature_upgrade_message("tax_tools"),
             "cit_year": cit_year,
             "cit_revenue": _money(cit_revenue),
             "cit_cost": _money(cit_cost),
@@ -4078,6 +4129,8 @@ def api_owner_reports(request):
             "is_professional_services": bool(owner.is_professional_services),
         },
         "vat": {
+            "available": _plan_has_feature(owner, "tax_tools"),
+            "upgrade_message": "" if _plan_has_feature(owner, "tax_tools") else _feature_upgrade_message("tax_tools"),
             "vat_year": vat_year,
             "vat_month": vat_month,
             "vat_taxable_sales": _money(vat_taxable_sales),
@@ -4086,6 +4139,7 @@ def api_owner_reports(request):
             "vat_registration_note": vat_registration_note,
         },
         "is_nigeria": (owner.country or "").strip().lower() == "nigeria",
+        "entitlements": _feature_entitlements(owner),
     })
 
 
@@ -4127,6 +4181,7 @@ def api_owner_customers(request):
         return _json_success({
             "customers": [_serialize_customer(c) for c in customers],
             "religions": [choice[0] for choice in Customer.RELIGION_CHOICES],
+            "entitlements": _feature_entitlements(owner),
         })
 
     data = _get_body_data(request)
@@ -4144,6 +4199,12 @@ def api_owner_customers(request):
 
     if not first_name or not last_name or not phone:
         return _json_error("First name, last name, and phone are required.")
+
+    advanced_values = [email, birthday, religion, tribe, notes]
+    if any(advanced_values):
+        feature_error = _json_feature_required(owner, "full_customer_management")
+        if feature_error:
+            return feature_error
 
     valid_religions = {choice[0] for choice in Customer.RELIGION_CHOICES}
     if religion not in valid_religions:
@@ -4190,18 +4251,33 @@ def api_owner_customer_detail(request, customer_id):
     if "phone" in data:
         customer.phone = (data.get("phone") or "").strip()
     if "email" in data:
+        feature_error = _json_feature_required(owner, "full_customer_management")
+        if feature_error:
+            return feature_error
         email = (data.get("email") or "").strip()
         customer.email = email or None
     if "birthday" in data:
+        feature_error = _json_feature_required(owner, "full_customer_management")
+        if feature_error:
+            return feature_error
         birthday = (data.get("birthday") or "").strip()
         customer.birthday = birthday or None
     if "religion" in data:
+        feature_error = _json_feature_required(owner, "full_customer_management")
+        if feature_error:
+            return feature_error
         religion = (data.get("religion") or "").strip()
         valid_religions = {choice[0] for choice in Customer.RELIGION_CHOICES}
         customer.religion = religion if religion in valid_religions else ""
     if "tribe" in data:
+        feature_error = _json_feature_required(owner, "full_customer_management")
+        if feature_error:
+            return feature_error
         customer.tribe = (data.get("tribe") or "").strip()
     if "notes" in data:
+        feature_error = _json_feature_required(owner, "full_customer_management")
+        if feature_error:
+            return feature_error
         customer.notes = (data.get("notes") or "").strip()
 
     if not customer.first_name or not customer.last_name or not customer.phone:
@@ -4337,6 +4413,8 @@ def api_owner_settings(request):
         "marketplace_assignment": {
             "assigned_shopboy_id": marketplace_settings.assigned_shopboy_id,
         },
+        "entitlements": _feature_entitlements(owner),
+        "plan": PLAN_LIMITS.get(getattr(owner, "plan", "starter")) or PLAN_LIMITS["starter"],
     })
 
 
@@ -4358,36 +4436,43 @@ def api_owner_settings_profile(request):
     if not business_name or not country or not address or not phone:
         return _json_error("Business name, country, address, and phone are required.")
 
-    if fixed_assets_raw:
-        try:
-            fixed_assets_value = Decimal(fixed_assets_raw)
-            if fixed_assets_value < 0:
-                raise ValueError
-            owner.fixed_assets = fixed_assets_value
-        except Exception:
-            return _json_error("Fixed assets must be a valid non-negative amount.")
-    else:
-        owner.fixed_assets = None
-
-    owner.business_name = business_name
-    owner.country = country
-    owner.address = address
-    owner.phone = phone
-    owner.is_professional_services = is_professional_services
-
-    profile_image = request.FILES.get("profile_image")
-    if profile_image:
-        owner.profile_image = profile_image
-
-    owner.save(update_fields=[
+    tax_update_requested = bool(fixed_assets_raw or is_professional_services)
+    save_fields = [
         "business_name",
         "country",
         "address",
         "phone",
         "profile_image",
-        "fixed_assets",
-        "is_professional_services",
-    ])
+    ]
+    if tax_update_requested and not _plan_has_feature(owner, "tax_tools"):
+        feature_error = _json_feature_required(owner, "tax_tools")
+        if feature_error:
+            return feature_error
+
+    if _plan_has_feature(owner, "tax_tools"):
+        if fixed_assets_raw:
+            try:
+                fixed_assets_value = Decimal(fixed_assets_raw)
+                if fixed_assets_value < 0:
+                    raise ValueError
+                owner.fixed_assets = fixed_assets_value
+            except Exception:
+                return _json_error("Fixed assets must be a valid non-negative amount.")
+        else:
+            owner.fixed_assets = None
+        owner.is_professional_services = is_professional_services
+        save_fields.extend(["fixed_assets", "is_professional_services"])
+
+    owner.business_name = business_name
+    owner.country = country
+    owner.address = address
+    owner.phone = phone
+
+    profile_image = request.FILES.get("profile_image")
+    if profile_image:
+        owner.profile_image = profile_image
+
+    owner.save(update_fields=save_fields)
 
     marketplace_profile, _ = MarketplaceShopProfile.objects.get_or_create(user=owner)
     marketplace_logo = request.FILES.get("marketplace_logo")
@@ -4458,6 +4543,9 @@ def api_owner_settings_shopboys(request):
 
     branch = None
     if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
         branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
         if not branch:
             return _json_error("Invalid branch selection.")
@@ -4495,6 +4583,8 @@ def api_owner_settings_branches(request):
         return _json_error("Branch name and address are required.")
 
     plan, branch_limit = _plan_limit(owner, "branch_limit")
+    if not _plan_has_feature(owner, "multi_branch") and ShopBranch.objects.filter(user=owner, is_active=True).count() >= 1:
+        return _json_error(_feature_upgrade_message("multi_branch"), status=403, feature="multi_branch", upgrade_required=True)
     if branch_limit is not None and ShopBranch.objects.filter(user=owner, is_active=True).count() >= branch_limit:
         return _json_error(_plan_limit_error("branch", plan["name"]), status=403)
 
@@ -4519,6 +4609,9 @@ def api_owner_settings_branch_update(request, branch_id):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "multi_branch")
+    if feature_error:
+        return feature_error
 
     branch = get_object_or_404(ShopBranch, user=owner, id=branch_id)
     data = _get_body_data(request)
@@ -4553,6 +4646,9 @@ def api_owner_settings_branch_delete(request, branch_id):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "multi_branch")
+    if feature_error:
+        return feature_error
 
     branch = get_object_or_404(ShopBranch, user=owner, id=branch_id)
     if ShopBranch.objects.filter(user=owner).count() <= 1:
@@ -4725,6 +4821,9 @@ def api_shopboy_cart_add_by_code(request):
     shopboy, token_obj = _get_shopboy_from_request(request)
     if not shopboy:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(shopboy.user, "barcode")
+    if feature_error:
+        return feature_error
 
     data = _get_body_data(request)
     if data is None:
