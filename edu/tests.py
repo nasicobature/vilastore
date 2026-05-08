@@ -22,6 +22,16 @@ class EduPortalRoutingTests(TestCase):
         self.assertEqual(secondary.status_code, 200)
         self.assertEqual(tertiary.status_code, 200)
 
+    def test_registration_pages_render_verification_wizard(self):
+        secondary = self.client.get(reverse("edu:secondary_register"))
+        tertiary = self.client.get(reverse("edu:tertiary_register"))
+
+        for response in (secondary, tertiary):
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, 'class="wizard-form"')
+            self.assertContains(response, "Verification Documents")
+            self.assertContains(response, "Submit for Verification")
+
 
 class EduPortalVerificationRegistrationTests(TestCase):
     def _file(self, name):

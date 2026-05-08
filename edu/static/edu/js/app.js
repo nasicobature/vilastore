@@ -21,6 +21,132 @@
     });
   });
 
+  const wizardForms = document.querySelectorAll('[data-registration-wizard]');
+  wizardForms.forEach((form) => {
+    const panels = Array.from(form.querySelectorAll('[data-wizard-panel]'));
+    const container = form.closest('.registration-card');
+    const indicators = container ? Array.from(container.querySelectorAll('[data-step-indicator]')) : [];
+    const prevButton = form.querySelector('[data-wizard-prev]');
+    const nextButton = form.querySelector('[data-wizard-next]');
+    const submitButton = form.querySelector('[data-wizard-submit]');
+    const errorBox = form.querySelector('[data-wizard-error]');
+    const reviewOutput = form.querySelector('[data-review-output]');
+    let currentStep = 0;
+
+    const showError = (message) => {
+      if (!errorBox) return;
+      errorBox.textContent = message;
+      errorBox.hidden = !message;
+    };
+
+    const fieldLabel = (field) => {
+      const label = field.closest('label');
+      if (!label) return field.name || 'Required field';
+      const clone = label.cloneNode(true);
+      clone.querySelectorAll('input, select, small, span, i, em').forEach((node) => node.remove());
+      return clone.textContent.replace('*', '').trim() || field.name || 'Required field';
+    };
+
+    const validatePanel = (panel) => {
+      const requiredFields = Array.from(panel.querySelectorAll('[required]'));
+      for (const field of requiredFields) {
+        if (field.type === 'file' && !field.files.length) {
+          showError(`${fieldLabel(field)} is required.`);
+          field.focus({ preventScroll: true });
+          return false;
+        }
+        if (field.type !== 'file' && !field.value.trim()) {
+          showError(`${fieldLabel(field)} is required.`);
+          field.focus({ preventScroll: true });
+          return false;
+        }
+      }
+
+      const requiredGroups = Array.from(new Set(
+        Array.from(panel.querySelectorAll('[data-required-group]')).map((field) => field.dataset.requiredGroup)
+      ));
+      for (const group of requiredGroups) {
+        const hasFile = Array.from(panel.querySelectorAll(`[data-required-group="${group}"]`)).some((field) => field.files.length);
+        if (!hasFile) {
+          showError(group === 'license'
+            ? 'Upload either Ministry Approval or School Operating License.'
+            : 'Upload either Utility Bill or Proof of Address.');
+          return false;
+        }
+      }
+
+      showError('');
+      return true;
+    };
+
+    const buildReview = () => {
+      if (!reviewOutput) return;
+      const fields = Array.from(form.querySelectorAll('[data-review-label]'));
+      reviewOutput.innerHTML = fields.map((field) => {
+        let value = 'Not provided';
+        if (field.type === 'file') {
+          value = field.files.length ? field.files[0].name : 'Not uploaded';
+        } else if (field.tagName === 'SELECT') {
+          value = field.options[field.selectedIndex] ? field.options[field.selectedIndex].text : field.value;
+        } else if (field.value.trim()) {
+          value = field.value.trim();
+        }
+        return `<div class="review-item"><span>${field.dataset.reviewLabel}</span><strong>${value}</strong></div>`;
+      }).join('');
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    };
+
+    const setStep = (step) => {
+      currentStep = Math.max(0, Math.min(step, panels.length - 1));
+      panels.forEach((panel, index) => {
+        panel.classList.toggle('is-active', index === currentStep);
+      });
+      indicators.forEach((indicator, index) => {
+        indicator.classList.toggle('is-active', index === currentStep);
+        indicator.classList.toggle('is-complete', index < currentStep);
+      });
+      if (prevButton) {
+        prevButton.hidden = currentStep === 0;
+      }
+      if (nextButton) {
+        nextButton.hidden = currentStep === panels.length - 1;
+      }
+      if (submitButton) {
+        submitButton.hidden = currentStep !== panels.length - 1;
+      }
+      showError('');
+      if (currentStep === panels.length - 1) {
+        buildReview();
+      }
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    if (prevButton) {
+      prevButton.addEventListener('click', () => setStep(currentStep - 1));
+    }
+    if (nextButton) {
+      nextButton.addEventListener('click', () => {
+        if (validatePanel(panels[currentStep])) {
+          setStep(currentStep + 1);
+        }
+      });
+    }
+    form.addEventListener('submit', (event) => {
+      for (let index = 0; index < panels.length; index += 1) {
+        if (!validatePanel(panels[index])) {
+          event.preventDefault();
+          setStep(index);
+          validatePanel(panels[index]);
+          return;
+        }
+      }
+    });
+
+    setStep(0);
+  });
+
   const navLinks = document.querySelectorAll('.nav-item');
   const activeClasses = ['bg-sidebar-accent', 'text-sidebar-accent-foreground', 'font-medium'];
   const inactiveClasses = ['text-sidebar-foreground/70'];
