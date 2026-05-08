@@ -59,6 +59,61 @@ def _resolve_login_user(institution_type, school_code, identifier):
     return profile.user if profile else None
 
 
+def _get_or_repair_edu_profile(user, institution_type, school_code):
+    profile = getattr(user, 'profile', None)
+    if profile:
+        return profile
+
+    staff = Staff.objects.select_related('institution').filter(
+        user=user,
+        institution__institution_type=institution_type,
+    ).first()
+    if staff:
+        profile, _ = Profile.objects.get_or_create(user=user)
+        profile.institution = staff.institution
+        profile.institution_type = institution_type
+        profile.role = staff.role
+        profile.created_via = profile.created_via or 'repaired-login'
+        profile.is_approved = staff.institution.verification_status == 'approved'
+        profile.approved_at = timezone.now() if profile.is_approved and not profile.approved_at else profile.approved_at
+        profile.save()
+        return profile
+
+    student = Student.objects.select_related('institution').filter(
+        user=user,
+        institution__institution_type=institution_type,
+    ).first()
+    if student:
+        profile, _ = Profile.objects.get_or_create(user=user)
+        profile.institution = student.institution
+        profile.institution_type = institution_type
+        profile.role = 'student'
+        profile.created_via = profile.created_via or 'repaired-login'
+        profile.is_approved = student.institution.verification_status == 'approved'
+        profile.approved_at = timezone.now() if profile.is_approved and not profile.approved_at else profile.approved_at
+        profile.save()
+        return profile
+
+    institution = Institution.objects.filter(
+        institution_type=institution_type,
+        school_code__iexact=school_code,
+    ).filter(
+        Q(admin_email__iexact=user.email) | Q(admin_phone__iexact=user.username)
+    ).first()
+    if institution:
+        profile, _ = Profile.objects.get_or_create(user=user)
+        profile.institution = institution
+        profile.institution_type = institution_type
+        profile.role = 'admin' if institution_type == 'secondary' else 'vc'
+        profile.created_via = profile.created_via or 'school-register'
+        profile.is_approved = institution.verification_status == 'approved'
+        profile.approved_at = timezone.now() if profile.is_approved and not profile.approved_at else profile.approved_at
+        profile.save()
+        return profile
+
+    return None
+
+
 def _login_for_institution(request, institution_type, template_name):
     roles = SECONDARY_ROLES if institution_type == 'secondary' else TERTIARY_ROLES
 
@@ -77,7 +132,7 @@ def _login_for_institution(request, institution_type, template_name):
                 messages.error(request, 'Invalid username or password.')
         else:
             auth_login(request, user)
-            profile = getattr(user, 'profile', None)
+            profile = _get_or_repair_edu_profile(user, institution_type, school_code)
             if profile and profile.institution_type != institution_type:
                 auth_logout(request)
                 messages.error(request, 'This account belongs to a different portal.')
@@ -472,7 +527,7 @@ def secondary_school_register(request):
                 user.is_active = True
                 user.save()
 
-                profile = user.profile
+                profile, _ = Profile.objects.get_or_create(user=user)
                 profile.institution = institution
                 profile.institution_type = 'secondary'
                 profile.role = 'admin'
@@ -548,7 +603,7 @@ def secondary_create_user(request):
             user.is_active = True
             user.save()
 
-            profile = user.profile
+            profile, _ = Profile.objects.get_or_create(user=user)
             profile.institution = creator_profile.institution
             profile.institution_type = 'secondary'
             profile.role = role
@@ -1138,7 +1193,7 @@ def secondary_add_student(request):
             user.is_active = True
             user.save()
 
-            profile = user.profile
+            profile, _ = Profile.objects.get_or_create(user=user)
             profile.institution = creator_profile.institution
             profile.institution_type = 'secondary'
             profile.role = 'student'
@@ -1284,7 +1339,7 @@ def secondary_add_teacher(request):
             user.is_active = True
             user.save()
 
-            profile = user.profile
+            profile, _ = Profile.objects.get_or_create(user=user)
             profile.institution = creator_profile.institution
             profile.institution_type = 'secondary'
             profile.role = 'teacher'
@@ -1340,7 +1395,7 @@ def tertiary_create_user(request):
             user.is_active = True
             user.save()
 
-            profile = user.profile
+            profile, _ = Profile.objects.get_or_create(user=user)
             profile.institution = creator_profile.institution
             profile.institution_type = 'tertiary'
             profile.role = role
@@ -1438,7 +1493,7 @@ def tertiary_school_register(request):
                 user.is_active = True
                 user.save()
 
-                profile = user.profile
+                profile, _ = Profile.objects.get_or_create(user=user)
                 profile.institution = institution
                 profile.institution_type = 'tertiary'
                 profile.role = vc_role if vc_role in ['vc', 'provost'] else 'vc'

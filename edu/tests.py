@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import AcademicClass, AcademicSession, AcademicTerm, Fee, Institution, Payment, Profile, Student
+from .models import AcademicClass, AcademicSession, AcademicTerm, Fee, Institution, Payment, Profile, Staff, Student
 
 
 class EduPortalRoutingTests(TestCase):
@@ -139,6 +139,39 @@ class EduPortalVerificationRegistrationTests(TestCase):
         })
         self.assertEqual(phone_response.status_code, 200)
         self.assertContains(phone_response, "School verification is still pending")
+
+    def test_login_repairs_missing_profile_from_staff_record(self):
+        institution = Institution.objects.create(
+            name="Approved Repair Academy",
+            institution_type="secondary",
+            verification_status="approved",
+        )
+        user = get_user_model().objects.create_user(
+            username="repair-admin",
+            password="StrongPass123!",
+            email="repair@example.com",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        Profile.objects.filter(user=user).delete()
+        Staff.objects.create(
+            institution=institution,
+            user=user,
+            full_name="Repair Admin",
+            staff_id="REP/001",
+            role="admin",
+        )
+
+        response = self.client.post(reverse("edu:secondary_login"), {
+            "school_code": institution.school_code,
+            "username": "repair-admin",
+            "password": "StrongPass123!",
+        })
+
+        profile = Profile.objects.get(user=user)
+        self.assertEqual(profile.institution, institution)
+        self.assertEqual(profile.role, "admin")
+        self.assertTrue(profile.is_approved)
+        self.assertRedirects(response, reverse("edu:secondary_dashboard", kwargs={"role": "admin"}))
 
 
 class EduPortalFeesTests(TestCase):
