@@ -23,6 +23,7 @@ urlpatterns = [
     path('secondary/fees/<int:fee_id>/delete/', views.secondary_delete_fee, name='secondary_delete_fee'),
     path('secondary/payments/record/', views.secondary_record_payment, name='secondary_record_payment'),
     path('secondary/payments/online/', views.secondary_online_payment, name='secondary_online_payment'),
+    path('secondary/student/payments/online/', views.secondary_student_online_payment, name='secondary_student_online_payment'),
     path('secondary/payments/<str:reference>/receipt/', views.secondary_payment_receipt, name='secondary_payment_receipt'),
     path('secondary/payment/settings/', views.secondary_payment_settings, name='secondary_payment_settings'),
     path('secondary/teacher/scores/save/', views.secondary_save_scores, name='secondary_save_scores'),

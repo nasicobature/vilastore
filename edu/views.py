@@ -285,6 +285,13 @@ def _get_secondary_accountant_profile(request):
     return profile
 
 
+def _get_secondary_student_profile(request):
+    profile = getattr(request.user, 'profile', None)
+    if not profile or profile.institution_type != 'secondary' or profile.role != 'student':
+        return None
+    return profile
+
+
 def _get_selected_session_term(institution, session_id, term_id):
     session = AcademicSession.objects.filter(id=session_id, institution=institution).first()
     term = AcademicTerm.objects.filter(id=term_id, session=session).first() if session else None
@@ -871,6 +878,94 @@ def secondary_online_payment(request):
 
 
 @login_required
+def secondary_student_online_payment(request):
+    profile = _get_secondary_student_profile(request)
+    if not profile:
+        messages.error(request, 'Only Students can pay school fees here.')
+        return redirect('edu:secondary_dashboard', role='student')
+
+    institution = profile.institution
+    student = Student.objects.filter(user=request.user, institution=institution).first()
+    if not student:
+        messages.error(request, 'Student record not found.')
+        return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+
+    if request.method == 'POST':
+        fee_id = request.POST.get('fee')
+        amount_raw = request.POST.get('amount', '').strip()
+        payment_reference = request.POST.get('payment_reference', '').strip()
+        fee = Fee.objects.filter(id=fee_id, institution=institution).first()
+
+        if not fee or not amount_raw or not payment_reference:
+            messages.error(request, 'Fee, amount, and payment reference are required.')
+            return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+        if not institution.payment_secret_key:
+            messages.error(request, 'Payment secret key is not configured for this school.')
+            return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+        if not _fee_student_queryset(fee).filter(id=student.id).exists():
+            messages.error(request, 'This fee does not apply to your class.')
+            return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+
+        try:
+            expected_amount = Decimal(amount_raw)
+        except Exception:
+            messages.error(request, 'Payment amount is invalid.')
+            return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+
+        try:
+            verify_response = requests.get(
+                f"https://api.flutterwave.com/v3/transactions/{payment_reference}/verify",
+                headers={"Authorization": f"Bearer {institution.payment_secret_key}"},
+                timeout=15,
+            )
+            verify_payload = verify_response.json()
+        except Exception:
+            messages.error(request, 'Could not verify payment right now. Please try again.')
+            return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+
+        tx_data = verify_payload.get('data') or {}
+        tx_status = (tx_data.get('status') or '').strip().lower()
+        if (verify_payload.get('status') or '').strip().lower() != 'success' or tx_status != 'successful':
+            messages.error(request, 'Payment was not successful.')
+            return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+
+        try:
+            paid_amount = Decimal(str(tx_data.get('amount') or '0'))
+        except Exception:
+            paid_amount = Decimal('0.00')
+        if paid_amount < expected_amount:
+            messages.error(request, 'Paid amount is less than the required fee amount.')
+            return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+
+        currency = (tx_data.get('currency') or '').strip().upper()
+        if currency and currency != (institution.currency or 'NGN').upper():
+            messages.error(request, 'Payment currency does not match school currency.')
+            return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+
+        payment, created = Payment.objects.get_or_create(
+            institution=institution,
+            gateway_reference=payment_reference,
+            defaults={
+                'fee': fee,
+                'student': student,
+                'amount': paid_amount,
+                'status': 'Paid',
+                'payment_method': 'Flutterwave',
+            },
+        )
+        if payment.student_id != student.id:
+            messages.error(request, 'Payment reference belongs to another student.')
+            return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+        if created:
+            messages.success(request, f'Payment confirmed. Receipt: {payment.reference}')
+        else:
+            messages.info(request, 'This payment was already recorded.')
+        return redirect(_payment_receipt_url(payment))
+
+    return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+
+
+@login_required
 def secondary_payment_receipt(request, reference):
     profile = getattr(request.user, 'profile', None)
     if not profile or profile.institution_type != 'secondary':
@@ -882,6 +977,11 @@ def secondary_payment_receipt(request, reference):
         reference=reference,
         institution=profile.institution,
     )
+    if profile.role == 'student':
+        student = Student.objects.filter(user=request.user, institution=profile.institution).first()
+        if not student or payment.student_id != student.id:
+            messages.error(request, 'Receipt not found for your account.')
+            return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
     return render(request, 'edu/payment_receipt.html', {
         'payment': payment,
         'institution': payment.institution,
@@ -1657,6 +1757,14 @@ def secondary_page(request, role, page):
     result_sheet_session = ''
     result_sheet_term = ''
     id_card_students = students_all
+    student_record = None
+    student_subjects = Subject.objects.none()
+    student_results = Result.objects.none()
+    student_payments = Payment.objects.none()
+    student_fee_rows = []
+    student_fee_total = Decimal('0.00')
+    student_paid_total = Decimal('0.00')
+    student_outstanding_total = Decimal('0.00')
     selected_id_card_class_id = request.GET.get('class', '').strip()
     selected_id_card_session_id = request.GET.get('session', '').strip()
     if page == 'student-ids':
@@ -1695,6 +1803,41 @@ def secondary_page(request, role, page):
                 }
 
             teacher_submissions = ResultSubmission.objects.filter(submitted_by=staff).select_related('academic_class', 'subject').order_by('-submitted_at')
+    elif role == 'student':
+        student_record = Student.objects.filter(user=request.user, institution=institution).select_related('academic_class').first()
+        if student_record:
+            student_subjects = Subject.objects.filter(
+                subject_classes__academic_class=student_record.academic_class,
+                institution=institution,
+            ).distinct().order_by('name')
+            student_results = Result.objects.filter(
+                institution=institution,
+                student=student_record,
+            ).select_related('subject', 'academic_class', 'teacher', 'academic_session', 'academic_term').order_by('-session', 'subject__name')
+            student_payments = Payment.objects.filter(
+                institution=institution,
+                student=student_record,
+            ).select_related('fee').order_by('-paid_at')
+            paid_by_fee = {}
+            for payment in student_payments.filter(status='Paid'):
+                if payment.fee_id:
+                    paid_by_fee[payment.fee_id] = paid_by_fee.get(payment.fee_id, Decimal('0.00')) + payment.amount
+            for fee in fees:
+                if not _fee_student_queryset(fee).filter(id=student_record.id).exists():
+                    continue
+                paid_amount = paid_by_fee.get(fee.id, Decimal('0.00'))
+                outstanding = fee.amount - paid_amount
+                if outstanding < 0:
+                    outstanding = Decimal('0.00')
+                student_fee_total += fee.amount
+                student_paid_total += paid_amount
+                student_outstanding_total += outstanding
+                student_fee_rows.append({
+                    'fee': fee,
+                    'paid': paid_amount,
+                    'outstanding': outstanding,
+                    'is_paid': outstanding <= 0,
+                })
     elif role == 'examiner':
         examiner_submissions = ResultSubmission.objects.filter(
             institution=institution,
@@ -1780,6 +1923,11 @@ def secondary_page(request, role, page):
         'submit-results',
         'review-results',
         'result-sheets',
+        'subjects-student',
+        'test-scores',
+        'results',
+        'pay-fees',
+        'profile',
     }
     nav_placeholders = [item for item in nav_items if item['id'] not in existing_sections]
 
@@ -1825,6 +1973,14 @@ def secondary_page(request, role, page):
         'result_sheet_session': result_sheet_session,
         'result_sheet_term': result_sheet_term,
         'id_card_students': id_card_students,
+        'student_record': student_record,
+        'student_subjects': student_subjects,
+        'student_results': student_results,
+        'student_payments': student_payments,
+        'student_fee_rows': student_fee_rows,
+        'student_fee_total': student_fee_total,
+        'student_paid_total': student_paid_total,
+        'student_outstanding_total': student_outstanding_total,
         'selected_id_card_class_id': selected_id_card_class_id,
         'selected_id_card_session_id': selected_id_card_session_id,
         'current_session_name': current_session.name if current_session else '',

@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from decimal import Decimal
 
 
 class Institution(models.Model):
@@ -280,6 +281,10 @@ class Result(models.Model):
     session = models.CharField(max_length=20, blank=True)
 
     def save(self, *args, **kwargs):
+        self.test1 = Decimal(str(self.test1 or 0))
+        self.test2 = Decimal(str(self.test2 or 0))
+        self.assignment = Decimal(str(self.assignment or 0))
+        self.exam = Decimal(str(self.exam or 0))
         self.total = self.test1 + self.test2 + self.assignment + self.exam
         if self.total >= 70:
             self.grade = 'A'

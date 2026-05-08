@@ -379,6 +379,79 @@ class EduPortalFeesTests(TestCase):
         self.assertContains(response, self.student.student_id)
         self.assertNotContains(response, "Coming soon")
 
+    def test_student_portal_sections_are_active(self):
+        student_user = get_user_model().objects.create_user(
+            username="student-user",
+            password="StrongPass123!",
+            email="student@example.com",
+        )
+        student_user.profile.institution = self.institution
+        student_user.profile.institution_type = "secondary"
+        student_user.profile.role = "student"
+        student_user.profile.is_approved = True
+        student_user.profile.save()
+        self.student.user = student_user
+        self.student.save(update_fields=["user"])
+        session = AcademicSession.objects.create(institution=self.institution, name="2025/2026", is_current=True)
+        term = AcademicTerm.objects.create(session=session, term="first", is_current=True)
+        self.academic_class.academic_session = session
+        self.academic_class.academic_term = term
+        self.academic_class.save(update_fields=["academic_session", "academic_term"])
+        subject = Subject.objects.create(institution=self.institution, name="English Language", code="ENG")
+        ClassSubject.objects.create(academic_class=self.academic_class, subject=subject)
+        teacher = Staff.objects.create(
+            institution=self.institution,
+            full_name="Teacher Two",
+            staff_id="TCH/002",
+            role="teacher",
+        )
+        Result.objects.create(
+            institution=self.institution,
+            student=self.student,
+            academic_class=self.academic_class,
+            subject=subject,
+            teacher=teacher,
+            academic_session=session,
+            academic_term=term,
+            session=session.name,
+            term=term.get_term_display(),
+            test1="8",
+            test2="9",
+            assignment="10",
+            exam="55",
+        )
+        fee = Fee.objects.create(
+            institution=self.institution,
+            name="First Term Fee",
+            amount="12000",
+            session=session.name,
+            term=term.get_term_display(),
+        )
+        fee.classes.set([self.academic_class])
+        payment = Payment.objects.create(
+            institution=self.institution,
+            fee=fee,
+            student=self.student,
+            amount="2000",
+            status="Paid",
+            payment_method="Manual",
+        )
+        self.client.force_login(student_user)
+
+        expectations = {
+            "subjects-student": ["My Subjects", "English Language"],
+            "test-scores": ["My Test Scores", "English Language", "8.00"],
+            "results": ["My Results", "82.00", "A"],
+            "pay-fees": ["My School Fees", "First Term Fee", "Receipt"],
+            "profile": ["Ada Student", "Fees Academy", self.student.student_id],
+        }
+        for page, texts in expectations.items():
+            response = self.client.get(reverse("edu:secondary_page", kwargs={"role": "student", "page": page}))
+            self.assertEqual(response.status_code, 200)
+            self.assertNotContains(response, "Coming Soon")
+            for text in texts:
+                self.assertContains(response, text)
+
     def test_accountant_can_create_class_fee_and_record_payment(self):
         response = self.client.post(reverse("edu:secondary_create_fee"), {
             "name": "First Term Tuition",

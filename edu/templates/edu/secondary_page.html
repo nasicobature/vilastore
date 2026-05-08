@@ -1570,6 +1570,248 @@
         {% endif %}
       {% endif %}
 
+      {% if active_page == 'subjects-student' and role == 'student' %}
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <div>
+              <h3 class="font-display font-semibold">My Subjects</h3>
+              <p class="text-xs text-muted-foreground mt-1">{% if student_record and student_record.academic_class %}{{ student_record.academic_class.name }}{% else %}No class assigned{% endif %}</p>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Code</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for subject in student_subjects %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ subject.name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ subject.code|default:"-" }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="2" class="px-4 py-3 text-sm">No subjects assigned to your class yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'test-scores' and role == 'student' %}
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">My Test Scores</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Session</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Term</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 1</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 2</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Assignment</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for result in student_results %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ result.subject.name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.session|default:"-" }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.term|default:"-" }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.test1 }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.test2 }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.assignment }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="6" class="px-4 py-3 text-sm">No scores have been entered yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'results' and role == 'student' %}
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">My Results</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Session</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Term</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Exam</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Total</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Grade</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for result in student_results %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ result.subject.name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.session|default:"-" }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.term|default:"-" }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.exam }}</td>
+                    <td class="px-4 py-3 text-sm">{{ result.total }}</td>
+                    <td class="px-4 py-3 text-sm">
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary/10 text-secondary">{{ result.grade }}</span>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="6" class="px-4 py-3 text-sm">No results published yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'pay-fees' and role == 'student' %}
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-card rounded-xl border border-border p-5">
+            <p class="text-sm text-muted-foreground">Total Fees</p>
+            <p class="text-xl font-display font-bold">₦{{ student_fee_total|floatformat:2 }}</p>
+          </div>
+          <div class="bg-card rounded-xl border border-border p-5">
+            <p class="text-sm text-muted-foreground">Paid</p>
+            <p class="text-xl font-display font-bold">₦{{ student_paid_total|floatformat:2 }}</p>
+          </div>
+          <div class="bg-card rounded-xl border border-border p-5">
+            <p class="text-sm text-muted-foreground">Outstanding</p>
+            <p class="text-xl font-display font-bold">₦{{ student_outstanding_total|floatformat:2 }}</p>
+          </div>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">My School Fees</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Fee</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Session/Term</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Amount</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Paid</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Outstanding</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for row in student_fee_rows %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ row.fee.name }}</td>
+                    <td class="px-4 py-3 text-sm">{{ row.fee.session|default:"-" }}{% if row.fee.term %} / {{ row.fee.term }}{% endif %}</td>
+                    <td class="px-4 py-3 text-sm">₦{{ row.fee.amount }}</td>
+                    <td class="px-4 py-3 text-sm">₦{{ row.paid|floatformat:2 }}</td>
+                    <td class="px-4 py-3 text-sm">₦{{ row.outstanding|floatformat:2 }}</td>
+                    <td class="px-4 py-3 text-sm">
+                      {% if row.is_paid %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary/10 text-secondary">Paid</span>
+                      {% elif online_payment_enabled %}
+                        <form method="post" action="/edu/secondary/student/payments/online/" data-edu-online-payment class="flex flex-wrap items-center gap-2">
+                          {% csrf_token %}
+                          <input type="hidden" name="fee" value="{{ row.fee.id }}" />
+                          <input type="hidden" name="amount" value="{{ row.outstanding }}" />
+                          <input type="hidden" name="payment_reference" data-payment-reference />
+                          <input type="hidden" name="public_key" value="{{ payment_public_key }}" />
+                          <input type="hidden" data-student-email value="{{ request.user.email }}" />
+                          <input type="hidden" data-student-name value="{{ student_record.full_name }}" />
+                          <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors" data-pay-online>Pay Now</button>
+                        </form>
+                      {% else %}
+                        <span class="text-xs text-muted-foreground">Online payment unavailable</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="6" class="px-4 py-3 text-sm">No fees assigned to your class yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Payment History</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Fee</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Amount</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Method</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Date</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Receipt</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for payment in student_payments %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{% if payment.fee %}{{ payment.fee.name }}{% else %}-{% endif %}</td>
+                    <td class="px-4 py-3 text-sm">₦{{ payment.amount }}</td>
+                    <td class="px-4 py-3 text-sm">{{ payment.payment_method }}</td>
+                    <td class="px-4 py-3 text-sm">{{ payment.paid_at|date:"M j, Y" }}</td>
+                    <td class="px-4 py-3 text-sm"><a class="text-xs text-primary hover:underline" href="/edu/secondary/payments/{{ payment.reference }}/receipt/" target="_blank" rel="noopener">Receipt</a></td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="5" class="px-4 py-3 text-sm">No payments yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'profile' and role == 'student' %}
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center gap-4">
+            <div class="w-20 h-24 rounded-xl bg-muted overflow-hidden flex items-center justify-center">
+              {% if student_record.photo %}
+                <img src="{{ student_record.photo.url }}" alt="{{ student_record.full_name }}" class="w-full h-full object-cover" />
+              {% else %}
+                <span class="text-2xl font-semibold text-muted-foreground">{{ student_record.full_name|slice:':1'|upper }}</span>
+              {% endif %}
+            </div>
+            <div>
+              <h3 class="font-display font-semibold text-lg">{{ student_record.full_name|default:user_name }}</h3>
+              <p class="text-sm text-muted-foreground">{{ student_record.student_id }}</p>
+              <p class="text-sm text-muted-foreground">{% if student_record.academic_class %}{{ student_record.academic_class.name }}{% else %}No class assigned{% endif %}</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div class="rounded-xl border border-border p-4">
+              <p class="text-muted-foreground">School</p>
+              <p class="font-medium">{{ user.profile.institution.name }}</p>
+            </div>
+            <div class="rounded-xl border border-border p-4">
+              <p class="text-muted-foreground">Current Session / Term</p>
+              <p class="font-medium">{{ current_session_name|default:"-" }}{% if current_term_name %} / {{ current_term_name }}{% endif %}</p>
+            </div>
+            <div class="rounded-xl border border-border p-4">
+              <p class="text-muted-foreground">Next of Kin</p>
+              <p class="font-medium">{{ student_record.next_of_kin_name|default:"-" }}</p>
+            </div>
+            <div class="rounded-xl border border-border p-4">
+              <p class="text-muted-foreground">Next of Kin Phone</p>
+              <p class="font-medium">{{ student_record.next_of_kin_phone|default:"-" }}</p>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
       {% for item in nav_placeholders %}
         {% if active_page == item.id %}
           <div class="bg-card rounded-xl border border-border p-5">

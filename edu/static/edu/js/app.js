@@ -150,11 +150,14 @@
   const onlinePaymentForms = document.querySelectorAll('[data-edu-online-payment]');
   onlinePaymentForms.forEach((form) => {
     const feeSelect = form.querySelector('select[name="fee"]');
+    const feeInput = form.querySelector('input[name="fee"]');
     const studentSelect = form.querySelector('select[name="student"]');
     const amountInput = form.querySelector('input[name="amount"]');
     const referenceInput = form.querySelector('[data-payment-reference]');
     const publicKeyInput = form.querySelector('input[name="public_key"]');
     const payButton = form.querySelector('[data-pay-online]');
+    const studentEmailInput = form.querySelector('[data-student-email]');
+    const studentNameInput = form.querySelector('[data-student-name]');
 
     if (feeSelect && amountInput) {
       feeSelect.addEventListener('change', () => {
@@ -167,7 +170,9 @@
 
     if (payButton) {
       payButton.addEventListener('click', () => {
-        if (!feeSelect.value || !studentSelect.value || !amountInput.value) {
+        const selectedFee = feeSelect ? feeSelect.value : (feeInput ? feeInput.value : '');
+        const selectedStudent = studentSelect ? studentSelect.value : 'self';
+        if (!selectedFee || !selectedStudent || !amountInput.value) {
           alert('Select fee, student, and amount before payment.');
           return;
         }
@@ -176,8 +181,8 @@
           return;
         }
 
-        const studentOption = studentSelect.options[studentSelect.selectedIndex];
-        const feeOption = feeSelect.options[feeSelect.selectedIndex];
+        const studentOption = studentSelect ? studentSelect.options[studentSelect.selectedIndex] : null;
+        const feeOption = feeSelect ? feeSelect.options[feeSelect.selectedIndex] : null;
         const publicKey = publicKeyInput ? publicKeyInput.value : '';
         const amount = Number(amountInput.value || 0);
         if (!publicKey || amount <= 0) {
@@ -192,12 +197,12 @@
           currency: 'NGN',
           payment_options: 'card,banktransfer,ussd',
           customer: {
-            email: studentOption.dataset.email || 'student@edupayment.local',
-            name: studentOption.dataset.name || studentOption.textContent.trim(),
+            email: (studentOption && studentOption.dataset.email) || (studentEmailInput && studentEmailInput.value) || 'student@edupayment.local',
+            name: (studentOption && studentOption.dataset.name) || (studentNameInput && studentNameInput.value) || 'Student',
           },
           customizations: {
             title: 'EduPortal School Fees',
-            description: feeOption.textContent.trim(),
+            description: feeOption ? feeOption.textContent.trim() : 'School fee payment',
           },
           callback: function (response) {
             referenceInput.value = response.transaction_id || response.tx_ref || '';
