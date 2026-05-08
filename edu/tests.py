@@ -100,6 +100,29 @@ class EduPortalVerificationRegistrationTests(TestCase):
         self.assertTrue(institution.cac_certificate)
         self.assertTrue(institution.owner_valid_id)
 
+    def test_pending_school_admin_login_shows_verification_message(self):
+        data = {
+            "institution_name": "Pending Login Academy",
+            "admin_full_name": "School Admin",
+            "admin_password": "StrongPass123!",
+            "admin_email": "admin@example.com",
+            "admin_phone": "08000000000",
+        }
+        data.update(self._verification_files())
+        self.client.post(reverse("edu:secondary_register"), data)
+        institution = Institution.objects.get(name="Pending Login Academy")
+        profile = Profile.objects.get(institution=institution, role="admin")
+
+        response = self.client.post(reverse("edu:secondary_login"), {
+            "school_code": institution.school_code,
+            "username": profile.user.username,
+            "password": "StrongPass123!",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "School verification is still pending")
+        self.assertFalse("_auth_user_id" in self.client.session)
+
 
 class EduPortalFeesTests(TestCase):
     def setUp(self):

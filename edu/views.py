@@ -63,14 +63,18 @@ def _login_for_institution(request, institution_type, template_name):
                 if not school_code or not profile.institution or profile.institution.school_code.upper() != school_code:
                     auth_logout(request)
                     messages.error(request, 'Invalid school code.')
-                    return None
-                if not profile.is_approved:
+                elif not profile.is_approved:
                     auth_logout(request)
-                    messages.error(request, 'Account pending approval.')
-                    return None
-                if profile.institution_type == 'tertiary':
-                    return redirect('edu:tertiary_dashboard', role=profile.role)
-                return redirect('edu:secondary_dashboard', role=profile.role)
+                    if profile.institution and profile.institution.verification_status == 'pending':
+                        messages.error(request, 'School verification is still pending. VilaStore must approve the submitted documents before portal access is granted.')
+                    elif profile.institution and profile.institution.verification_status == 'rejected':
+                        messages.error(request, 'School verification was rejected. Please contact VilaStore support for review details.')
+                    else:
+                        messages.error(request, 'Account pending approval.')
+                else:
+                    if profile.institution_type == 'tertiary':
+                        return redirect('edu:tertiary_dashboard', role=profile.role)
+                    return redirect('edu:secondary_dashboard', role=profile.role)
             else:
                 messages.error(request, 'No profile found for this user.')
 
