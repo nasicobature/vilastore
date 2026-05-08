@@ -1072,6 +1072,20 @@ def secondary_save_scores(request):
                 },
             )
 
+        ResultSubmission.objects.update_or_create(
+            institution=profile.institution,
+            academic_class=academic_class,
+            subject=subject,
+            submitted_by=staff,
+            academic_session=session,
+            academic_term=term,
+            defaults={
+                'session': session.name,
+                'term': term.get_term_display(),
+                'status': 'draft',
+                'published_at': None,
+            },
+        )
         messages.success(request, 'Scores saved.')
     return redirect('edu:secondary_page', role=profile.role, page='enter-scores')
 
@@ -1109,16 +1123,21 @@ def secondary_submit_results(request):
             messages.error(request, 'You are not assigned to that subject.')
             return redirect('edu:secondary_page', role=profile.role, page='submit-results')
 
-        ResultSubmission.objects.create(
+        teacher_comment = request.POST.get('teacher_comment', '').strip()
+        ResultSubmission.objects.update_or_create(
             institution=profile.institution,
             academic_class=academic_class,
             subject=subject,
             submitted_by=staff,
             academic_session=session,
             academic_term=term,
-            session=session.name,
-            term=term.get_term_display(),
-            status='submitted',
+            defaults={
+                'session': session.name,
+                'term': term.get_term_display(),
+                'status': 'submitted_to_examiner',
+                'teacher_comment': teacher_comment,
+                'published_at': None,
+            },
         )
         messages.success(request, 'Results submitted to Examiner.')
     return redirect('edu:secondary_page', role=profile.role, page='submit-results')
@@ -1133,16 +1152,52 @@ def secondary_review_results(request):
 
     if request.method == 'POST':
         submission_id = request.POST.get('submission_id')
+        action = request.POST.get('action', 'approve')
         submission = ResultSubmission.objects.filter(id=submission_id, institution=profile.institution).first()
         if not submission:
             messages.error(request, 'Submission not found.')
             return redirect('edu:secondary_page', role=profile.role, page='review-results')
-        submission.status = 'reviewed'
-        submission.save(update_fields=['status'])
-        messages.success(request, 'Results marked as reviewed.')
+        if action == 'return':
+            submission.status = 'returned_for_correction'
+            submission.examiner_comment = request.POST.get('examiner_comment', '').strip()
+            submission.published_at = None
+            submission.save(update_fields=['status', 'examiner_comment', 'published_at'])
+            messages.success(request, 'Result returned to teacher for correction.')
+        else:
+            submission.status = 'approved_by_examiner'
+            submission.examiner_comment = request.POST.get('examiner_comment', '').strip()
+            submission.published_at = None
+            submission.save(update_fields=['status', 'examiner_comment', 'published_at'])
+            messages.success(request, 'Result approved and sent to Admin.')
         return redirect(f"/edu/secondary/{profile.role}/review-results/?submission={submission.id}")
 
     return redirect('edu:secondary_page', role=profile.role, page='review-results')
+
+
+@login_required
+def secondary_admin_result_approval(request):
+    profile = getattr(request.user, 'profile', None)
+    if not profile or profile.institution_type != 'secondary' or profile.role != 'admin':
+        messages.error(request, 'Only Admin can approve and publish results.')
+        return redirect('edu:secondary_dashboard', role=profile.role if profile else 'admin')
+
+    if request.method == 'POST':
+        submission_id = request.POST.get('submission_id')
+        submission = ResultSubmission.objects.filter(
+            id=submission_id,
+            institution=profile.institution,
+            status='approved_by_examiner',
+        ).first()
+        if not submission:
+            messages.error(request, 'Result submission is not ready for Admin approval.')
+            return redirect('edu:secondary_page', role=profile.role, page='approve-results')
+
+        submission.status = 'published'
+        submission.admin_comment = request.POST.get('admin_comment', '').strip()
+        submission.published_at = timezone.now()
+        submission.save(update_fields=['status', 'admin_comment', 'published_at'])
+        messages.success(request, 'Result approved and published to students.')
+    return redirect('edu:secondary_page', role=profile.role, page='approve-results')
 
 
 @login_required
@@ -1743,6 +1798,7 @@ def secondary_page(request, role, page):
     teacher_results_map = {}
     teacher_submissions = ResultSubmission.objects.none()
     teacher_subject_assignments = TeacherSubjectAssignment.objects.filter(institution=institution).select_related('teacher', 'academic_class', 'subject')
+    admin_result_submissions = ResultSubmission.objects.none()
     term_map = {}
     for term_obj in terms:
         term_map.setdefault(term_obj.session_id, []).append({
@@ -1760,6 +1816,12 @@ def secondary_page(request, role, page):
     student_record = None
     student_subjects = Subject.objects.none()
     student_results = Result.objects.none()
+    student_report_results = Result.objects.none()
+    student_report_total = Decimal('0.00')
+    student_report_average = Decimal('0.00')
+    student_report_position = ''
+    student_report_submission = None
+    student_report_first_result = None
     student_payments = Payment.objects.none()
     student_fee_rows = []
     student_fee_total = Decimal('0.00')
@@ -1772,6 +1834,12 @@ def secondary_page(request, role, page):
             id_card_students = id_card_students.filter(academic_class_id=selected_id_card_class_id)
         if selected_id_card_session_id:
             id_card_students = id_card_students.filter(academic_class__academic_session_id=selected_id_card_session_id)
+
+    if role == 'admin':
+        admin_result_submissions = ResultSubmission.objects.filter(
+            institution=institution,
+            status='approved_by_examiner',
+        ).select_related('academic_class', 'subject', 'submitted_by').order_by('-submitted_at')
 
     if role == 'teacher':
         staff = Staff.objects.filter(user=request.user, institution=institution).first()
@@ -1814,6 +1882,49 @@ def secondary_page(request, role, page):
                 institution=institution,
                 student=student_record,
             ).select_related('subject', 'academic_class', 'teacher', 'academic_session', 'academic_term').order_by('-session', 'subject__name')
+            published_submissions = ResultSubmission.objects.filter(
+                institution=institution,
+                academic_class=student_record.academic_class,
+                status='published',
+            ).select_related('academic_class', 'subject', 'submitted_by').order_by('-published_at', 'subject__name')
+            published_filters = Q()
+            for submission in published_submissions:
+                published_filters |= Q(
+                    subject=submission.subject,
+                    academic_class=submission.academic_class,
+                    academic_session=submission.academic_session,
+                    academic_term=submission.academic_term,
+                )
+            if published_filters:
+                student_report_results = Result.objects.filter(
+                    published_filters,
+                    institution=institution,
+                    student=student_record,
+                ).select_related('subject', 'academic_class', 'teacher', 'academic_session', 'academic_term').order_by('subject__name')
+                student_report_total = sum((result.total for result in student_report_results), Decimal('0.00'))
+                count = student_report_results.count()
+                if count:
+                    student_report_average = (student_report_total / Decimal(count)).quantize(Decimal('0.01'))
+                    first_result = student_report_results.first()
+                    student_report_first_result = first_result
+                    student_report_submission = published_submissions.filter(
+                        academic_session=first_result.academic_session,
+                        academic_term=first_result.academic_term,
+                    ).first()
+                    class_results = Result.objects.filter(
+                        institution=institution,
+                        academic_class=first_result.academic_class,
+                        academic_session=first_result.academic_session,
+                        academic_term=first_result.academic_term,
+                        subject__in=published_submissions.filter(
+                            academic_session=first_result.academic_session,
+                            academic_term=first_result.academic_term,
+                        ).values('subject'),
+                    ).values('student_id').annotate(total_score=Sum('total')).order_by('-total_score')
+                    for index, item in enumerate(class_results, start=1):
+                        if item['student_id'] == student_record.id:
+                            student_report_position = _ordinal(index)
+                            break
             student_payments = Payment.objects.filter(
                 institution=institution,
                 student=student_record,
@@ -1841,7 +1952,7 @@ def secondary_page(request, role, page):
     elif role == 'examiner':
         examiner_submissions = ResultSubmission.objects.filter(
             institution=institution,
-        ).select_related('academic_class', 'subject', 'submitted_by').order_by('-submitted_at')
+        ).exclude(status='draft').select_related('academic_class', 'subject', 'submitted_by').order_by('-submitted_at')
         submission_id = request.GET.get('submission')
         if submission_id:
             selected_submission = examiner_submissions.filter(id=submission_id).first()
@@ -1965,6 +2076,7 @@ def secondary_page(request, role, page):
         'teacher_results_map': teacher_results_map,
         'teacher_submissions': teacher_submissions,
         'teacher_subject_assignments': teacher_subject_assignments,
+        'admin_result_submissions': admin_result_submissions,
         'examiner_submissions': examiner_submissions,
         'examiner_results': examiner_results,
         'selected_submission': selected_submission,
@@ -1976,6 +2088,12 @@ def secondary_page(request, role, page):
         'student_record': student_record,
         'student_subjects': student_subjects,
         'student_results': student_results,
+        'student_report_results': student_report_results,
+        'student_report_total': student_report_total,
+        'student_report_average': student_report_average,
+        'student_report_position': student_report_position,
+        'student_report_submission': student_report_submission,
+        'student_report_first_result': student_report_first_result,
         'student_payments': student_payments,
         'student_fee_rows': student_fee_rows,
         'student_fee_total': student_fee_total,

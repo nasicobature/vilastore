@@ -304,9 +304,12 @@ class Result(models.Model):
 
 class ResultSubmission(models.Model):
     STATUS_CHOICES = [
-        ('submitted', 'Submitted'),
-        ('reviewed', 'Reviewed'),
-        ('approved', 'Approved'),
+        ('draft', 'Draft'),
+        ('submitted_to_examiner', 'Submitted to Examiner'),
+        ('returned_for_correction', 'Returned for Correction'),
+        ('approved_by_examiner', 'Approved by Examiner'),
+        ('approved_by_admin', 'Approved by Admin'),
+        ('published', 'Published'),
     ]
 
     institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='result_submissions')
@@ -317,8 +320,12 @@ class ResultSubmission(models.Model):
     academic_term = models.ForeignKey(AcademicTerm, on_delete=models.SET_NULL, null=True, blank=True, related_name='result_submissions')
     session = models.CharField(max_length=20, blank=True)
     term = models.CharField(max_length=50, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='submitted')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='draft')
+    teacher_comment = models.TextField(blank=True)
+    examiner_comment = models.TextField(blank=True)
+    admin_comment = models.TextField(blank=True)
     submitted_at = models.DateTimeField(default=timezone.now)
+    published_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.academic_class.name} - {self.subject.name} ({self.status})"

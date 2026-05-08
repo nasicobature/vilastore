@@ -358,6 +358,94 @@ class EduPortalFeesTests(TestCase):
         submission = ResultSubmission.objects.get(submitted_by=teacher, subject=subject)
         self.assertEqual(submission.academic_session, session)
         self.assertEqual(submission.academic_term, term)
+        self.assertEqual(submission.status, "submitted_to_examiner")
+
+    def test_result_approval_workflow_publishes_student_report_card(self):
+        session = AcademicSession.objects.create(institution=self.institution, name="2025/2026", is_current=True)
+        term = AcademicTerm.objects.create(session=session, term="first", is_current=True)
+        subject = Subject.objects.create(institution=self.institution, name="Mathematics", code="MTH")
+        teacher_user = get_user_model().objects.create_user(username="math-teacher", password="StrongPass123!")
+        teacher_user.profile.institution = self.institution
+        teacher_user.profile.institution_type = "secondary"
+        teacher_user.profile.role = "teacher"
+        teacher_user.profile.is_approved = True
+        teacher_user.profile.save()
+        teacher = Staff.objects.create(institution=self.institution, user=teacher_user, full_name="Math Teacher", staff_id="MT/001", role="teacher")
+        TeacherAssignment.objects.create(institution=self.institution, teacher=teacher, academic_class=self.academic_class)
+        ClassSubject.objects.create(academic_class=self.academic_class, subject=subject)
+        TeacherSubjectAssignment.objects.create(institution=self.institution, teacher=teacher, academic_class=self.academic_class, subject=subject)
+        student_user = get_user_model().objects.create_user(username="workflow-student", password="StrongPass123!")
+        student_user.profile.institution = self.institution
+        student_user.profile.institution_type = "secondary"
+        student_user.profile.role = "student"
+        student_user.profile.is_approved = True
+        student_user.profile.save()
+        self.student.user = student_user
+        self.student.save(update_fields=["user"])
+
+        self.client.force_login(teacher_user)
+        self.client.post(reverse("edu:secondary_save_scores"), {
+            "academic_session": str(session.id),
+            "academic_term": str(term.id),
+            "academic_class": str(self.academic_class.id),
+            "subject": str(subject.id),
+            "students": [str(self.student.id)],
+            f"test1_{self.student.id}": "10",
+            f"test2_{self.student.id}": "10",
+            f"assignment_{self.student.id}": "10",
+            f"exam_{self.student.id}": "60",
+        })
+        submission = ResultSubmission.objects.get(submitted_by=teacher, subject=subject)
+        self.assertEqual(submission.status, "draft")
+        self.client.post(reverse("edu:secondary_submit_results"), {
+            "academic_session": str(session.id),
+            "academic_term": str(term.id),
+            "academic_class": str(self.academic_class.id),
+            "subject": str(subject.id),
+            "teacher_comment": "Excellent work",
+        })
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, "submitted_to_examiner")
+
+        self.client.force_login(student_user)
+        response = self.client.get(reverse("edu:secondary_page", kwargs={"role": "student", "page": "results"}))
+        self.assertContains(response, "Your result is not yet published.")
+        self.assertNotContains(response, "90.00")
+
+        examiner_user = get_user_model().objects.create_user(username="examiner", password="StrongPass123!")
+        examiner_user.profile.institution = self.institution
+        examiner_user.profile.institution_type = "secondary"
+        examiner_user.profile.role = "examiner"
+        examiner_user.profile.is_approved = True
+        examiner_user.profile.save()
+        self.client.force_login(examiner_user)
+        self.client.post(reverse("edu:secondary_review_results"), {
+            "submission_id": str(submission.id),
+            "examiner_comment": "Checked",
+        })
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, "approved_by_examiner")
+
+        admin_user = get_user_model().objects.create_user(username="result-admin", password="StrongPass123!")
+        admin_user.profile.institution = self.institution
+        admin_user.profile.institution_type = "secondary"
+        admin_user.profile.role = "admin"
+        admin_user.profile.is_approved = True
+        admin_user.profile.save()
+        self.client.force_login(admin_user)
+        self.client.post(reverse("edu:secondary_admin_result_approval"), {
+            "submission_id": str(submission.id),
+            "admin_comment": "Published",
+        })
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, "published")
+        self.assertIsNotNone(submission.published_at)
+
+        self.client.force_login(student_user)
+        response = self.client.get(reverse("edu:secondary_page", kwargs={"role": "student", "page": "results"}))
+        self.assertContains(response, "Student Report Card")
+        self.assertContains(response, "90.00")
+        self.assertContains(response, "Excellent work")
 
     def test_registry_student_id_cards_page_is_active(self):
         admin = get_user_model().objects.create_user(
@@ -440,8 +528,8 @@ class EduPortalFeesTests(TestCase):
 
         expectations = {
             "subjects-student": ["My Subjects", "English Language"],
-            "test-scores": ["My Test Scores", "English Language", "8.00"],
-            "results": ["My Results", "82.00", "A"],
+            "test-scores": ["My Test Scores", "Your result is not yet published."],
+            "results": ["My Results", "Your result is not yet published."],
             "pay-fees": ["My School Fees", "First Term Fee", "Receipt"],
             "profile": ["Ada Student", "Fees Academy", self.student.student_id],
         }
