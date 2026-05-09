@@ -29,9 +29,6 @@ from .models import (
     HouseInquiryMessage,
     MarketplaceBuyer,
     MarketplaceBuyerToken,
-    DeliveryRequest,
-    DeliveryRider,
-    DeliveryCompany,
     Feedback,
     HouseListing,
     HouseListingImage,
@@ -391,11 +388,6 @@ def privacy_policy(request):
 
 def account_deletion(request):
     return render(request, "legal/account-deletion.html")
-
-
-def mvp_delivery_disabled(request, *args, **kwargs):
-    messages.info(request, "Delivery is temporarily hidden while VilaStore MVP focuses on Shop Management and House/Rental Management.")
-    return redirect("marketplace")
 
 
 def not_found(request, exception):
@@ -2091,7 +2083,6 @@ def delete_branch(request, pk):
     Sale.objects.filter(user=request.user, branch=branch).update(branch=fallback)
     Expense.objects.filter(user=request.user, branch=branch).update(branch=fallback)
     MarketplaceOrder.objects.filter(shop_owner=request.user, branch=branch).update(branch=fallback)
-    DeliveryRequest.objects.filter(branch=branch).update(branch=fallback)
     branch.delete()
     if not ShopBranch.objects.filter(user=request.user, is_default=True).exists():
         fallback.is_default = True
@@ -4940,10 +4931,6 @@ def _get_marketplace_web_token(buyer):
     )
 
 
-def _is_marketplace_rider_account(buyer):
-    return False
-
-
 def _marketplace_buyer_needs_phone_verification(buyer):
     return False
 
@@ -4993,29 +4980,9 @@ def _send_marketplace_verification_code(buyer):
     )
 
 
-def _send_marketplace_phone_verification_code(buyer):
-    phone = (buyer.phone or "").strip()
-    if not phone:
-        raise ValueError("Phone number is required for phone verification.")
-
-    code = str(random.randint(100000, 999999))
-    buyer.phone_verification_code = code
-    buyer.phone_code_sent_at = timezone.now()
-    buyer.save(update_fields=["phone_verification_code", "phone_code_sent_at"])
-
-    sent = send_sms(
-        phone,
-        f"Your VilaStore rider verification code is {code}. It will expire in 10 minutes.",
-    )
-    if not sent:
-        raise ValueError("Failed to send rider verification SMS.")
-
-
 def _send_marketplace_pending_verification_codes(buyer):
     if not buyer.is_email_verified:
         _send_marketplace_verification_code(buyer)
-    if _marketplace_buyer_needs_phone_verification(buyer) and not buyer.is_phone_verified:
-        _send_marketplace_phone_verification_code(buyer)
 
 
 def _send_marketplace_reset_code(buyer):
@@ -5102,9 +5069,6 @@ def marketplace_login(request):
             except Exception:
                 messages.error(request, "Could not send verification codes. Please try again.")
                 return render(request, "shopboy/marketplace-login.html", {"next_url": next_url})
-            if _marketplace_buyer_needs_phone_verification(buyer):
-                messages.success(request, "Verify your email and phone number to activate your rider account.")
-                return redirect("marketplace_rider_verify")
             messages.success(request, "Verify your email to continue. We sent you a code.")
             return redirect("marketplace_verify")
 
@@ -5166,81 +5130,6 @@ def marketplace_signup(request):
     })
 
 
-def marketplace_rider_signup(request):
-    buyer = _get_marketplace_buyer(request)
-    if buyer:
-        next_url = _get_marketplace_next_url(request) or reverse("marketplace_rider_portal")
-        return _marketplace_dashboard_redirect(request, buyer, next_url)
-
-    next_url = _get_marketplace_next_url(request) or reverse("marketplace_rider_portal")
-    if request.method == "POST":
-        full_name = (request.POST.get("full_name") or "").strip()
-        email = (request.POST.get("email") or "").strip().lower()
-        phone = (request.POST.get("phone") or "").strip()
-        password = request.POST.get("password") or ""
-        confirm_password = request.POST.get("confirm_password") or ""
-
-        context = {
-            "next_url": next_url,
-            "full_name": full_name,
-            "email": email,
-            "phone": phone,
-        }
-
-        if not full_name or not email or not phone or not password or not confirm_password:
-            messages.error(request, "Full name, email, phone number, and passwords are required.")
-            return render(request, "shopboy/marketplace-rider-signup.html", context)
-
-        if password != confirm_password:
-            messages.error(request, "Passwords do not match.")
-            return render(request, "shopboy/marketplace-rider-signup.html", context)
-
-        if not _password_meets_rules(password):
-            messages.error(request, "Password must include uppercase, number, and special character.")
-            return render(request, "shopboy/marketplace-rider-signup.html", context)
-
-        if MarketplaceBuyer.objects.filter(email__iexact=email).exists():
-            messages.error(request, "Email already registered. Please sign in instead.")
-            return render(request, "shopboy/marketplace-rider-signup.html", context)
-
-        if DeliveryRider.objects.filter(phone__iexact=phone).exists():
-            messages.error(request, "That phone number is already linked to a rider account.")
-            return render(request, "shopboy/marketplace-rider-signup.html", context)
-
-        buyer = MarketplaceBuyer.objects.create(
-            email=email,
-            phone=phone,
-            password=make_password(password),
-            registration_role=MarketplaceBuyer.ROLE_RIDER,
-            is_active=False,
-        )
-        DeliveryRider.objects.create(
-            buyer=buyer,
-            full_name=full_name,
-            phone=phone,
-            email=email,
-            rider_type=DeliveryRider.RIDER_PERSONAL,
-            is_approved=False,
-            is_active=False,
-            is_available=False,
-        )
-
-        request.session["marketplace_pending_buyer_id"] = buyer.id
-        request.session["marketplace_next_url"] = next_url
-        try:
-            _send_marketplace_pending_verification_codes(buyer)
-        except Exception:
-            messages.error(request, "Account created, but we could not send verification codes. Please try again.")
-            return render(request, "shopboy/marketplace-rider-signup.html", context)
-
-        messages.success(request, "Rider account created. Verify your email and phone to activate it.")
-        return redirect("marketplace_rider_verify")
-
-    return render(request, "shopboy/marketplace-rider-signup.html", {
-        "next_url": next_url,
-    })
-
-
 def marketplace_logout(request):
     _logout_marketplace_buyer(request)
     return redirect("marketplace")
@@ -5284,71 +5173,6 @@ def marketplace_verify(request):
     return render(request, "shopboy/marketplace-verify.html", {"buyer": buyer})
 
 
-def marketplace_rider_verify(request):
-    buyer = _get_pending_marketplace_buyer(request)
-    if not buyer or buyer.registration_role != MarketplaceBuyer.ROLE_RIDER:
-        return redirect("marketplace_rider_signup")
-
-    if request.method == "POST":
-        email_code = (request.POST.get("email_code") or "").strip()
-        phone_code = (request.POST.get("phone_code") or "").strip()
-        context = {"buyer": buyer}
-
-        if not email_code or not phone_code:
-            messages.error(request, "Both email and phone verification codes are required.")
-            return render(request, "shopboy/marketplace-rider-verify.html", context)
-
-        if not buyer.email_verification_code or not buyer.email_code_sent_at:
-            messages.error(request, "No email verification code found. Send a new code.")
-            return render(request, "shopboy/marketplace-rider-verify.html", context)
-
-        if not buyer.phone_verification_code or not buyer.phone_code_sent_at:
-            messages.error(request, "No phone verification code found. Send a new code.")
-            return render(request, "shopboy/marketplace-rider-verify.html", context)
-
-        if timezone.now() - buyer.email_code_sent_at > timedelta(minutes=10):
-            messages.error(request, "Your email verification code has expired. Send a new code.")
-            return render(request, "shopboy/marketplace-rider-verify.html", context)
-
-        if timezone.now() - buyer.phone_code_sent_at > timedelta(minutes=10):
-            messages.error(request, "Your phone verification code has expired. Send a new code.")
-            return render(request, "shopboy/marketplace-rider-verify.html", context)
-
-        if email_code != buyer.email_verification_code:
-            messages.error(request, "The email verification code is invalid.")
-            return render(request, "shopboy/marketplace-rider-verify.html", context)
-
-        if phone_code != buyer.phone_verification_code:
-            messages.error(request, "The phone verification code is invalid.")
-            return render(request, "shopboy/marketplace-rider-verify.html", context)
-
-        buyer.is_email_verified = True
-        buyer.email_verification_code = ""
-        buyer.email_code_sent_at = None
-        buyer.is_phone_verified = True
-        buyer.phone_verification_code = ""
-        buyer.phone_code_sent_at = None
-        buyer.is_active = True
-        buyer.last_login = timezone.now()
-        buyer.save(update_fields=[
-            "is_email_verified",
-            "email_verification_code",
-            "email_code_sent_at",
-            "is_phone_verified",
-            "phone_verification_code",
-            "phone_code_sent_at",
-            "is_active",
-            "last_login",
-        ])
-
-        request.session.pop("marketplace_pending_buyer_id", None)
-        _login_marketplace_buyer(request, buyer)
-        messages.success(request, "Your rider account is now active.")
-        return _marketplace_dashboard_redirect(request, buyer)
-
-    return render(request, "shopboy/marketplace-rider-verify.html", {"buyer": buyer})
-
-
 @require_POST
 def marketplace_send_verification_code(request):
     buyer = _get_pending_marketplace_buyer(request)
@@ -5359,13 +5183,7 @@ def marketplace_send_verification_code(request):
         _send_marketplace_pending_verification_codes(buyer)
     except Exception:
         messages.error(request, "Failed to send verification codes. Please try again.")
-        if buyer.registration_role == MarketplaceBuyer.ROLE_RIDER:
-            return redirect("marketplace_rider_verify")
         return redirect("marketplace_verify")
-
-    if buyer.registration_role == MarketplaceBuyer.ROLE_RIDER:
-        messages.success(request, f"Codes sent to {buyer.email} and {buyer.phone}.")
-        return redirect("marketplace_rider_verify")
 
     messages.success(request, f"Code sent to {buyer.email}.")
     return redirect("marketplace_verify")
@@ -5480,8 +5298,6 @@ def marketplace_account(request):
     buyer = _get_marketplace_buyer(request)
     if not buyer:
         pending = _get_pending_marketplace_buyer(request)
-        if pending and pending.registration_role == MarketplaceBuyer.ROLE_RIDER:
-            return redirect("marketplace_rider_verify")
         if pending and not pending.is_email_verified:
             return redirect("marketplace_verify")
         return _redirect_to_marketplace_login(request, "marketplace_account")
@@ -5501,7 +5317,7 @@ def marketplace_account(request):
         "buyer": buyer,
         "orders": orders,
         "house_inquiries": house_inquiries,
-        "marketplace_portal_role": "rider" if _is_marketplace_rider_account(buyer) else "customer",
+        "marketplace_portal_role": "customer",
         "marketplace_active_tab": "marketplace",
     })
 
@@ -5510,14 +5326,9 @@ def marketplace_home(request):
     buyer = _get_marketplace_buyer(request)
     if not buyer:
         pending = _get_pending_marketplace_buyer(request)
-        if pending and pending.registration_role == MarketplaceBuyer.ROLE_RIDER:
-            return redirect("marketplace_rider_verify")
         if pending and not pending.is_email_verified:
             return redirect("marketplace_verify")
         return _redirect_to_marketplace_login(request, "marketplace_home")
-
-    if _is_marketplace_rider_account(buyer):
-        return redirect("marketplace_rider_portal")
 
     buyer_token = _get_marketplace_web_token(buyer)
     orders = (
@@ -5530,70 +5341,22 @@ def marketplace_home(request):
         .select_related("house", "owner")
         .order_by("-updated_at", "-created_at")
     )
-    delivery_requests = (
-        DeliveryRequest.objects.filter(buyer=buyer)
-        .select_related("rider", "rider__buyer")
-        .order_by("-created_at")
-    )
-    active_delivery = (
-        delivery_requests.exclude(
-            status__in=[DeliveryRequest.STATUS_DELIVERED, DeliveryRequest.STATUS_CANCELLED]
-        ).first()
-    )
-
     return render(request, "shopboy/marketplace-home.html", {
         "buyer": buyer,
         "buyer_api_token": buyer_token.token,
         "marketplace_portal_role": "customer",
         "recent_orders": orders[:5],
         "recent_house_inquiries": house_inquiries[:5],
-        "active_delivery": active_delivery,
         "stats": {
             "orders_count": orders.count(),
             "house_inquiries": house_inquiries.count(),
-            "active_deliveries": delivery_requests.exclude(
-                status__in=[DeliveryRequest.STATUS_DELIVERED, DeliveryRequest.STATUS_CANCELLED]
-            ).count(),
-            "completed_deliveries": delivery_requests.filter(
-                status=DeliveryRequest.STATUS_DELIVERED
-            ).count(),
         },
         "marketplace_active_tab": "home",
     })
 
 
 def marketplace_settings(request):
-    return redirect("marketplace_rider_portal")
-
-
-def marketplace_rider_portal(request):
-    buyer = _get_marketplace_buyer(request)
-    if not buyer:
-        pending = _get_pending_marketplace_buyer(request)
-        if pending and pending.registration_role == MarketplaceBuyer.ROLE_RIDER:
-            return redirect("marketplace_rider_verify")
-        if pending and not pending.is_email_verified:
-            return redirect("marketplace_verify")
-        return _redirect_to_marketplace_login(request, "marketplace_rider_portal")
-
-    buyer_token = _get_marketplace_web_token(buyer)
-    recent_delivery_requests = (
-        DeliveryRequest.objects.filter(buyer=buyer)
-        .select_related("rider", "rider__buyer")
-        .order_by("-created_at")[:5]
-    )
-    rider_profile = DeliveryRider.objects.filter(buyer=buyer).first()
-    delivery_company = DeliveryCompany.objects.filter(owner=buyer, is_active=True).first()
-
-    return render(request, "shopboy/marketplace-settings.html", {
-        "buyer": buyer,
-        "buyer_api_token": buyer_token.token,
-        "rider_profile": rider_profile,
-        "delivery_company": delivery_company,
-        "marketplace_portal_role": "rider",
-        "recent_delivery_requests": recent_delivery_requests,
-        "marketplace_active_tab": "rider",
-    })
+    return redirect("marketplace_home")
 
 
 def marketplace(request):
@@ -5768,7 +5531,7 @@ def marketplace(request):
         "buyer": buyer,
         "active_tab": active_tab,
         "active_result_count": houses.count() if active_tab == "houses" else profiles.count(),
-        "marketplace_portal_role": "rider" if _is_marketplace_rider_account(buyer) else "customer",
+        "marketplace_portal_role": "customer",
         "profiles": profiles,
         "houses": houses,
         "categories": categories,

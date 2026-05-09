@@ -73,7 +73,7 @@
         <div>
           <span class="badge badge-primary">Simple Marketplace</span>
           <h1>Everything a customer needs in one clear place.</h1>
-          <p>Browse shops and houses, track orders, and continue rental conversations without delivery clutter.</p>
+          <p>Browse shops and houses, track orders, and continue rental conversations from one simple MVP dashboard.</p>
         </div>
         <div class="marketplace-hero-actions">
           <a href="{% url 'marketplace' %}" class="btn btn-primary"><i data-lucide="store"></i> Explore Marketplace</a>
@@ -124,174 +124,68 @@
         </div>
       </section>
 
-      <section class="marketplace-section-grid">
-        <section class="card delivery-card marketplace-delivery-booking" style="display:none;">
-          <div class="delivery-card-header">
-            <div>
-              <h3>Book Delivery</h3>
-              <p>Fill the trip once, check the map, then request a rider with more confidence.</p>
+      <section class="card marketplace-scanner-card" id="customerScannerApp">
+        <div class="marketplace-scanner-head">
+          <div>
+            <span class="badge badge-primary">Barcode Scanner</span>
+            <h2>Scan products and submit your order to the shop.</h2>
+            <p>Enter the shop username or shop code, scan product barcodes, review your cart, then submit the order for shop staff to confirm after payment.</p>
+          </div>
+          <button type="button" class="btn btn-outline" id="scannerStartCameraBtn">
+            <i data-lucide="scan-barcode"></i>
+            Open Camera
+          </button>
+        </div>
+
+        <div class="marketplace-scanner-grid">
+          <div class="marketplace-scanner-panel">
+            <label class="marketplace-search-field">
+              <span>Shop username or shop code</span>
+              <input type="text" class="input" id="scannerShopCode" placeholder="Example: SCAN01 or shop username">
+            </label>
+            <label class="marketplace-search-field">
+              <span>Your name</span>
+              <input type="text" class="input" id="scannerCustomerName" placeholder="Optional">
+            </label>
+            <label class="marketplace-search-field">
+              <span>Your phone</span>
+              <input type="tel" class="input" id="scannerCustomerPhone" placeholder="Optional">
+            </label>
+            <button type="button" class="btn btn-primary" id="scannerStartOrderBtn">
+              <i data-lucide="shopping-cart"></i>
+              Start Order
+            </button>
+            <div class="marketplace-scanner-code-row">
+              <input type="text" class="input" id="scannerManualCode" placeholder="Scan or type barcode">
+              <button type="button" class="btn btn-outline" id="scannerAddCodeBtn">Add</button>
             </div>
-            <span id="deliveryLocationStatus" class="delivery-status-pill">Fetching browser location...</span>
+            <p class="marketplace-scanner-status" id="scannerStatus">Start an order before scanning products.</p>
           </div>
 
-          <div class="delivery-form-grid">
-            <label class="delivery-field">
-              <span>Pickup address</span>
-              <input id="deliveryPickupAddress" class="input" type="text" placeholder="Where should the rider collect from?">
-            </label>
-            <label class="delivery-field">
-              <span>Dropoff address</span>
-              <input id="deliveryDropoffAddress" class="input" type="text" placeholder="Where should the rider deliver to?">
-            </label>
-            <label class="delivery-field">
-              <span>Customer name</span>
-              <input id="deliveryCustomerName" class="input" type="text" placeholder="Who receives the package?">
-            </label>
-            <label class="delivery-field">
-              <span>Customer phone</span>
-              <input id="deliveryCustomerPhone" class="input" type="text" placeholder="Phone number">
-            </label>
-            <label class="delivery-field">
-              <span>Estimated distance</span>
-              <select id="deliveryDistanceKm" class="input">
-                <option value="1">1 km</option>
-                <option value="3" selected>3 km</option>
-                <option value="5">5 km</option>
-                <option value="8">8 km</option>
-                <option value="12">12 km</option>
-              </select>
-            </label>
-            <label class="delivery-field">
-              <span>Notes</span>
-              <textarea id="deliveryNotes" class="input" rows="3" placeholder="Landmark, package details, or rider instructions"></textarea>
-            </label>
-          </div>
-
-          <div class="delivery-actions">
-            <button type="button" class="btn btn-secondary" id="deliveryUseCurrentLocation">
-              <i data-lucide="map-pin"></i>
-              Use My Current Location
-            </button>
-            <button type="button" class="btn btn-outline" id="deliveryEstimateButton">
-              <i data-lucide="calculator"></i>
-              Estimate Price
-            </button>
-            <button type="button" class="btn btn-primary" id="deliverySubmitButton">
+          <div class="marketplace-scanner-cart">
+            <div class="marketplace-scanner-cart-head">
+              <h3>Cart</h3>
+              <strong id="scannerCartTotal">NGN 0.00</strong>
+            </div>
+            <div id="scannerCartItems" class="marketplace-scanner-items">
+              <p>No scanned products yet.</p>
+            </div>
+            <div id="scannerBankBox" class="marketplace-scanner-bank" hidden>
+              <span>Shop payment account</span>
+              <strong id="scannerBankName">-</strong>
+              <p id="scannerBankAccount">-</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-full" id="scannerCheckoutBtn" disabled>
               <i data-lucide="send"></i>
-              Request Delivery
+              Submit Order to Shop
             </button>
           </div>
-
-          <div class="delivery-estimate-grid">
-            <div class="delivery-estimate-card">
-              <span>Estimated fare</span>
-              <strong id="deliveryPrice">NGN 0.00</strong>
-            </div>
-            <div class="delivery-estimate-card">
-              <span>Route distance</span>
-              <strong id="deliveryRouteDistance">3.00 km</strong>
-            </div>
-            <div class="delivery-estimate-card">
-              <span>Suggested rider</span>
-              <strong id="deliverySuggestedRider">Unassigned</strong>
-            </div>
-          </div>
-
-          <div id="deliveryPricingBreakdown" class="delivery-breakdown"></div>
-        </section>
-
-        <section class="card delivery-card marketplace-map-panel marketplace-map-panel-bolt" style="display:none;">
-          <div class="delivery-card-header">
-            <div>
-              <span class="badge badge-primary">Live Ride Panel</span>
-              <h3>Live Map and Nearby Riders</h3>
-              <p>Watch the route, check ride readiness, and scan nearby riders from one stronger panel.</p>
-            </div>
-            <a id="deliveryMapLink" class="btn btn-ghost btn-sm" href="https://maps.google.com" target="_blank" rel="noopener noreferrer">
-              <i data-lucide="navigation"></i>
-              Open map
-            </a>
-          </div>
-
-          <div class="delivery-map-card">
-            <div class="delivery-map-card-header">
-              <div>
-                <h4>Route Preview</h4>
-                <p id="deliveryRouteSummary">Add a pickup and destination to preview the trip.</p>
-              </div>
-            </div>
-            <div class="delivery-map-frame-wrap">
-              <iframe
-                id="deliveryMapFrame"
-                class="delivery-map-frame"
-                title="Delivery route preview"
-                loading="lazy"
-                referrerpolicy="no-referrer-when-downgrade"
-                src="https://maps.google.com/maps?q=Nigeria&z=6&output=embed"
-              ></iframe>
-              <div class="delivery-map-floating-bar">
-                <div class="delivery-floating-pill">
-                  <i data-lucide="route"></i>
-                  <span id="deliveryMapStageLabel">Waiting for route details</span>
-                </div>
-                <div class="delivery-floating-pill delivery-floating-pill-dark">
-                  <i data-lucide="bike"></i>
-                  <span id="deliveryMapRiderCount">0 riders nearby</span>
-                </div>
-              </div>
-              <div id="deliveryMapPlaceholder" class="delivery-map-placeholder">
-                <i data-lucide="map"></i>
-                <strong>Your route will appear here.</strong>
-                <span>Use current location or enter both addresses to preview the trip.</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="delivery-route-insights marketplace-map-insights delivery-route-insights-bolt">
-            <div class="delivery-insight-card delivery-insight-card-accent">
-              <span class="delivery-insight-label">Pickup status</span>
-              <strong id="deliveryPickupHint">Waiting for pickup details.</strong>
-              <p>Turn on location for faster rider matching, or type the collection point manually.</p>
-            </div>
-            <div class="delivery-insight-card">
-              <span class="delivery-insight-label">Destination status</span>
-              <strong id="deliveryDropoffHint">Waiting for destination details.</strong>
-              <p>Enter the dropoff address so the route and estimate can update.</p>
-            </div>
-          </div>
-
-          <div class="delivery-card-header" style="margin-top:1rem;">
-            <div>
-              <h3>Nearby Riders</h3>
-              <p>Matched from the same marketplace delivery APIs used by mobile.</p>
-            </div>
-            <span id="deliveryRidersBadge" class="delivery-mini-pill">0 nearby</span>
-          </div>
-          <div id="deliveryRidersList" class="delivery-list"></div>
-        </section>
+        </div>
       </section>
 
       <section class="marketplace-section-grid marketplace-secondary-grid">
-        <section class="card delivery-card" style="display:none;">
-          <div class="delivery-card-header">
-            <div>
-              <h3>Active Delivery</h3>
-              <p>Track the latest delivery request and assigned rider details.</p>
-            </div>
-          </div>
-          <div id="activeDeliveryCard" class="delivery-empty">
-            {% if active_delivery %}
-            <strong>{{ active_delivery.pickup_address }}</strong>
-            <p>To {{ active_delivery.dropoff_address }}</p>
-            <p>Status: {{ active_delivery.get_status_display }}</p>
-            {% else %}
-            <p>No active delivery yet.</p>
-            {% endif %}
-          </div>
-        </section>
-
-        <section class="card delivery-card">
-          <div class="delivery-card-header">
+        <section class="card marketplace-activity-card">
+          <div class="marketplace-activity-card-header">
             <div>
               <h3>Recent Orders</h3>
               <p>Recent marketplace purchases stay easy to reopen from here.</p>
@@ -322,8 +216,8 @@
         </section>
       </section>
 
-      <section class="card delivery-card">
-        <div class="delivery-card-header">
+      <section class="card marketplace-activity-card">
+        <div class="marketplace-activity-card-header">
           <div>
             <h3>Recent House Chats</h3>
             <p>Continue any conversation you started with a house owner.</p>
@@ -354,5 +248,213 @@
     </main>
   </div>
 
+  <div id="scannerCameraModal" class="modal-overlay">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title">Scan Product Barcode</h3>
+        <button class="modal-close" type="button" id="scannerCloseCameraBtn"><i data-lucide="x"></i></button>
+      </div>
+      <video id="scannerCameraVideo" class="marketplace-scanner-video" autoplay playsinline></video>
+      <p class="marketplace-scanner-status">Point your phone camera at the product barcode.</p>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+  <script>
+    (function () {
+      const app = document.getElementById("customerScannerApp");
+      if (!app) return;
+
+      const token = document.querySelector(".marketplace-container")?.dataset.token || "";
+      const els = {
+        shopCode: document.getElementById("scannerShopCode"),
+        customerName: document.getElementById("scannerCustomerName"),
+        customerPhone: document.getElementById("scannerCustomerPhone"),
+        manualCode: document.getElementById("scannerManualCode"),
+        startOrder: document.getElementById("scannerStartOrderBtn"),
+        addCode: document.getElementById("scannerAddCodeBtn"),
+        status: document.getElementById("scannerStatus"),
+        items: document.getElementById("scannerCartItems"),
+        total: document.getElementById("scannerCartTotal"),
+        checkout: document.getElementById("scannerCheckoutBtn"),
+        bankBox: document.getElementById("scannerBankBox"),
+        bankName: document.getElementById("scannerBankName"),
+        bankAccount: document.getElementById("scannerBankAccount"),
+        openCamera: document.getElementById("scannerStartCameraBtn"),
+        closeCamera: document.getElementById("scannerCloseCameraBtn"),
+        cameraModal: document.getElementById("scannerCameraModal"),
+        video: document.getElementById("scannerCameraVideo"),
+      };
+      let cartToken = "";
+      let scanStream = null;
+      let scanning = false;
+
+      function money(value) {
+        const number = Number(value || 0);
+        return `NGN ${number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+
+      function toast(message) {
+        const container = document.getElementById("toastContainer");
+        if (!container) {
+          alert(message);
+          return;
+        }
+        const el = document.createElement("div");
+        el.className = "toast";
+        el.textContent = message;
+        container.appendChild(el);
+        setTimeout(() => el.remove(), 3500);
+      }
+
+      async function apiRequest(url, payload) {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": token ? `Bearer ${token}` : "",
+          },
+          body: JSON.stringify(payload || {}),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success === false) {
+          throw new Error(data.error || "Request failed.");
+        }
+        return data;
+      }
+
+      function renderCart(cart) {
+        cartToken = cart.cart_token || cartToken;
+        els.total.textContent = money(cart.total);
+        els.checkout.disabled = !cart.items || cart.items.length === 0;
+        if (cart.bank) {
+          els.bankBox.hidden = false;
+          els.bankName.textContent = cart.bank.bank_name || "Bank account";
+          els.bankAccount.textContent = `${cart.bank.account_number || "-"} - ${cart.bank.account_name || cart.shop?.business_name || ""}`;
+        }
+        if (!cart.items || cart.items.length === 0) {
+          els.items.innerHTML = "<p>No scanned products yet.</p>";
+          return;
+        }
+        els.items.innerHTML = cart.items.map((item) => `
+          <div class="marketplace-scanner-item">
+            <div>
+              <strong>${item.name}</strong>
+              <span>${item.code || ""}</span>
+            </div>
+            <div>
+              <strong>${money(item.line_total)}</strong>
+              <span>${item.quantity} x ${money(item.price)}</span>
+            </div>
+          </div>
+        `).join("");
+      }
+
+      async function startOrder() {
+        const shop = els.shopCode.value.trim();
+        if (!shop) {
+          toast("Enter shop username or shop code first.");
+          return;
+        }
+        els.status.textContent = "Starting order...";
+        const data = await apiRequest("{% url 'api_customer_scan_cart_start' %}", {
+          shop_username: shop,
+          customer_name: els.customerName.value.trim(),
+          customer_phone: els.customerPhone.value.trim(),
+        });
+        renderCart(data.cart);
+        els.status.textContent = `Order started for ${data.cart.shop.business_name}. Scan or type product barcodes.`;
+      }
+
+      async function addCode(code) {
+        const value = (code || els.manualCode.value).trim();
+        if (!cartToken) {
+          await startOrder();
+        }
+        if (!value) {
+          toast("Scan or type a product barcode.");
+          return;
+        }
+        els.status.textContent = "Adding product...";
+        const data = await apiRequest("{% url 'api_customer_scan_cart_add_by_code' %}", {
+          cart_token: cartToken,
+          code: value,
+          quantity: 1,
+        });
+        els.manualCode.value = "";
+        renderCart(data.cart);
+        els.status.textContent = `${value} added to cart.`;
+      }
+
+      async function checkout() {
+        if (!cartToken) return;
+        els.status.textContent = "Submitting order to shop...";
+        const data = await apiRequest("{% url 'api_customer_scan_cart_checkout' %}", { cart_token: cartToken });
+        if (data.bank) {
+          els.bankBox.hidden = false;
+          els.bankName.textContent = data.bank.bank_name || "Bank account";
+          els.bankAccount.textContent = `${data.bank.account_number || "-"} - ${data.bank.account_name || ""}`;
+        }
+        els.checkout.disabled = true;
+        els.status.textContent = `Order submitted. Pay ${money(data.sale.total_amount)} to the shop account, then ask staff to confirm payment.`;
+        toast("Order submitted to shop.");
+      }
+
+      async function stopCamera() {
+        scanning = false;
+        if (scanStream) {
+          scanStream.getTracks().forEach((track) => track.stop());
+          scanStream = null;
+        }
+        els.cameraModal.classList.remove("active");
+      }
+
+      async function openCamera() {
+        if (!("BarcodeDetector" in window)) {
+          toast("Camera barcode scanning is not supported on this browser. Type the barcode instead.");
+          return;
+        }
+        try {
+          scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+          els.video.srcObject = scanStream;
+          els.cameraModal.classList.add("active");
+          scanning = true;
+          const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e", "qr_code"] });
+          const scanLoop = async () => {
+            if (!scanning) return;
+            try {
+              const barcodes = await detector.detect(els.video);
+              if (barcodes && barcodes.length) {
+                const code = barcodes[0].rawValue || "";
+                await stopCamera();
+                await addCode(code);
+                return;
+              }
+            } catch (error) {}
+            requestAnimationFrame(scanLoop);
+          };
+          requestAnimationFrame(scanLoop);
+        } catch (error) {
+          await stopCamera();
+          toast("Could not open camera. Check camera permission or type the barcode.");
+        }
+      }
+
+      els.startOrder.addEventListener("click", () => startOrder().catch((error) => toast(error.message)));
+      els.addCode.addEventListener("click", () => addCode().catch((error) => toast(error.message)));
+      els.manualCode.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          addCode().catch((error) => toast(error.message));
+        }
+      });
+      els.checkout.addEventListener("click", () => checkout().catch((error) => toast(error.message)));
+      els.openCamera.addEventListener("click", () => openCamera().catch((error) => toast(error.message)));
+      els.closeCamera.addEventListener("click", () => stopCamera());
+    })();
+    if (window.lucide && typeof window.lucide.createIcons === "function") {
+      window.lucide.createIcons();
+    }
+  </script>
 </body>
 </html>

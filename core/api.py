@@ -25,9 +25,6 @@ from .models import (
     MarketplaceOrderItem,
     MarketplaceShopProfile,
     BranchInventory,
-    DeliveryRider,
-    DeliveryRequest,
-    DeliveryCompany,
     HouseInquiry,
     HouseInquiryMessage,
     HouseListing,
@@ -108,10 +105,6 @@ def _json_error(message, status=400, **extra):
     return JsonResponse(payload, status=status)
 
 
-def api_mvp_delivery_disabled(request, *args, **kwargs):
-    return _json_error("Delivery is temporarily unavailable in the VilaStore MVP.", status=404)
-
-
 def _json_success(data=None, status=200):
     payload = {"success": True}
     if data:
@@ -159,85 +152,6 @@ def _to_decimal(value):
         return None
 
 
-def _estimate_delivery_price(distance_km):
-    try:
-        distance = max(Decimal(str(distance_km)), Decimal("0"))
-    except Exception:
-        distance = Decimal("0")
-
-    current_fuel_price = Decimal("950.00")
-    fuel_efficiency_km_per_litre = Decimal("24.0")
-    fuel_buffer_multiplier = Decimal("1.15")
-    base = Decimal("350.00")
-    operational_per_km = Decimal("45.00")
-    fuel_component = Decimal("0.00")
-    if distance > 0:
-        fuel_component = (
-            (distance / fuel_efficiency_km_per_litre)
-            * current_fuel_price
-            * fuel_buffer_multiplier
-        )
-    distance_component = operational_per_km * distance
-    subtotal = base + distance_component + fuel_component
-    surge = Decimal("1.00")
-    if distance > Decimal("8"):
-        surge = Decimal("1.20")
-    elif distance > Decimal("5"):
-        surge = Decimal("1.10")
-    total = subtotal * surge
-    return {
-        "distance_km": distance.quantize(Decimal("0.01")),
-        "base_fare": base.quantize(Decimal("0.01")),
-        "distance_fee": distance_component.quantize(Decimal("0.01")),
-        "fuel_surcharge": fuel_component.quantize(Decimal("0.01")),
-        "fuel_price_per_litre": current_fuel_price.quantize(Decimal("0.01")),
-        "surge_multiplier": surge.quantize(Decimal("0.01")),
-        "price": total.quantize(Decimal("0.01")),
-    }
-
-
-def _resolve_delivery_distance_km(data):
-    pickup_lat = _to_decimal(data.get("pickup_lat"))
-    pickup_lng = _to_decimal(data.get("pickup_lng"))
-    dropoff_lat = _to_decimal(data.get("dropoff_lat"))
-    dropoff_lng = _to_decimal(data.get("dropoff_lng"))
-    derived_distance = None
-    if None not in (pickup_lat, pickup_lng, dropoff_lat, dropoff_lng):
-        derived_distance = _haversine_km(pickup_lat, pickup_lng, dropoff_lat, dropoff_lng)
-    if derived_distance is not None:
-        return Decimal(str(derived_distance)), pickup_lat, pickup_lng, dropoff_lat, dropoff_lng
-
-    distance_km = data.get("distance_km")
-    if distance_km in (None, ""):
-        return None, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng
-    parsed_distance = _to_decimal(distance_km)
-    if parsed_distance is None:
-        return None, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng
-    return parsed_distance, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng
-
-
-def _haversine_km(lat1, lng1, lat2, lng2):
-    import math
-
-    try:
-        lat1 = float(lat1)
-        lng1 = float(lng1)
-        lat2 = float(lat2)
-        lng2 = float(lng2)
-    except Exception:
-        return None
-
-    rad = math.pi / 180.0
-    dlat = (lat2 - lat1) * rad
-    dlng = (lng2 - lng1) * rad
-    a = (
-        math.sin(dlat / 2) ** 2
-        + math.cos(lat1 * rad) * math.cos(lat2 * rad) * math.sin(dlng / 2) ** 2
-    )
-    c = 2 * math.asin(math.sqrt(a))
-    return 6371 * c
-
-
 def _abs_media_url(request, field):
     if not field:
         return ""
@@ -274,29 +188,9 @@ def _marketplace_buyer_is_fully_verified(buyer):
     return True
 
 
-def _send_marketplace_phone_verification_code(buyer):
-    phone = (buyer.phone or "").strip()
-    if not phone:
-        raise ValueError("Phone number is required for phone verification.")
-
-    code = str(secrets.randbelow(900000) + 100000)
-    buyer.phone_verification_code = code
-    buyer.phone_code_sent_at = timezone.now()
-    buyer.save(update_fields=["phone_verification_code", "phone_code_sent_at"])
-
-    sent = send_sms(
-        phone,
-        f"Your VilaStore rider verification code is {code}. It will expire in {OTP_EXPIRY_MINUTES} minutes.",
-    )
-    if not sent:
-        raise ValueError("Failed to send rider verification SMS.")
-
-
 def _send_marketplace_pending_verification_codes(buyer):
     if not buyer.is_email_verified:
         _send_marketplace_verification_code(buyer)
-    if _marketplace_buyer_needs_phone_verification(buyer) and not buyer.is_phone_verified:
-        _send_marketplace_phone_verification_code(buyer)
 
 
 def _issue_auth_token(role, *, owner=None, shopboy=None, agent=None):
@@ -970,9 +864,7 @@ def api_marketplace_signup(request):
         return _json_error("Invalid JSON payload.")
 
     email = (data.get("email") or "").strip().lower()
-    phone = (data.get("phone") or "").strip()
     registration_role = MarketplaceBuyer.ROLE_CUSTOMER
-    full_name = (data.get("full_name") or "").strip()
     password = data.get("password") or ""
     confirm_password = data.get("confirm_password") or ""
 
@@ -988,34 +880,12 @@ def api_marketplace_signup(request):
     if MarketplaceBuyer.objects.filter(email__iexact=email).exists():
         return _json_error("Email already registered. Please sign in.", status=409)
 
-    if registration_role not in {MarketplaceBuyer.ROLE_CUSTOMER, MarketplaceBuyer.ROLE_RIDER}:
-        registration_role = MarketplaceBuyer.ROLE_CUSTOMER
-
-    if registration_role == MarketplaceBuyer.ROLE_RIDER:
-        if not full_name or not phone:
-            return _json_error("Full name and phone number are required for rider registration.")
-        if DeliveryRider.objects.filter(phone__iexact=phone).exists():
-            return _json_error("That phone number is already linked to a rider account.", status=409)
-
     buyer = MarketplaceBuyer.objects.create(
         email=email,
-        phone=phone,
         password=make_password(password),
         registration_role=registration_role,
-        is_active=registration_role != MarketplaceBuyer.ROLE_RIDER,
+        is_active=True,
     )
-
-    if registration_role == MarketplaceBuyer.ROLE_RIDER:
-        DeliveryRider.objects.create(
-            buyer=buyer,
-            full_name=full_name,
-            phone=phone,
-            email=email,
-            rider_type=DeliveryRider.RIDER_PERSONAL,
-            is_approved=False,
-            is_active=False,
-            is_available=False,
-        )
 
     try:
         _send_marketplace_pending_verification_codes(buyer)
@@ -1025,7 +895,6 @@ def api_marketplace_signup(request):
     return _json_success({
         "requires_verification": True,
         "email": buyer.email,
-        "phone": buyer.phone,
         "registration_role": buyer.registration_role,
     }, status=201)
 
@@ -1058,8 +927,7 @@ def api_marketplace_login(request):
         return _json_success({
             "requires_verification": True,
             "email": buyer.email,
-            "phone": buyer.phone,
-            "registration_role": buyer.registration_role,
+        "registration_role": buyer.registration_role,
         })
 
     buyer.last_login = timezone.now()
@@ -1082,8 +950,6 @@ def api_marketplace_verify(request):
 
     email = (data.get("email") or "").strip().lower()
     email_code = (data.get("email_code") or data.get("code") or "").strip()
-    phone_code = (data.get("phone_code") or "").strip()
-
     if not email or not email_code:
         return _json_error("Email and verification code are required.")
 
@@ -1112,24 +978,6 @@ def api_marketplace_verify(request):
         buyer.email_verification_code = ""
         buyer.email_code_sent_at = None
         update_fields.extend(["is_email_verified", "email_verification_code", "email_code_sent_at"])
-
-    if _marketplace_buyer_needs_phone_verification(buyer) and not buyer.is_phone_verified:
-        if not phone_code:
-            return _json_error("Phone verification code is required for rider accounts.")
-        if not buyer.phone_verification_code or not buyer.phone_code_sent_at:
-            return _json_error("No phone verification code found. Send code first.")
-        if timezone.now() - buyer.phone_code_sent_at > timedelta(minutes=OTP_EXPIRY_MINUTES):
-            return _json_error("Phone verification code expired. Send a new code.")
-        if phone_code != buyer.phone_verification_code:
-            return _json_error("Invalid phone verification code.")
-        buyer.is_phone_verified = True
-        buyer.phone_verification_code = ""
-        buyer.phone_code_sent_at = None
-        update_fields.extend(["is_phone_verified", "phone_verification_code", "phone_code_sent_at"])
-
-    if buyer.registration_role == MarketplaceBuyer.ROLE_RIDER and not buyer.is_active:
-        buyer.is_active = True
-        update_fields.append("is_active")
 
     buyer.last_login = timezone.now()
     buyer.save(update_fields=update_fields)
@@ -1767,602 +1615,6 @@ def api_marketplace_house_inquiry_message(request, public_id):
     return _json_success({
         "message": _serialize_house_inquiry_message(message),
     }, status=201)
-
-
-# =============================
-# Marketplace Delivery APIs
-# =============================
-
-
-def _serialize_delivery_rider(rider, *, distance_km=None):
-    return {
-        "id": rider.id,
-        "full_name": rider.full_name or rider.buyer.email,
-        "phone": rider.phone if rider.allow_direct_call else "",
-        "is_available": rider.is_available,
-        "distance_km": float(distance_km) if distance_km is not None else None,
-        "vehicle_type": rider.vehicle_type,
-        "vehicle_color": rider.vehicle_color,
-        "vehicle_model": rider.vehicle_model,
-        "plate_number": rider.plate_number,
-        "rider_type": rider.rider_type,
-        "is_approved": rider.is_approved,
-    }
-
-
-def _serialize_delivery_request(request_obj):
-    status_labels = dict(DeliveryRequest.STATUS_CHOICES)
-    return {
-        "public_id": str(request_obj.public_id),
-        "status": request_obj.status,
-        "status_label": status_labels.get(request_obj.status, request_obj.status),
-        "pickup_address": request_obj.pickup_address,
-        "dropoff_address": request_obj.dropoff_address,
-        "distance_km": float(request_obj.distance_km or 0),
-        "price": _money(request_obj.price),
-        "customer_name": request_obj.customer_name,
-        "customer_phone": request_obj.customer_phone,
-        "notes": request_obj.notes,
-        "rider": _serialize_delivery_rider(request_obj.rider) if request_obj.rider_id else None,
-        "created_at": request_obj.created_at.isoformat(),
-        "updated_at": request_obj.updated_at.isoformat(),
-    }
-
-
-@csrf_exempt
-@require_http_methods(["GET"])
-def api_marketplace_delivery_riders(request):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    pickup_lat = _to_decimal(request.GET.get("pickup_lat"))
-    pickup_lng = _to_decimal(request.GET.get("pickup_lng"))
-    max_distance_km = _to_decimal(request.GET.get("max_distance_km"))
-
-    riders = DeliveryRider.objects.filter(
-        is_active=True,
-        is_available=True,
-        is_approved=True,
-    ).select_related("buyer")
-    cutoff = timezone.now() - timedelta(minutes=30)
-    results = []
-    for rider in riders:
-        if rider.last_seen_at and rider.last_seen_at < cutoff:
-            continue
-        distance = None
-        if pickup_lat is not None and pickup_lng is not None:
-            if rider.current_lat is None or rider.current_lng is None:
-                continue
-            distance = _haversine_km(pickup_lat, pickup_lng, rider.current_lat, rider.current_lng)
-        if max_distance_km is not None and distance is not None and distance > float(max_distance_km):
-            continue
-        results.append((distance, rider))
-
-    results.sort(key=lambda row: row[0] if row[0] is not None else 999999)
-    payload = [
-        _serialize_delivery_rider(rider, distance_km=distance)
-        for distance, rider in results
-    ]
-
-    return _json_success({"riders": payload})
-
-
-@csrf_exempt
-@require_http_methods(["GET", "POST"])
-def api_marketplace_delivery_estimate(request):
-    data = _get_body_data(request)
-    if data is None:
-        return _json_error("Invalid JSON payload.")
-    distance_km, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng = _resolve_delivery_distance_km(data)
-    if distance_km is None:
-        return _json_error("Pickup and dropoff coordinates or distance_km are required.")
-    estimate = _estimate_delivery_price(distance_km)
-    return _json_success({
-        "distance_km": float(estimate["distance_km"]),
-        "price": _money(estimate["price"]),
-        "pricing": {
-            "base_fare": _money(estimate["base_fare"]),
-            "distance_fee": _money(estimate["distance_fee"]),
-            "fuel_surcharge": _money(estimate["fuel_surcharge"]),
-            "fuel_price_per_litre": _money(estimate["fuel_price_per_litre"]),
-            "surge_multiplier": str(estimate["surge_multiplier"]),
-        },
-        "route": {
-            "pickup_lat": float(pickup_lat) if pickup_lat is not None else None,
-            "pickup_lng": float(pickup_lng) if pickup_lng is not None else None,
-            "dropoff_lat": float(dropoff_lat) if dropoff_lat is not None else None,
-            "dropoff_lng": float(dropoff_lng) if dropoff_lng is not None else None,
-        },
-    })
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_marketplace_delivery_request(request):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    data = _get_body_data(request)
-    if data is None:
-        return _json_error("Invalid JSON payload.")
-
-    pickup_address = (data.get("pickup_address") or "").strip()
-    dropoff_address = (data.get("dropoff_address") or "").strip()
-    rider_id = data.get("rider_id")
-
-    if not pickup_address or not dropoff_address:
-        return _json_error("Pickup and destination are required.")
-    distance_km, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng = _resolve_delivery_distance_km(data)
-    if distance_km is None:
-        return _json_error("Pickup and dropoff coordinates or distance_km are required.")
-
-    rider = None
-    if rider_id:
-        try:
-            rider = DeliveryRider.objects.get(id=int(rider_id), is_active=True, is_approved=True)
-        except Exception:
-            return _json_error("Selected rider is unavailable.")
-
-    estimate = _estimate_delivery_price(distance_km)
-    status = DeliveryRequest.STATUS_RIDER_SELECTED if rider else DeliveryRequest.STATUS_REQUESTED
-
-    delivery_request = DeliveryRequest.objects.create(
-        buyer=buyer,
-        rider=rider,
-        pickup_address=pickup_address,
-        dropoff_address=dropoff_address,
-        pickup_lat=pickup_lat,
-        pickup_lng=pickup_lng,
-        dropoff_lat=dropoff_lat,
-        dropoff_lng=dropoff_lng,
-        distance_km=estimate["distance_km"],
-        price=estimate["price"],
-        customer_name=(data.get("customer_name") or "").strip(),
-        customer_phone=(data.get("customer_phone") or "").strip(),
-        notes=(data.get("notes") or "").strip(),
-        status=status,
-    )
-
-    return _json_success({
-        "request": _serialize_delivery_request(delivery_request),
-        "notification_sent": bool(rider),
-    }, status=201)
-
-
-@csrf_exempt
-@require_http_methods(["GET"])
-def api_marketplace_delivery_request_detail(request, public_id):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    delivery_request = get_object_or_404(
-        DeliveryRequest.objects.select_related("buyer", "rider", "rider__buyer"),
-        public_id=public_id,
-    )
-
-    if delivery_request.buyer_id != buyer.id and (
-        not delivery_request.rider_id or delivery_request.rider.buyer_id != buyer.id
-    ):
-        return _json_error("Access denied.", status=403)
-
-    return _json_success({
-        "request": _serialize_delivery_request(delivery_request),
-    })
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_marketplace_delivery_assign_rider(request, public_id):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    data = _get_body_data(request)
-    if data is None:
-        return _json_error("Invalid JSON payload.")
-
-    delivery_request = get_object_or_404(DeliveryRequest, public_id=public_id, buyer=buyer)
-    rider_id = data.get("rider_id")
-    if not rider_id:
-        return _json_error("rider_id is required.")
-
-    try:
-        rider = DeliveryRider.objects.get(id=int(rider_id), is_active=True)
-    except Exception:
-        return _json_error("Selected rider is unavailable.")
-
-    delivery_request.rider = rider
-    delivery_request.status = DeliveryRequest.STATUS_RIDER_SELECTED
-    delivery_request.save(update_fields=["rider", "status", "updated_at"])
-
-    return _json_success({
-        "request": _serialize_delivery_request(delivery_request),
-        "notification_sent": True,
-    })
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_marketplace_delivery_rider_register(request):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-    if not _marketplace_buyer_is_fully_verified(buyer):
-        return _json_error("Verify your email and phone number before completing rider registration.", status=403)
-
-    data = _get_body_data(request) or {}
-
-    full_name = (data.get("full_name") or "").strip()
-    phone = (data.get("phone") or "").strip()
-    email = (data.get("email") or "").strip()
-    home_address = (data.get("home_address") or "").strip()
-    id_type = (data.get("id_type") or "").strip()
-    id_number = (data.get("id_number") or "").strip()
-    vehicle_type = (data.get("vehicle_type") or "").strip()
-    plate_number = (data.get("plate_number") or "").strip()
-    vehicle_color = (data.get("vehicle_color") or "").strip()
-    vehicle_model = (data.get("vehicle_model") or "").strip()
-    city = (data.get("city") or "").strip()
-    operating_areas = (data.get("operating_areas") or "").strip()
-    bank_name = (data.get("bank_name") or "").strip()
-    account_number = (data.get("account_number") or "").strip()
-    account_name = (data.get("account_name") or "").strip()
-    allow_direct_call = data.get("allow_direct_call")
-    terms_accepted = data.get("terms_accepted")
-
-    if isinstance(allow_direct_call, str):
-        allow_direct_call = allow_direct_call.strip().lower() in {"true", "1", "yes", "on"}
-    elif allow_direct_call is not None:
-        allow_direct_call = bool(allow_direct_call)
-
-    if isinstance(terms_accepted, str):
-        terms_accepted = terms_accepted.strip().lower() in {"true", "1", "yes", "on"}
-    elif terms_accepted is not None:
-        terms_accepted = bool(terms_accepted)
-
-    if not full_name or not phone or not home_address:
-        return _json_error("Full name, phone, and address are required.")
-    if not id_type:
-        return _json_error("An ID type is required.")
-    if not vehicle_type or not plate_number or not vehicle_color or not vehicle_model:
-        return _json_error("Complete vehicle details are required.")
-    if not city or not operating_areas:
-        return _json_error("City and operating areas are required.")
-    if not bank_name or not account_number or not account_name:
-        return _json_error("Payment details are required.")
-    if not terms_accepted:
-        return _json_error("You must accept the terms.")
-
-    rider, _ = DeliveryRider.objects.get_or_create(buyer=buyer)
-    id_document = request.FILES.get("id_document")
-    profile_photo = request.FILES.get("profile_photo")
-    vehicle_photo = request.FILES.get("vehicle_photo")
-    plate_photo = request.FILES.get("plate_photo")
-
-    if not id_document and not rider.id_document:
-        return _json_error("An ID document must be uploaded.")
-    if not profile_photo and not rider.profile_photo:
-        return _json_error("A profile photo must be uploaded.")
-    if not vehicle_photo and not rider.vehicle_photo:
-        return _json_error("A vehicle photo must be uploaded.")
-    if not plate_photo and not rider.plate_photo:
-        return _json_error("A plate photo must be uploaded.")
-
-    rider.full_name = full_name
-    rider.phone = phone
-    rider.email = email
-    rider.home_address = home_address
-    rider.id_type = id_type
-    rider.id_number = id_number
-    rider.vehicle_type = vehicle_type
-    rider.plate_number = plate_number
-    rider.vehicle_color = vehicle_color
-    rider.vehicle_model = vehicle_model
-    rider.city = city
-    rider.operating_areas = operating_areas
-    rider.bank_name = bank_name
-    rider.account_number = account_number
-    rider.account_name = account_name
-    if allow_direct_call is not None:
-        rider.allow_direct_call = allow_direct_call
-    rider.terms_accepted = terms_accepted
-    rider.id_document = id_document
-    rider.profile_photo = profile_photo
-    rider.vehicle_photo = vehicle_photo
-    rider.plate_photo = plate_photo
-    rider.rider_type = DeliveryRider.RIDER_PERSONAL
-    rider.is_approved = True
-    rider.is_active = True
-    rider.is_available = True
-    rider.last_seen_at = timezone.now()
-    rider.save()
-
-    return _json_success({"rider": _serialize_delivery_rider(rider)})
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_marketplace_delivery_rider_location(request):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    data = _get_body_data(request)
-    if data is None:
-        return _json_error("Invalid JSON payload.")
-
-    rider = DeliveryRider.objects.filter(buyer=buyer, is_active=True).first()
-    if not rider:
-        return _json_error("Rider profile not found.", status=404)
-
-    lat = _to_decimal(data.get("lat"))
-    lng = _to_decimal(data.get("lng"))
-    is_available = data.get("is_available")
-    if isinstance(is_available, str):
-        is_available = is_available.strip().lower() in {"true", "1", "yes", "on"}
-    elif is_available is not None:
-        is_available = bool(is_available)
-
-    if lat is not None:
-        rider.current_lat = lat
-    if lng is not None:
-        rider.current_lng = lng
-    if is_available is not None:
-        rider.is_available = is_available
-    rider.last_seen_at = timezone.now()
-    rider.save(update_fields=["current_lat", "current_lng", "is_available", "last_seen_at", "updated_at"])
-
-    return _json_success({"rider": _serialize_delivery_rider(rider)})
-
-
-@csrf_exempt
-@require_http_methods(["GET"])
-def api_marketplace_delivery_rider_requests(request):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    rider = DeliveryRider.objects.filter(buyer=buyer, is_active=True, is_approved=True).first()
-    if not rider:
-        return _json_error("Rider profile not found.", status=404)
-
-    requests = (
-        DeliveryRequest.objects.filter(
-            Q(rider=rider)
-            | Q(rider__isnull=True, status=DeliveryRequest.STATUS_REQUESTED)
-        )
-        .select_related("buyer")
-        .order_by("-created_at")
-    )
-
-    return _json_success({
-        "requests": [_serialize_delivery_request(req) for req in requests],
-    })
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_marketplace_delivery_rider_status(request, public_id):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    rider = DeliveryRider.objects.filter(buyer=buyer, is_active=True, is_approved=True).first()
-    if not rider:
-        return _json_error("Rider profile not found.", status=404)
-
-    data = _get_body_data(request)
-    if data is None:
-        return _json_error("Invalid JSON payload.")
-
-    status = (data.get("status") or "").strip()
-    valid_statuses = {choice[0] for choice in DeliveryRequest.STATUS_CHOICES}
-    if status not in valid_statuses:
-        return _json_error("Invalid status.")
-
-    with transaction.atomic():
-        delivery_request = get_object_or_404(
-            DeliveryRequest.objects.select_for_update(),
-            public_id=public_id,
-        )
-
-        if delivery_request.rider_id not in (None, rider.id):
-            return _json_error("This delivery request has already been assigned to another rider.", status=409)
-
-        if delivery_request.rider_id is None:
-            if status != DeliveryRequest.STATUS_ACCEPTED:
-                return _json_error("Unassigned delivery requests can only be accepted by a rider.", status=400)
-            delivery_request.rider = rider
-
-        delivery_request.status = status
-        update_fields = ["status", "updated_at"]
-        if delivery_request.rider_id == rider.id and "rider" not in update_fields:
-            update_fields.append("rider")
-        delivery_request.save(update_fields=update_fields)
-
-    return _json_success({
-        "request": _serialize_delivery_request(delivery_request),
-    })
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_marketplace_delivery_company_profile(request):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    data = _get_body_data(request) or {}
-    company_name = (data.get("company_name") or "").strip()
-    phone = (data.get("phone") or "").strip()
-    email = (data.get("email") or "").strip()
-    address = (data.get("address") or "").strip()
-    city = (data.get("city") or "").strip()
-    operating_areas = (data.get("operating_areas") or "").strip()
-    bank_name = (data.get("bank_name") or "").strip()
-    account_number = (data.get("account_number") or "").strip()
-    account_name = (data.get("account_name") or "").strip()
-    terms_accepted = data.get("terms_accepted")
-
-    if isinstance(terms_accepted, str):
-        terms_accepted = terms_accepted.strip().lower() in {"true", "1", "yes", "on"}
-    elif terms_accepted is not None:
-        terms_accepted = bool(terms_accepted)
-
-    if not company_name or not phone or not address or not city:
-        return _json_error("Company name, phone, address, and city are required.")
-    if not bank_name or not account_number or not account_name:
-        return _json_error("Payment details are required.")
-    if not terms_accepted:
-        return _json_error("You must accept the terms.")
-
-    company, _ = DeliveryCompany.objects.get_or_create(owner=buyer)
-    company.company_name = company_name
-    company.phone = phone
-    company.email = email
-    company.address = address
-    company.city = city
-    company.operating_areas = operating_areas
-    company.bank_name = bank_name
-    company.account_number = account_number
-    company.account_name = account_name
-    company.terms_accepted = terms_accepted
-    company.is_active = True
-    company.save()
-
-    return _json_success({
-        "company": {
-            "id": company.id,
-            "company_name": company.company_name,
-            "phone": company.phone,
-            "email": company.email,
-            "city": company.city,
-            "operating_areas": company.operating_areas,
-        }
-    })
-
-
-@csrf_exempt
-@require_http_methods(["GET", "POST"])
-def api_marketplace_delivery_company_riders(request):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    company = DeliveryCompany.objects.filter(owner=buyer, is_active=True).first()
-    if not company:
-        return _json_error("Company profile not found.", status=404)
-
-    if request.method == "GET":
-        riders = DeliveryRider.objects.filter(company=company).select_related("buyer").order_by("-created_at")
-        return _json_success({
-            "riders": [
-                {
-                    "id": rider.id,
-                    "full_name": rider.full_name,
-                    "phone": rider.phone,
-                    "email": rider.buyer.email,
-                    "is_active": rider.is_active,
-                    "is_approved": rider.is_approved,
-                }
-                for rider in riders
-            ]
-        })
-
-    data = _get_body_data(request) or {}
-    email = (data.get("email") or "").strip().lower()
-    password = data.get("password") or ""
-    full_name = (data.get("full_name") or "").strip()
-    phone = (data.get("phone") or "").strip()
-    allow_direct_call = data.get("allow_direct_call")
-
-    if isinstance(allow_direct_call, str):
-        allow_direct_call = allow_direct_call.strip().lower() in {"true", "1", "yes", "on"}
-    elif allow_direct_call is not None:
-        allow_direct_call = bool(allow_direct_call)
-    else:
-        allow_direct_call = True
-
-    if not email or not password or not full_name or not phone:
-        return _json_error("Email, password, full name, and phone are required.")
-
-    if MarketplaceBuyer.objects.filter(email__iexact=email).exists():
-        return _json_error("Email already exists for a rider.", status=409)
-    if DeliveryRider.objects.filter(phone__iexact=phone).exists():
-        return _json_error("That phone number is already linked to a rider.", status=409)
-
-    rider_buyer = MarketplaceBuyer.objects.create(
-        email=email,
-        phone=phone,
-        password=make_password(password),
-        registration_role=MarketplaceBuyer.ROLE_RIDER,
-        is_active=False,
-    )
-
-    rider = DeliveryRider.objects.create(
-        buyer=rider_buyer,
-        full_name=full_name,
-        phone=phone,
-        allow_direct_call=allow_direct_call,
-        rider_type=DeliveryRider.RIDER_COMPANY,
-        is_approved=False,
-        is_active=False,
-        is_available=False,
-        terms_accepted=True,
-        company=company,
-    )
-    try:
-        _send_marketplace_pending_verification_codes(rider_buyer)
-    except Exception:
-        return _json_error("Rider account created, but verification codes could not be sent.", status=500)
-
-    return _json_success({
-        "rider": {
-            "id": rider.id,
-            "full_name": rider.full_name,
-            "phone": rider.phone,
-            "email": rider.buyer.email,
-            "is_approved": rider.is_approved,
-        }
-    }, status=201)
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_marketplace_delivery_company_rider_approve(request, rider_id):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    company = DeliveryCompany.objects.filter(owner=buyer, is_active=True).first()
-    if not company:
-        return _json_error("Company profile not found.", status=404)
-
-    rider = get_object_or_404(DeliveryRider, id=rider_id, company=company)
-    rider.is_approved = True
-    rider.save(update_fields=["is_approved"])
-    return _json_success({"approved": True})
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_marketplace_delivery_company_rider_remove(request, rider_id):
-    buyer, _ = _get_buyer_from_request(request)
-    if not buyer:
-        return _json_error("Unauthorized.", status=401)
-
-    company = DeliveryCompany.objects.filter(owner=buyer, is_active=True).first()
-    if not company:
-        return _json_error("Company profile not found.", status=404)
-
-    rider = get_object_or_404(DeliveryRider, id=rider_id, company=company)
-    rider.is_active = False
-    rider.is_available = False
-    rider.save(update_fields=["is_active", "is_available"])
-    return _json_success({"removed": True})
 
 
 # =============================
@@ -4749,7 +4001,6 @@ def api_owner_settings_branch_delete(request, branch_id):
     Sale.objects.filter(user=owner, branch=branch).update(branch=fallback)
     Expense.objects.filter(user=owner, branch=branch).update(branch=fallback)
     MarketplaceOrder.objects.filter(shop_owner=owner, branch=branch).update(branch=fallback)
-    DeliveryRequest.objects.filter(branch=branch).update(branch=fallback)
     branch.delete()
     if fallback and not ShopBranch.objects.filter(user=owner, is_default=True).exists():
         fallback.is_default = True

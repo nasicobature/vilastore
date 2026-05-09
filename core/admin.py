@@ -17,9 +17,6 @@ from .models import (
     MarketplaceChatMessage,
     MarketplaceBuyer,
     MarketplaceBuyerToken,
-    DeliveryRider,
-    DeliveryRequest,
-    DeliveryCompany,
     HouseListing,
     HouseListingImage,
     Investor,
@@ -92,27 +89,6 @@ class MarketplaceBuyerTokenAdmin(admin.ModelAdmin):
     list_display = ("buyer", "token", "is_revoked", "created_at", "last_used_at", "expires_at")
     search_fields = ("buyer__email", "token")
     list_filter = ("is_revoked",)
-
-
-@admin.register(DeliveryRider)
-class DeliveryRiderAdmin(admin.ModelAdmin):
-    list_display = ("buyer", "full_name", "phone", "rider_type", "is_approved", "vehicle_type", "city", "is_active", "is_available", "last_seen_at")
-    search_fields = ("buyer__email", "full_name", "phone", "plate_number", "vehicle_model")
-    list_filter = ("rider_type", "is_approved", "is_active", "is_available", "vehicle_type", "city")
-
-
-@admin.register(DeliveryRequest)
-class DeliveryRequestAdmin(admin.ModelAdmin):
-    list_display = ("public_id", "buyer", "rider", "status", "distance_km", "price", "created_at")
-    list_filter = ("status", "created_at")
-    search_fields = ("public_id", "buyer__email", "customer_phone")
-
-
-@admin.register(DeliveryCompany)
-class DeliveryCompanyAdmin(admin.ModelAdmin):
-    list_display = ("company_name", "owner", "phone", "city", "is_active", "created_at")
-    list_filter = ("is_active", "city")
-    search_fields = ("company_name", "owner__email", "phone")
 
 
 @admin.register(CustomerScanCart)

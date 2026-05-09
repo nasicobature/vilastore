@@ -403,7 +403,6 @@ class CustomerScannerPaymentTests(TestCase):
         self.assertEqual(sale.handled_by_shopboy, self.shopboy)
         self.assertEqual(self.product.stock, Decimal("4.00"))
 
-    def test_delivery_api_is_hidden_for_mvp(self):
-        response = self.client.get(reverse("api_marketplace_delivery_riders"))
+    def test_delivery_api_is_removed_for_mvp(self):
+        response = self.client.get("/api/marketplace/delivery/riders/")
         self.assertEqual(response.status_code, 404)
-        self.assertIn("temporarily unavailable", response.json()["error"])
