@@ -100,6 +100,9 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20)
     address = models.TextField()
     country = models.CharField(max_length=100)
+    bank_name = models.CharField(max_length=100, blank=True, default="")
+    bank_account_number = models.CharField(max_length=30, blank=True, default="")
+    bank_account_name = models.CharField(max_length=120, blank=True, default="")
 
     # Profile
     profile_image = models.ImageField(upload_to='profiles/', null=True, blank=True)
@@ -321,11 +324,13 @@ class Sale(models.Model):
     CHANNEL_OWNER_POS = "owner_pos"
     CHANNEL_MARKETPLACE = "marketplace"
     CHANNEL_SHOPBOY_PORTAL = "shopboy_portal"
+    CHANNEL_CUSTOMER_SCAN = "customer_scan"
 
     CHANNEL_CHOICES = [
         (CHANNEL_OWNER_POS, "Owner POS"),
         (CHANNEL_MARKETPLACE, "Marketplace"),
         (CHANNEL_SHOPBOY_PORTAL, "Shop Boy Portal"),
+        (CHANNEL_CUSTOMER_SCAN, "Customer Scanner"),
     ]
 
     PAYMENT_PAID = "paid"
@@ -381,7 +386,7 @@ class SaleItem(models.Model):
     vat_rate = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal("0.00"))
     vat_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     vat_applicable = models.BooleanField(default=False)
-    
+
 
 class Investor(models.Model):
     name = models.CharField(max_length=150)
@@ -789,6 +794,20 @@ class MarketplaceBuyerToken(models.Model):
 
     def __str__(self):
         return f"{self.buyer.email} ({self.token[:6]}...)"
+
+
+class CustomerScanCart(models.Model):
+    cart_token = models.CharField(max_length=80, unique=True, default=uuid.uuid4)
+    shop_owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="customer_scan_carts")
+    buyer = models.ForeignKey(MarketplaceBuyer, on_delete=models.SET_NULL, null=True, blank=True, related_name="scan_carts")
+    branch = models.ForeignKey(ShopBranch, on_delete=models.SET_NULL, null=True, blank=True, related_name="customer_scan_carts")
+    data = models.JSONField(default=dict, blank=True)
+    customer_name = models.CharField(max_length=150, blank=True)
+    customer_phone = models.CharField(max_length=30, blank=True)
+    pending_sale = models.ForeignKey(Sale, on_delete=models.SET_NULL, null=True, blank=True, related_name="scan_cart")
+    is_checked_out = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 
 class DeliveryRider(models.Model):

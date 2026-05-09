@@ -27,17 +27,12 @@
     </div>
   </header>
 
-  <div
-    id="buyerDeliveryApp"
-    class="marketplace-container marketplace-portal-shell"
-    data-token="{{ buyer_api_token }}"
-    data-request-detail-base="/api/marketplace/delivery/requests/"
-  >
+  <div class="marketplace-container marketplace-portal-shell" data-token="{{ buyer_api_token }}">
     <aside class="marketplace-sidebar marketplace-portal-sidebar">
       <div class="marketplace-sidebar-panel">
         <span class="badge badge-primary">Customer Workspace</span>
         <h3>{{ buyer.email }}</h3>
-        <p>Shop, chat with sellers, and plan delivery from one cleaner home screen.</p>
+        <p>Shop, chat with sellers, and manage housing/rental inquiries from one cleaner home screen.</p>
       </div>
 
       <div class="marketplace-sidebar-panel">
@@ -51,14 +46,6 @@
             <span>Orders and Chats</span>
             <i data-lucide="arrow-right"></i>
           </a>
-          <a href="{% url 'marketplace_rider_portal' %}" class="filter-btn">
-            <span>Rider Workspace</span>
-            <i data-lucide="arrow-right"></i>
-          </a>
-          <button type="button" class="filter-btn" data-action="refresh-delivery-home">
-            <span>Refresh Delivery</span>
-            <i data-lucide="refresh-cw"></i>
-          </button>
         </div>
       </div>
 
@@ -74,8 +61,8 @@
             <strong>{{ stats.house_inquiries }}</strong>
           </div>
           <div class="marketplace-mini-metric">
-            <span>Active Deliveries</span>
-            <strong>{{ stats.active_deliveries }}</strong>
+            <span>MVP Focus</span>
+            <strong>Shop + Housing</strong>
           </div>
         </div>
       </div>
@@ -86,7 +73,7 @@
         <div>
           <span class="badge badge-primary">Simple Marketplace</span>
           <h1>Everything a customer needs in one clear place.</h1>
-          <p>Browse shops and houses, track chats, and request delivery with a live map that shows your trip before you book it.</p>
+          <p>Browse shops and houses, track orders, and continue rental conversations without delivery clutter.</p>
         </div>
         <div class="marketplace-hero-actions">
           <a href="{% url 'marketplace' %}" class="btn btn-primary"><i data-lucide="store"></i> Explore Marketplace</a>
@@ -105,8 +92,8 @@
         <article class="marketplace-quick-card">
           <div class="marketplace-quick-icon"><i data-lucide="map"></i></div>
           <div>
-            <h3>Plan Delivery</h3>
-            <p>Preview the route, estimate the fare, and see nearby riders.</p>
+            <h3>Scan and Pay</h3>
+            <p>Use the mobile scanner to add products to cart and pay directly to the shop account.</p>
           </div>
         </article>
         <article class="marketplace-quick-card">
@@ -128,17 +115,17 @@
           <div class="stat-card-value">{{ stats.house_inquiries }}</div>
         </div>
         <div class="stat-card card">
-          <div class="stat-card-header"><span class="stat-card-title">Active Deliveries</span></div>
-          <div class="stat-card-value">{{ stats.active_deliveries }}</div>
+          <div class="stat-card-header"><span class="stat-card-title">MVP Scope</span></div>
+          <div class="stat-card-value">2</div>
         </div>
         <div class="stat-card card">
-          <div class="stat-card-header"><span class="stat-card-title">Completed Deliveries</span></div>
-          <div class="stat-card-value">{{ stats.completed_deliveries }}</div>
+          <div class="stat-card-header"><span class="stat-card-title">Scanner Pay</span></div>
+          <div class="stat-card-value">Ready</div>
         </div>
       </section>
 
       <section class="marketplace-section-grid">
-        <section class="card delivery-card marketplace-delivery-booking">
+        <section class="card delivery-card marketplace-delivery-booking" style="display:none;">
           <div class="delivery-card-header">
             <div>
               <h3>Book Delivery</h3>
@@ -213,7 +200,7 @@
           <div id="deliveryPricingBreakdown" class="delivery-breakdown"></div>
         </section>
 
-        <section class="card delivery-card marketplace-map-panel marketplace-map-panel-bolt">
+        <section class="card delivery-card marketplace-map-panel marketplace-map-panel-bolt" style="display:none;">
           <div class="delivery-card-header">
             <div>
               <span class="badge badge-primary">Live Ride Panel</span>
@@ -285,7 +272,7 @@
       </section>
 
       <section class="marketplace-section-grid marketplace-secondary-grid">
-        <section class="card delivery-card">
+        <section class="card delivery-card" style="display:none;">
           <div class="delivery-card-header">
             <div>
               <h3>Active Delivery</h3>
@@ -367,6 +354,5 @@
     </main>
   </div>
 
-  <script src="{% static 'js/marketplace-delivery.js' %}"></script>
 </body>
 </html>

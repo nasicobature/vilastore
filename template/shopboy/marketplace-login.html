@@ -21,15 +21,15 @@
           <h1>Marketplace</h1>
         </div>
         <h2>Welcome Back</h2>
-        <p>Customers and delivery riders use this same sign-in page. We will send you to the right portal after login.</p>
+        <p>Customers use this page to browse shops, manage orders, and contact housing/rental listings.</p>
       </div>
     </div>
 
     <div class="auth-form-panel">
       <div class="auth-form-container">
         <div class="auth-form-header">
-          <h2>Customer and Rider Sign In</h2>
-          <p>Use your email and password. Your dashboard opens automatically based on your account type.</p>
+          <h2>Customer Sign In</h2>
+          <p>Use your email and password to open your customer marketplace dashboard.</p>
         </div>
 
         {% if messages %}
@@ -80,10 +80,6 @@
           <a href="{% url 'marketplace_signup' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="btn btn-outline btn-full">
             <i data-lucide="user-plus"></i>
             Create Account
-          </a>
-          <a href="{% url 'marketplace_rider_signup' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="btn btn-ghost btn-full" style="margin-top:0.75rem;">
-            <i data-lucide="bike"></i>
-            Register as Delivery Rider
           </a>
         </div>
       </div>

@@ -21,15 +21,15 @@
           <h1>Marketplace</h1>
         </div>
         <h2>Create Marketplace Account</h2>
-        <p>Customers and riders start with the same account. After sign-in, we route you to the portal that matches your role.</p>
+        <p>Create a customer account for marketplace shopping and housing/rental inquiries.</p>
       </div>
     </div>
 
     <div class="auth-form-panel">
       <div class="auth-form-container">
         <div class="auth-form-header">
-          <h2>Create Shared Account</h2>
-          <p>Create a normal marketplace account here. Delivery riders should use the rider registration button below.</p>
+          <h2>Create Customer Account</h2>
+          <p>Create a marketplace account for shops, orders, and housing/rental inquiries.</p>
         </div>
 
         {% if messages %}
@@ -84,10 +84,6 @@
           <a href="{% url 'marketplace_login' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="btn btn-outline btn-full">
             <i data-lucide="log-in"></i>
             Sign In
-          </a>
-          <a href="{% url 'marketplace_rider_signup' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="btn btn-ghost btn-full" style="margin-top:0.75rem;">
-            <i data-lucide="bike"></i>
-            Delivery Rider Registration
           </a>
         </div>
       </div>

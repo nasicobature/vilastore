@@ -221,7 +221,6 @@
         <a href="{% url 'marketplace' %}" class="btn-secondary"><i data-lucide="shopping-bag" style="width:20px;height:20px;"></i> Browse Marketplace</a>
         <a href="{% url 'edu:index' %}" class="btn-secondary"><i data-lucide="graduation-cap" style="width:20px;height:20px;"></i> Open Edu Portal</a>
         <a href="{% url 'housing_signup' %}" class="btn-secondary"><i data-lucide="house-plus" style="width:20px;height:20px;"></i> Register Housing</a>
-        <a href="{% url 'marketplace_rider_signup' %}" class="btn-secondary"><i data-lucide="bike" style="width:20px;height:20px;"></i> Register as Rider</a>
         <a href="#how-it-works" class="btn-secondary"><i data-lucide="play-circle" style="width:20px;height:20px;"></i> How It Works</a>
       </div>
     </div>
@@ -257,17 +256,6 @@
         <h3>Marketplace Login</h3>
         <p>Sign in to the marketplace to manage your shop profile, listings, and customer orders in one place.</p>
         <a href="{% url 'marketplace_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Marketplace Login</a>
-      </div>
-      <div class="portal-card rider">
-        <div class="portal-icon"><i data-lucide="bike" style="width:28px;height:28px;"></i></div>
-        <h3>Delivery Rider Register</h3>
-        <p>Create a marketplace account for delivery work, then complete your rider or rider-company setup inside the Settings portal.</p>
-        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-          <a href="{% url 'marketplace_rider_signup' %}" class="portal-btn"><i data-lucide="user-plus" style="width:18px;height:18px;"></i> Rider Sign Up</a>
-          <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_rider_portal' %}" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
-            <i data-lucide="settings" style="width:18px;height:18px;"></i> Rider Settings
-          </a>
-        </div>
       </div>
       <div class="portal-card housing">
         <div class="portal-icon"><i data-lucide="house-plus" style="width:28px;height:28px;"></i></div>

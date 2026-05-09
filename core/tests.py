@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Customer, Product, Sale, SaleItem, ShopBranch, ShopBoy, User
+from .models import Customer, CustomerScanCart, Product, Sale, SaleItem, ShopBranch, ShopBoy, User
 
 
 class MobileOwnerLoginTests(TestCase):
@@ -317,3 +317,93 @@ class SubscriptionEntitlementTests(TestCase):
 
         self.assertEqual(Customer.objects.filter(user=self.owner).count(), 0)
         self.assertContains(response, "Full customer management")
+
+
+class CustomerScannerPaymentTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="scan-shop",
+            email="scan@example.com",
+            password="TestPass123!",
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Scan Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000003001",
+            address="30 Market Road",
+            country="Nigeria",
+            plan="business",
+            shop_code="SCAN01",
+            bank_name="Test Bank",
+            bank_account_number="1234567890",
+            bank_account_name="Scan Shop Ltd",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        self.product = Product.objects.create(
+            user=self.owner,
+            name="Scanner Milk",
+            code="MILK001",
+            cost_price=Decimal("500.00"),
+            selling_price=Decimal("750.00"),
+            stock=Decimal("5.00"),
+        )
+        self.shopboy = ShopBoy.objects.create(
+            user=self.owner,
+            full_name="Staff One",
+            username="staff",
+            password="pass123",
+            is_active=True,
+        )
+
+    def _shopboy_token(self):
+        response = self.client.post(reverse("api_mobile_auth_login"), data={
+            "role": "shopboy",
+            "shop_code": "SCAN01",
+            "username": "staff",
+            "password": "pass123",
+        })
+        self.assertEqual(response.status_code, 200)
+        return response.json()["token"]
+
+    def test_customer_scans_checkout_and_shopboy_confirms_payment(self):
+        start = self.client.post(reverse("api_customer_scan_cart_start"), data={
+            "shop_username": self.owner.username,
+            "customer_name": "Walk In",
+        })
+        self.assertEqual(start.status_code, 200)
+        cart = start.json()["cart"]
+        self.assertEqual(cart["bank"]["account_number"], "1234567890")
+
+        scan = self.client.post(reverse("api_customer_scan_cart_add_by_code"), data={
+            "cart_token": cart["cart_token"],
+            "code": "MILK001",
+        })
+        self.assertEqual(scan.status_code, 200)
+        self.assertEqual(scan.json()["cart"]["total"], "750.00")
+
+        checkout = self.client.post(reverse("api_customer_scan_cart_checkout"), data={
+            "cart_token": cart["cart_token"],
+        })
+        self.assertEqual(checkout.status_code, 200)
+        sale = Sale.objects.get(user=self.owner, sales_channel=Sale.CHANNEL_CUSTOMER_SCAN)
+        self.assertEqual(sale.payment_status, Sale.PAYMENT_LOAN)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, Decimal("5.00"))
+        self.assertTrue(CustomerScanCart.objects.get(cart_token=cart["cart_token"]).is_checked_out)
+
+        token = self._shopboy_token()
+        pending = self.client.get(reverse("api_shopboy_scanner_sales"), HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertContains(pending, "Scanner Milk")
+
+        confirm = self.client.post(reverse("api_shopboy_scanner_sale_confirm", kwargs={"sale_id": sale.id}), HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(confirm.status_code, 200)
+        sale.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(sale.payment_status, Sale.PAYMENT_PAID)
+        self.assertEqual(sale.handled_by_shopboy, self.shopboy)
+        self.assertEqual(self.product.stock, Decimal("4.00"))
+
+    def test_delivery_api_is_hidden_for_mvp(self):
+        response = self.client.get(reverse("api_marketplace_delivery_riders"))
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("temporarily unavailable", response.json()["error"])

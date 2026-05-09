@@ -5,6 +5,7 @@ from .models import (
     Category,
     Product,
     Customer,
+    CustomerScanCart,
     Sale,
     SaleItem,
     Expense,
@@ -45,6 +46,9 @@ class CustomUserAdmin(UserAdmin):
                 "phone",
                 "address",
                 "country",
+                "bank_name",
+                "bank_account_number",
+                "bank_account_name",
                 "profile_image",
                 "plan",
                 "is_paid",
@@ -109,6 +113,13 @@ class DeliveryCompanyAdmin(admin.ModelAdmin):
     list_display = ("company_name", "owner", "phone", "city", "is_active", "created_at")
     list_filter = ("is_active", "city")
     search_fields = ("company_name", "owner__email", "phone")
+
+
+@admin.register(CustomerScanCart)
+class CustomerScanCartAdmin(admin.ModelAdmin):
+    list_display = ("cart_token", "shop_owner", "customer_name", "is_checked_out", "pending_sale", "created_at")
+    list_filter = ("is_checked_out", "created_at")
+    search_fields = ("cart_token", "shop_owner__username", "shop_owner__business_name", "customer_name", "customer_phone")
 
 
 # =============================

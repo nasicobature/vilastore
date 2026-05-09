@@ -44,6 +44,7 @@ from .models import (
     OwnerCart,
     User,
     Customer,
+    CustomerScanCart,
 )
 
 PLAN_LIMITS = {
@@ -105,6 +106,10 @@ def _json_error(message, status=400, **extra):
     payload = {"success": False, "error": message}
     payload.update(extra)
     return JsonResponse(payload, status=status)
+
+
+def api_mvp_delivery_disabled(request, *args, **kwargs):
+    return _json_error("Delivery is temporarily unavailable in the VilaStore MVP.", status=404)
 
 
 def _json_success(data=None, status=200):
@@ -258,7 +263,7 @@ def _issue_token(buyer):
 
 
 def _marketplace_buyer_needs_phone_verification(buyer):
-    return bool(buyer and buyer.registration_role == MarketplaceBuyer.ROLE_RIDER)
+    return False
 
 
 def _marketplace_buyer_is_fully_verified(buyer):
@@ -359,6 +364,11 @@ def _serialize_owner(owner):
         "account_type": owner.account_type,
         "account_type_label": owner.get_account_type_display(),
         "phone": owner.phone,
+        "bank": {
+            "bank_name": owner.bank_name or "",
+            "account_number": owner.bank_account_number or "",
+            "account_name": owner.bank_account_name or "",
+        },
         "is_paid": owner.is_paid,
         "subscription_active_until": (
             owner.subscription_active_until.isoformat()
@@ -381,6 +391,11 @@ def _serialize_shopboy(shopboy):
         "owner": {
             "id": shopboy.user_id,
             "business_name": shopboy.user.business_name,
+            "bank": {
+                "bank_name": shopboy.user.bank_name or "",
+                "account_number": shopboy.user.bank_account_number or "",
+                "account_name": shopboy.user.bank_account_name or "",
+            },
         },
     }
 
@@ -608,6 +623,65 @@ def _serialize_shopboy_cart(request, cart, shopboy):
         "items": items,
         "total": _money(total),
     }
+
+
+def _shop_bank_payload(owner):
+    return {
+        "bank_name": owner.bank_name or "",
+        "account_number": owner.bank_account_number or "",
+        "account_name": owner.bank_account_name or owner.business_name or owner.username,
+        "payment_note": "Pay to this account, then show payment proof to shop staff for confirmation.",
+    }
+
+
+def _serialize_customer_scan_cart(request, cart):
+    items = []
+    total = Decimal("0.00")
+    product_ids = [int(pid) for pid in cart.data.keys() if str(pid).isdigit()]
+    products = Product.objects.filter(user=cart.shop_owner, id__in=product_ids)
+    product_map = {str(p.id): p for p in products}
+    for pid, row in cart.data.items():
+        product = product_map.get(str(pid))
+        if not product:
+            continue
+        qty = _cart_quantity_value(row.get("quantity"))
+        if qty <= 0:
+            continue
+        price = Decimal(str(row.get("price", product.selling_price)))
+        line_total = price * qty
+        total += line_total
+        items.append({
+            "product_id": product.id,
+            "code": product.code,
+            "name": product.name,
+            "price": _money(price),
+            "quantity": _format_quantity(qty),
+            "line_total": _money(line_total),
+            "image_url": _abs_media_url(request, product.image),
+        })
+    return {
+        "cart_token": cart.cart_token,
+        "shop": {
+            "id": cart.shop_owner_id,
+            "username": cart.shop_owner.username,
+            "business_name": cart.shop_owner.business_name or cart.shop_owner.username,
+        },
+        "items": items,
+        "total": _money(total),
+        "bank": _shop_bank_payload(cart.shop_owner),
+        "is_checked_out": cart.is_checked_out,
+        "pending_sale_id": cart.pending_sale_id,
+    }
+
+
+def _marketplace_buyer_from_request(request):
+    token_value = _get_token_value(request)
+    if not token_value:
+        return None
+    token = MarketplaceBuyerToken.objects.select_related("buyer").filter(token=token_value, is_revoked=False).first()
+    if not token:
+        return None
+    return token.buyer
 
 
 def _get_token_value(request):
@@ -897,7 +971,7 @@ def api_marketplace_signup(request):
 
     email = (data.get("email") or "").strip().lower()
     phone = (data.get("phone") or "").strip()
-    registration_role = (data.get("registration_role") or MarketplaceBuyer.ROLE_CUSTOMER).strip().lower()
+    registration_role = MarketplaceBuyer.ROLE_CUSTOMER
     full_name = (data.get("full_name") or "").strip()
     password = data.get("password") or ""
     confirm_password = data.get("confirm_password") or ""
@@ -4399,6 +4473,9 @@ def api_owner_settings(request):
             "country": owner.country or "",
             "address": owner.address or "",
             "phone": owner.phone or "",
+            "bank_name": owner.bank_name or "",
+            "bank_account_number": owner.bank_account_number or "",
+            "bank_account_name": owner.bank_account_name or "",
             "fixed_assets": _money(owner.fixed_assets) if owner.fixed_assets is not None else "",
             "is_professional_services": bool(owner.is_professional_services),
             "profile_image_url": _abs_media_url(request, owner.profile_image),
@@ -4425,12 +4502,16 @@ def api_owner_settings_profile(request):
     if not owner:
         return _json_error("Unauthorized.", status=401)
 
-    business_name = (request.POST.get("business_name") or "").strip()
-    country = (request.POST.get("country") or "").strip()
-    address = (request.POST.get("address") or "").strip()
-    phone = (request.POST.get("phone") or "").strip()
-    fixed_assets_raw = (request.POST.get("fixed_assets") or "").strip()
-    is_professional_services_raw = (request.POST.get("is_professional_services") or "").strip().lower()
+    data = _get_body_data(request) or {}
+    business_name = (data.get("business_name") or "").strip()
+    country = (data.get("country") or "").strip()
+    address = (data.get("address") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    bank_name = (data.get("bank_name") or "").strip()
+    bank_account_number = (data.get("bank_account_number") or "").strip()
+    bank_account_name = (data.get("bank_account_name") or "").strip()
+    fixed_assets_raw = (data.get("fixed_assets") or "").strip()
+    is_professional_services_raw = (data.get("is_professional_services") or "").strip().lower()
     is_professional_services = is_professional_services_raw in {"true", "1", "on", "yes"}
 
     if not business_name or not country or not address or not phone:
@@ -4443,6 +4524,9 @@ def api_owner_settings_profile(request):
         "address",
         "phone",
         "profile_image",
+        "bank_name",
+        "bank_account_number",
+        "bank_account_name",
     ]
     if tax_update_requested and not _plan_has_feature(owner, "tax_tools"):
         feature_error = _json_feature_required(owner, "tax_tools")
@@ -4467,6 +4551,9 @@ def api_owner_settings_profile(request):
     owner.country = country
     owner.address = address
     owner.phone = phone
+    owner.bank_name = bank_name
+    owner.bank_account_number = bank_account_number
+    owner.bank_account_name = bank_account_name
 
     profile_image = request.FILES.get("profile_image")
     if profile_image:
@@ -4490,6 +4577,9 @@ def api_owner_settings_profile(request):
             "country": owner.country or "",
             "address": owner.address or "",
             "phone": owner.phone or "",
+            "bank_name": owner.bank_name or "",
+            "bank_account_number": owner.bank_account_number or "",
+            "bank_account_name": owner.bank_account_name or "",
             "fixed_assets": _money(owner.fixed_assets) if owner.fixed_assets is not None else "",
             "is_professional_services": bool(owner.is_professional_services),
             "profile_image_url": _abs_media_url(request, owner.profile_image),
@@ -4720,6 +4810,166 @@ def api_owner_settings_marketplace_assign(request):
     settings_obj.save(update_fields=["assigned_shopboy", "updated_at"])
     return _json_success({
         "assigned_shopboy_id": settings_obj.assigned_shopboy_id,
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_customer_scan_cart_start(request):
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    shop_identifier = (data.get("shop_username") or data.get("shop_code") or "").strip()
+    if not shop_identifier:
+        return _json_error("Shop username or shop code is required.")
+
+    owner = User.objects.filter(
+        Q(username__iexact=shop_identifier) | Q(shop_code__iexact=shop_identifier),
+        account_type=User.ACCOUNT_TYPE_SHOP,
+        is_active=True,
+    ).first()
+    if not owner:
+        return _json_error("Shop not found.", status=404)
+
+    branch = None
+    branch_id = data.get("branch_id")
+    if branch_id:
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
+
+    cart = CustomerScanCart.objects.create(
+        shop_owner=owner,
+        buyer=_marketplace_buyer_from_request(request),
+        branch=branch,
+        customer_name=(data.get("customer_name") or "").strip(),
+        customer_phone=(data.get("customer_phone") or "").strip(),
+    )
+    return _json_success({"cart": _serialize_customer_scan_cart(request, cart)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_customer_scan_cart_add_by_code(request):
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    cart_token = (data.get("cart_token") or "").strip()
+    code = (data.get("code") or "").strip()
+    if not cart_token or not code:
+        return _json_error("Cart token and product code are required.")
+
+    cart = CustomerScanCart.objects.select_related("shop_owner", "branch").filter(cart_token=cart_token, is_checked_out=False).first()
+    if not cart:
+        return _json_error("Active cart not found.", status=404)
+
+    try:
+        quantity = _parse_stock(data.get("quantity", 1))
+    except Exception:
+        return _json_error("Invalid quantity.")
+
+    product = Product.objects.filter(user=cart.shop_owner, code__iexact=code).first()
+    if not product:
+        return _json_error(f"No product found for code {code}.", status=404)
+    available_stock = _effective_product_stock(product, cart.branch)
+    if available_stock <= 0:
+        return _json_error(f"{product.name} is out of stock.", status=409)
+
+    product_key = str(product.id)
+    current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
+    desired_qty = min(current_qty + quantity, available_stock)
+    cart.data[product_key] = {
+        "name": product.name,
+        "price": float(product.selling_price),
+        "cost": float(product.cost_price),
+        "quantity": _format_quantity(desired_qty),
+    }
+    cart.save(update_fields=["data", "updated_at"])
+    return _json_success({"cart": _serialize_customer_scan_cart(request, cart)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_customer_scan_cart_checkout(request):
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    cart_token = (data.get("cart_token") or "").strip()
+    cart = CustomerScanCart.objects.select_related("shop_owner", "branch").filter(cart_token=cart_token, is_checked_out=False).first()
+    if not cart:
+        return _json_error("Active cart not found.", status=404)
+    if not cart.data:
+        return _json_error("Cart is empty.", status=400)
+
+    product_ids = [int(pid) for pid in cart.data.keys() if str(pid).isdigit()]
+    total_amount = Decimal("0.00")
+    total_profit = Decimal("0.00")
+    line_items = []
+
+    with transaction.atomic():
+        products = Product.objects.select_for_update().filter(user=cart.shop_owner, id__in=product_ids)
+        product_map = {str(p.id): p for p in products}
+        inventory_map = {}
+        if cart.branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.select_for_update().filter(branch=cart.branch, product__in=products)
+            }
+            for product in products:
+                product._branch_inventory = inventory_map.get(product.id)
+
+        for pid, item in cart.data.items():
+            product = product_map.get(str(pid))
+            if not product:
+                return _json_error("A cart item no longer exists.", status=409)
+            quantity = _cart_quantity_value(item.get("quantity"))
+            if quantity <= 0:
+                continue
+            available_stock = _effective_product_stock(product, cart.branch)
+            if available_stock < quantity:
+                return _json_error(f"Not enough stock for {product.name}. Available: {available_stock}.", status=409)
+            price = Decimal(str(item.get("price", product.selling_price)))
+            cost = Decimal(str(item.get("cost", product.cost_price)))
+            total_amount += price * quantity
+            total_profit += (price - cost) * quantity
+            line_items.append({"product": product, "quantity": quantity, "price": price, "profit": (price - cost) * quantity})
+
+        if not line_items:
+            return _json_error("Cart is empty.", status=400)
+
+        sale = Sale.objects.create(
+            user=cart.shop_owner,
+            branch=cart.branch,
+            sales_channel=Sale.CHANNEL_CUSTOMER_SCAN,
+            customer_name=cart.customer_name or "Scanner Customer",
+            total_amount=total_amount.quantize(Decimal("0.01")),
+            total_profit=total_profit.quantize(Decimal("0.01")),
+            amount_paid=Decimal("0.00"),
+            payment_status=Sale.PAYMENT_LOAN,
+        )
+        for row in line_items:
+            SaleItem.objects.create(
+                sale=sale,
+                product=row["product"],
+                quantity=row["quantity"],
+                price=row["price"].quantize(Decimal("0.01")),
+                profit=row["profit"].quantize(Decimal("0.01")),
+            )
+
+        cart.pending_sale = sale
+        cart.is_checked_out = True
+        cart.save(update_fields=["pending_sale", "is_checked_out", "updated_at"])
+
+    return _json_success({
+        "sale": {
+            "id": sale.id,
+            "status": "awaiting_payment_confirmation",
+            "total_amount": _money(sale.total_amount),
+        },
+        "bank": _shop_bank_payload(cart.shop_owner),
     })
 
 
@@ -5055,8 +5305,87 @@ def api_shopboy_profile(request):
             "business_name": owner.business_name,
             "username": owner.username,
             "phone": owner.phone,
+            "bank": _shop_bank_payload(owner),
         },
     })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_shopboy_scanner_sales(request):
+    shopboy, _ = _get_shopboy_from_request(request)
+    if not shopboy:
+        return _json_error("Unauthorized.", status=401)
+
+    sales = Sale.objects.filter(
+        user=shopboy.user,
+        sales_channel=Sale.CHANNEL_CUSTOMER_SCAN,
+        payment_status__in=[Sale.PAYMENT_LOAN, Sale.PAYMENT_PARTIAL],
+    ).select_related("branch").prefetch_related("items__product").order_by("-created_at")
+    if shopboy.branch_id:
+        sales = sales.filter(Q(branch=shopboy.branch) | Q(branch__isnull=True))
+
+    return _json_success({
+        "pending_sales": [
+            {
+                "id": sale.id,
+                "customer_name": sale.display_customer_name or "Scanner Customer",
+                "total_amount": _money(sale.total_amount),
+                "payment_status": sale.payment_status,
+                "created_at": sale.created_at.isoformat(),
+                "items": [_serialize_sale_item(item) for item in sale.items.all()],
+            }
+            for sale in sales
+        ]
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_shopboy_scanner_sale_confirm(request, sale_id):
+    shopboy, _ = _get_shopboy_from_request(request)
+    if not shopboy:
+        return _json_error("Unauthorized.", status=401)
+
+    with transaction.atomic():
+        sale = get_object_or_404(
+            Sale.objects.select_for_update().prefetch_related("items__product"),
+            id=sale_id,
+            user=shopboy.user,
+            sales_channel=Sale.CHANNEL_CUSTOMER_SCAN,
+        )
+        if shopboy.branch_id and sale.branch_id not in (None, shopboy.branch_id):
+            return _json_error("This sale belongs to another branch.", status=403)
+        if sale.payment_status == Sale.PAYMENT_PAID:
+            return _json_success({"sale": _serialize_sale(sale), "message": "Sale was already paid."})
+
+        branch = sale.branch
+        inventory_map = {}
+        products = [item.product for item in sale.items.all()]
+        if branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.select_for_update().filter(branch=branch, product__in=products)
+            }
+        for item in sale.items.all():
+            inventory = inventory_map.get(item.product_id) if branch else None
+            if inventory and inventory.track_separately:
+                if inventory.stock < item.quantity:
+                    return _json_error(f"Not enough stock for {item.product.name}.", status=409)
+                inventory.stock = max(Decimal("0.00"), inventory.stock - item.quantity)
+                inventory.save(update_fields=["stock", "updated_at"])
+            else:
+                if item.product.stock < item.quantity:
+                    return _json_error(f"Not enough stock for {item.product.name}.", status=409)
+                item.product.stock -= item.quantity
+                item.product.save(update_fields=["stock"])
+
+        sale.handled_by_shopboy = shopboy
+        sale.amount_paid = sale.total_amount
+        sale.payment_status = Sale.PAYMENT_PAID
+        sale.save(update_fields=["handled_by_shopboy", "amount_paid", "payment_status"])
+
+    return _json_success({"sale": _serialize_sale(sale), "message": "Payment confirmed. Sale completed."})
 
 
 @csrf_exempt

@@ -393,6 +393,11 @@ def account_deletion(request):
     return render(request, "legal/account-deletion.html")
 
 
+def mvp_delivery_disabled(request, *args, **kwargs):
+    messages.info(request, "Delivery is temporarily hidden while VilaStore MVP focuses on Shop Management and House/Rental Management.")
+    return redirect("marketplace")
+
+
 def not_found(request, exception):
     return render(request, "errors/404.html", status=404)
 
@@ -1931,12 +1936,15 @@ def update_profile(request):
     user.country = (request.POST.get("country") or "").strip()
     user.address = (request.POST.get("address") or "").strip()
     user.phone = (request.POST.get("phone") or "").strip()
+    user.bank_name = (request.POST.get("bank_name") or "").strip()
+    user.bank_account_number = (request.POST.get("bank_account_number") or "").strip()
+    user.bank_account_name = (request.POST.get("bank_account_name") or "").strip()
     profile_image = request.FILES.get("profile_image")
     if profile_image:
         user.profile_image = profile_image
     fixed_assets_raw = (request.POST.get("fixed_assets") or "").strip()
     tax_fields_posted = "fixed_assets" in request.POST or "is_professional_services" in request.POST
-    save_fields = ["business_name", "country", "address", "phone", "profile_image"]
+    save_fields = ["business_name", "country", "address", "phone", "profile_image", "bank_name", "bank_account_number", "bank_account_name"]
     if tax_fields_posted:
         if not _plan_has_feature(user, "tax_tools"):
             messages.error(request, _feature_upgrade_message("tax_tools"))
@@ -4933,17 +4941,11 @@ def _get_marketplace_web_token(buyer):
 
 
 def _is_marketplace_rider_account(buyer):
-    if not buyer:
-        return False
-    if buyer.registration_role == MarketplaceBuyer.ROLE_RIDER:
-        return True
-    has_rider_profile = DeliveryRider.objects.filter(buyer=buyer, is_active=True).exists()
-    has_company_profile = DeliveryCompany.objects.filter(owner=buyer, is_active=True).exists()
-    return has_rider_profile or has_company_profile
+    return False
 
 
 def _marketplace_buyer_needs_phone_verification(buyer):
-    return bool(buyer and buyer.registration_role == MarketplaceBuyer.ROLE_RIDER)
+    return False
 
 
 def _marketplace_buyer_is_fully_verified(buyer):
@@ -4955,8 +4957,6 @@ def _marketplace_buyer_is_fully_verified(buyer):
 
 
 def _marketplace_default_dashboard_name(buyer):
-    if _is_marketplace_rider_account(buyer):
-        return "marketplace_rider_portal"
     return "marketplace_home"
 
 
