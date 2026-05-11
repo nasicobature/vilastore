@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Customer, CustomerScanCart, Product, Sale, SaleItem, ShopBranch, ShopBoy, User
+from .models import AuthToken, Customer, CustomerScanCart, Product, Sale, SaleItem, ShopBranch, ShopBoy, User
 
 
 class MobileOwnerLoginTests(TestCase):
@@ -317,6 +317,86 @@ class SubscriptionEntitlementTests(TestCase):
 
         self.assertEqual(Customer.objects.filter(user=self.owner).count(), 0)
         self.assertContains(response, "Full customer management")
+
+
+class OwnerInventoryApiTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="inventory-owner",
+            email="inventory@example.com",
+            password="TestPass123!",
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Inventory Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000004001",
+            address="40 Market Road",
+            country="Nigeria",
+            plan="business",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        self.token = AuthToken.objects.create(
+            token="inventory-token",
+            role=AuthToken.ROLE_OWNER,
+            owner=self.owner,
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+        self.product = Product.objects.create(
+            user=self.owner,
+            name="Old Rice",
+            cost_price=Decimal("100.00"),
+            selling_price=Decimal("150.00"),
+            stock=Decimal("2.00"),
+            low_stock_threshold=5,
+        )
+
+    def test_mobile_product_update_changes_inventory_values(self):
+        response = self.client.post(
+            reverse("api_owner_product_detail", kwargs={"pk": self.product.id}),
+            data={
+                "name": "Premium Rice",
+                "stock": "12",
+                "low_stock_threshold": "3",
+                "cost_price": "120.00",
+                "selling_price": "180.00",
+            },
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.name, "Premium Rice")
+        self.assertEqual(self.product.stock, Decimal("12.00"))
+        self.assertEqual(self.product.low_stock_threshold, 3)
+        self.assertEqual(self.product.cost_price, Decimal("120.00"))
+        self.assertEqual(self.product.selling_price, Decimal("180.00"))
+
+        inventory = self.client.get(
+            reverse("api_owner_inventory"),
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+        self.assertEqual(inventory.status_code, 200)
+        item = inventory.json()["products"][0]
+        self.assertEqual(item["name"], "Premium Rice")
+        self.assertEqual(item["stock"], "12.00")
+        self.assertEqual(item["selling_price"], "180.00")
+
+    def test_dashboard_returns_inventory_analysis(self):
+        response = self.client.get(
+            reverse("api_owner_dashboard"),
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        analysis = data["inventory_analysis"]
+        self.assertEqual(analysis["stock_value"], "300.00")
+        self.assertEqual(analysis["stock_cost"], "200.00")
+        self.assertEqual(analysis["potential_profit"], "100.00")
+        self.assertEqual(analysis["total_stock_units"], "2.00")
+        self.assertEqual(analysis["low_stock_count"], 1)
+        self.assertEqual(analysis["out_of_stock_count"], 0)
+        self.assertEqual(analysis["low_stock_products"][0]["name"], "Old Rice")
 
 
 class CustomerScannerPaymentTests(TestCase):

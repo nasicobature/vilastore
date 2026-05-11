@@ -2029,17 +2029,27 @@ def api_owner_dashboard(request):
             for product in products_for_counts:
                 product._branch_inventory = inventory_map.get(product.id)
 
+        total_stock_units = Decimal("0.00")
+        total_stock_value = Decimal("0.00")
+        total_stock_cost = Decimal("0.00")
+        out_of_stock_count = 0
+        low_stock_products = []
+        for product in products_for_counts:
+            stock = Decimal(_effective_product_stock(product, selected_branch) or "0.00")
+            selling_price = Decimal(_effective_product_price(product, selected_branch) or "0.00")
+            cost_price = Decimal(product.cost_price or "0.00")
+            total_stock_units += stock
+            total_stock_value += stock * selling_price
+            total_stock_cost += stock * cost_price
+            if stock <= 0:
+                out_of_stock_count += 1
+            elif stock <= product.low_stock_threshold:
+                low_stock_products.append(product)
+
         today_sales = sales_qs.filter(created_at__date=today).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
         today_profit = sales_qs.filter(created_at__date=today).aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
         total_products = len(products_for_counts)
-        if selected_branch:
-            low_stock_count = sum(
-                1
-                for product in products_for_counts
-                if _effective_product_stock(product, selected_branch) <= product.low_stock_threshold and _effective_product_stock(product, selected_branch) > 0
-            )
-        else:
-            low_stock_count = products_qs.filter(stock__lte=F("low_stock_threshold"), stock__gt=0).count()
+        low_stock_count = len(low_stock_products)
 
         today_transactions = (
             sales_qs.filter(created_at__date=today)
@@ -2068,6 +2078,23 @@ def api_owner_dashboard(request):
             "today_profit": _money(today_profit),
             "total_products": total_products,
             "low_stock_count": low_stock_count,
+            "inventory_analysis": {
+                "total_stock_units": str(total_stock_units),
+                "stock_value": _money(total_stock_value),
+                "stock_cost": _money(total_stock_cost),
+                "potential_profit": _money(total_stock_value - total_stock_cost),
+                "out_of_stock_count": out_of_stock_count,
+                "low_stock_count": low_stock_count,
+                "low_stock_products": [
+                    {
+                        "id": product.id,
+                        "name": product.name,
+                        "stock": str(_effective_product_stock(product, selected_branch)),
+                        "low_stock_threshold": product.low_stock_threshold,
+                    }
+                    for product in low_stock_products[:5]
+                ],
+            },
             "branch": _serialize_branch(selected_branch) if selected_branch else None,
             "branch_analytics": branch_analytics,
             "today_transactions": [
