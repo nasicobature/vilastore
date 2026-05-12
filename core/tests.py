@@ -555,6 +555,56 @@ class WebInventoryUpdateTests(TestCase):
         self.assertEqual(self.product.stock, Decimal("2.00"))
 
 
+class WebDashboardTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="dashboard-owner",
+            email="dashboard@example.com",
+            password="TestPass123!",
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Dashboard Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000004201",
+            address="42 Market Road",
+            country="Nigeria",
+            plan="starter",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        self.product = Product.objects.create(
+            user=self.owner,
+            name="Dashboard Rice",
+            cost_price=Decimal("100.00"),
+            selling_price=Decimal("150.00"),
+            stock=Decimal("5.00"),
+            low_stock_threshold=2,
+        )
+        self.client.force_login(self.owner)
+
+    def test_dashboard_defaults_to_all_sales_not_default_branch_only(self):
+        sale = Sale.objects.create(
+            user=self.owner,
+            total_amount=Decimal("150.00"),
+            total_profit=Decimal("50.00"),
+            payment_status=Sale.PAYMENT_PAID,
+        )
+        SaleItem.objects.create(
+            sale=sale,
+            product=self.product,
+            quantity=Decimal("1.00"),
+            price=Decimal("150.00"),
+            profit=Decimal("50.00"),
+        )
+
+        response = self.client.get(reverse("index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["today_sales"], Decimal("150.00"))
+        self.assertEqual(response.context["today_profit"], Decimal("50.00"))
+        self.assertIsNone(response.context["selected_branch"])
+        self.assertEqual(len(response.context["today_transactions"]), 1)
+
+
 class CustomerScannerPaymentTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(

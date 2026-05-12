@@ -430,7 +430,7 @@ def submit_feedback(request):
 @login_required
 def index(request):
     user = request.user
-    branches, selected_branch, _ = _selected_branch_for_request(request)
+    branches, selected_branch, _ = _selected_branch_for_request(request, default_to_all=True)
 
     today = timezone.localdate()
     sales_qs = Sale.objects.filter(user=user)
