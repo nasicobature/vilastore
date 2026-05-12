@@ -1904,8 +1904,27 @@ def api_owner_product_detail(request, pk):
     if data is None:
         return _json_error("Invalid JSON payload.")
 
+    branch_id = (data.get("branch_id") or "").strip()
+    branch = None
+    branch_inventory = None
+    if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
+        branch_inventory, _ = BranchInventory.objects.get_or_create(
+            branch=branch,
+            product=product,
+            defaults={"stock": product.stock, "selling_price": product.selling_price},
+        )
+
     if "name" in data:
-        product.name = (data.get("name") or "").strip()
+        name = (data.get("name") or "").strip()
+        if not name:
+            return _json_error("Product name is required.")
+        product.name = name
     if "category_id" in data:
         category_id = data.get("category_id") or None
         if category_id:
@@ -1915,7 +1934,8 @@ def api_owner_product_detail(request, pk):
         product.category_id = category_id
     if "code" in data:
         code = (data.get("code") or "").strip()
-        if code:
+        code_changed = code.lower() != (product.code or "").strip().lower()
+        if code and code_changed:
             feature_error = _json_feature_required(owner, "barcode")
             if feature_error:
                 return feature_error
@@ -1928,19 +1948,27 @@ def api_owner_product_detail(request, pk):
         if field in data:
             try:
                 if field == "stock":
-                    product.stock = _parse_stock(data.get("stock"))
+                    if branch_inventory:
+                        branch_inventory.stock = _parse_stock(data.get("stock"))
+                        branch_inventory.track_separately = True
+                    else:
+                        product.stock = _parse_stock(data.get("stock"))
                 elif field == "low_stock_threshold":
                     product.low_stock_threshold = int(data.get("low_stock_threshold") or 0)
                 elif field == "cost_price":
                     product.cost_price = Decimal(data.get("cost_price"))
                 elif field == "selling_price":
-                    product.selling_price = Decimal(data.get("selling_price"))
+                    if branch_inventory:
+                        branch_inventory.selling_price = Decimal(data.get("selling_price"))
+                    else:
+                        product.selling_price = Decimal(data.get("selling_price"))
             except Exception:
                 return _json_error("Invalid product values.")
 
     vat_status = (data.get("vat_status") or "").strip()
     if vat_status:
-        if vat_status != Product.VAT_STANDARD:
+        vat_changed = vat_status != product.vat_status
+        if vat_status != Product.VAT_STANDARD and vat_changed:
             feature_error = _json_feature_required(owner, "tax_tools")
             if feature_error:
                 return feature_error
@@ -1952,7 +1980,10 @@ def api_owner_product_detail(request, pk):
         product.image = request.FILES.get("image")
 
     product.save()
-    return _json_success({"product": _serialize_owner_product(request, product)})
+    if branch_inventory:
+        branch_inventory.save()
+        product._branch_inventory = branch_inventory
+    return _json_success({"product": _serialize_owner_product(request, product, branch=branch)})
 
 
 @csrf_exempt

@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import AuthToken, Customer, CustomerScanCart, Product, Sale, SaleItem, ShopBranch, ShopBoy, User
+from .models import AuthToken, BranchInventory, Customer, CustomerScanCart, Product, Sale, SaleItem, ShopBranch, ShopBoy, User
 
 
 class MobileOwnerLoginTests(TestCase):
@@ -380,6 +380,91 @@ class OwnerInventoryApiTests(TestCase):
         self.assertEqual(item["name"], "Premium Rice")
         self.assertEqual(item["stock"], "12.00")
         self.assertEqual(item["selling_price"], "180.00")
+
+    def test_starter_can_update_product_when_existing_code_is_unchanged(self):
+        self.owner.plan = "starter"
+        self.owner.save(update_fields=["plan"])
+        self.product.code = "RICE001"
+        self.product.save(update_fields=["code"])
+
+        response = self.client.post(
+            reverse("api_owner_product_detail", kwargs={"pk": self.product.id}),
+            data={
+                "name": "Starter Rice",
+                "code": "RICE001",
+                "stock": "7",
+                "low_stock_threshold": "2",
+                "cost_price": "110.00",
+                "selling_price": "170.00",
+            },
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.name, "Starter Rice")
+        self.assertEqual(self.product.code, "RICE001")
+        self.assertEqual(self.product.stock, Decimal("7.00"))
+
+    def test_starter_cannot_change_product_code(self):
+        self.owner.plan = "starter"
+        self.owner.save(update_fields=["plan"])
+        self.product.code = "RICE001"
+        self.product.save(update_fields=["code"])
+
+        response = self.client.post(
+            reverse("api_owner_product_detail", kwargs={"pk": self.product.id}),
+            data={
+                "name": "Old Rice",
+                "code": "RICE002",
+                "stock": "2",
+                "low_stock_threshold": "5",
+                "cost_price": "100.00",
+                "selling_price": "150.00",
+            },
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["feature"], "barcode")
+
+    def test_branch_product_update_changes_branch_inventory_not_global_stock(self):
+        branch = ShopBranch.objects.create(
+            user=self.owner,
+            name="Second Shop",
+            address="22 Branch Road",
+            city="Ikeja",
+            state="Lagos",
+        )
+        BranchInventory.objects.create(
+            branch=branch,
+            product=self.product,
+            stock=Decimal("4.00"),
+            selling_price=Decimal("160.00"),
+        )
+
+        response = self.client.post(
+            reverse("api_owner_product_detail", kwargs={"pk": self.product.id}),
+            data={
+                "branch_id": str(branch.id),
+                "name": "Branch Rice",
+                "stock": "9",
+                "low_stock_threshold": "3",
+                "cost_price": "105.00",
+                "selling_price": "190.00",
+            },
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        inventory = BranchInventory.objects.get(branch=branch, product=self.product)
+        self.assertEqual(self.product.name, "Branch Rice")
+        self.assertEqual(self.product.stock, Decimal("2.00"))
+        self.assertEqual(inventory.stock, Decimal("9.00"))
+        self.assertEqual(inventory.selling_price, Decimal("190.00"))
+        self.assertEqual(response.json()["product"]["stock"], "9.00")
+        self.assertEqual(response.json()["product"]["selling_price"], "190.00")
 
     def test_dashboard_returns_inventory_analysis(self):
         response = self.client.get(
