@@ -1935,7 +1935,15 @@ def api_owner_product_detail(request, pk):
     if "code" in data:
         code = (data.get("code") or "").strip()
         code_changed = code.lower() != (product.code or "").strip().lower()
-        if code and code_changed:
+        barcode_allowed = _plan_has_feature(owner, "barcode")
+        if not barcode_allowed:
+            if code and code_changed:
+                feature_error = _json_feature_required(owner, "barcode")
+                if feature_error:
+                    return feature_error
+            elif not code:
+                code = product.code or ""
+        if code and code_changed and barcode_allowed:
             feature_error = _json_feature_required(owner, "barcode")
             if feature_error:
                 return feature_error

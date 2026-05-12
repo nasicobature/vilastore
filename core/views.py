@@ -1176,7 +1176,7 @@ def edit_product(request, pk):
 
     product.name = name
     product.category_id = category_id
-    code = (request.POST.get("code") or "").strip()
+    submitted_code = (request.POST.get("code") or "").strip()
     try:
         parsed_stock = _parse_stock(request.POST.get('stock'))
         product.cost_price = Decimal(request.POST.get('cost_price'))
@@ -1204,11 +1204,18 @@ def edit_product(request, pk):
     if request.FILES.get('image'):
         product.image = request.FILES.get('image')
 
-    if code:
-        code_changed = code.lower() != (product.code or "").strip().lower()
-        if code_changed and not _plan_has_feature(request.user, "barcode"):
+    current_code = (product.code or "").strip()
+    barcode_allowed = _plan_has_feature(request.user, "barcode")
+    if not barcode_allowed:
+        code_changed = bool(submitted_code) and submitted_code.lower() != current_code.lower()
+        if code_changed:
             messages.error(request, _feature_upgrade_message("barcode"))
             return redirect('inventory')
+        code = current_code
+    else:
+        code = submitted_code
+
+    if code:
         existing_code = Product.objects.filter(user=request.user, code__iexact=code).exclude(id=product.id).exists()
         if existing_code:
             messages.error(request, f"A product with code {code} already exists.")

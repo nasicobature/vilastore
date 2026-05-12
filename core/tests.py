@@ -406,6 +406,31 @@ class OwnerInventoryApiTests(TestCase):
         self.assertEqual(self.product.code, "RICE001")
         self.assertEqual(self.product.stock, Decimal("7.00"))
 
+    def test_starter_update_preserves_existing_code_when_code_is_blank(self):
+        self.owner.plan = "starter"
+        self.owner.save(update_fields=["plan"])
+        self.product.code = "RICE001"
+        self.product.save(update_fields=["code"])
+
+        response = self.client.post(
+            reverse("api_owner_product_detail", kwargs={"pk": self.product.id}),
+            data={
+                "name": "Starter Rice Blank Code",
+                "code": "",
+                "stock": "8",
+                "low_stock_threshold": "2",
+                "cost_price": "111.00",
+                "selling_price": "171.00",
+            },
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.name, "Starter Rice Blank Code")
+        self.assertEqual(self.product.code, "RICE001")
+        self.assertEqual(self.product.stock, Decimal("8.00"))
+
     def test_starter_cannot_change_product_code(self):
         self.owner.plan = "starter"
         self.owner.save(update_fields=["plan"])
@@ -533,6 +558,29 @@ class WebInventoryUpdateTests(TestCase):
         self.assertEqual(self.product.stock, Decimal("11.00"))
         self.assertEqual(self.product.cost_price, Decimal("120.00"))
         self.assertEqual(self.product.selling_price, Decimal("180.00"))
+
+    def test_web_edit_product_preserves_code_when_barcode_locked_and_blank(self):
+        response = self.client.post(
+            reverse("edit_product", kwargs={"pk": self.product.id}),
+            data={
+                "name": "Updated Web Rice Blank Code",
+                "code": "",
+                "category": "",
+                "stock": "12",
+                "low_stock_threshold": "4",
+                "cost_price": "121.00",
+                "selling_price": "181.00",
+                "vat_status": Product.VAT_STANDARD,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.name, "Updated Web Rice Blank Code")
+        self.assertEqual(self.product.code, "WEB001")
+        self.assertEqual(self.product.stock, Decimal("12.00"))
+        self.assertEqual(self.product.cost_price, Decimal("121.00"))
+        self.assertEqual(self.product.selling_price, Decimal("181.00"))
 
     def test_web_edit_product_blocks_code_change_without_barcode_plan(self):
         response = self.client.post(
