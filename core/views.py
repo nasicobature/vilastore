@@ -1164,8 +1164,18 @@ def edit_product(request, pk):
             messages.error(request, "Selected branch is invalid.")
             return redirect('inventory')
 
-    product.name = request.POST.get('name')
-    product.category_id = request.POST.get('category') or None
+    name = (request.POST.get('name') or '').strip()
+    if not name:
+        messages.error(request, "Product name is required.")
+        return redirect('inventory')
+
+    category_id = request.POST.get('category') or None
+    if category_id and not Category.objects.filter(id=category_id, user=request.user).exists():
+        messages.error(request, "Selected category is invalid.")
+        return redirect('inventory')
+
+    product.name = name
+    product.category_id = category_id
     code = (request.POST.get("code") or "").strip()
     try:
         parsed_stock = _parse_stock(request.POST.get('stock'))
@@ -1175,9 +1185,16 @@ def edit_product(request, pk):
     except Exception:
         messages.error(request, "Invalid product values.")
         return redirect('inventory')
+    if parsed_stock < 0 or product.low_stock_threshold < 0:
+        messages.error(request, "Stock values cannot be negative.")
+        return redirect('inventory')
+    if product.cost_price < 0 or product.selling_price < 0:
+        messages.error(request, "Prices cannot be negative.")
+        return redirect('inventory')
     vat_status = (request.POST.get("vat_status") or "").strip()
     if vat_status:
-        if vat_status != Product.VAT_STANDARD and not _plan_has_feature(request.user, "tax_tools"):
+        vat_changed = vat_status != product.vat_status
+        if vat_status != Product.VAT_STANDARD and vat_changed and not _plan_has_feature(request.user, "tax_tools"):
             messages.error(request, _feature_upgrade_message("tax_tools"))
             return redirect('inventory')
         valid_vat_status = {choice[0] for choice in Product.VAT_STATUS_CHOICES}
@@ -1188,7 +1205,8 @@ def edit_product(request, pk):
         product.image = request.FILES.get('image')
 
     if code:
-        if not _plan_has_feature(request.user, "barcode"):
+        code_changed = code.lower() != (product.code or "").strip().lower()
+        if code_changed and not _plan_has_feature(request.user, "barcode"):
             messages.error(request, _feature_upgrade_message("barcode"))
             return redirect('inventory')
         existing_code = Product.objects.filter(user=request.user, code__iexact=code).exclude(id=product.id).exists()

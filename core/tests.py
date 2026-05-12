@@ -484,6 +484,77 @@ class OwnerInventoryApiTests(TestCase):
         self.assertEqual(analysis["low_stock_products"][0]["name"], "Old Rice")
 
 
+class WebInventoryUpdateTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="web-inventory-owner",
+            email="web-inventory@example.com",
+            password="TestPass123!",
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Web Inventory Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000004101",
+            address="41 Market Road",
+            country="Nigeria",
+            plan="starter",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        self.product = Product.objects.create(
+            user=self.owner,
+            name="Web Rice",
+            code="WEB001",
+            cost_price=Decimal("100.00"),
+            selling_price=Decimal("150.00"),
+            stock=Decimal("2.00"),
+            low_stock_threshold=5,
+        )
+        self.client.force_login(self.owner)
+
+    def test_web_edit_product_allows_unchanged_existing_code(self):
+        response = self.client.post(
+            reverse("edit_product", kwargs={"pk": self.product.id}),
+            data={
+                "name": "Updated Web Rice",
+                "code": "WEB001",
+                "category": "",
+                "stock": "11",
+                "low_stock_threshold": "4",
+                "cost_price": "120.00",
+                "selling_price": "180.00",
+                "vat_status": Product.VAT_STANDARD,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.name, "Updated Web Rice")
+        self.assertEqual(self.product.code, "WEB001")
+        self.assertEqual(self.product.stock, Decimal("11.00"))
+        self.assertEqual(self.product.cost_price, Decimal("120.00"))
+        self.assertEqual(self.product.selling_price, Decimal("180.00"))
+
+    def test_web_edit_product_blocks_code_change_without_barcode_plan(self):
+        response = self.client.post(
+            reverse("edit_product", kwargs={"pk": self.product.id}),
+            data={
+                "name": "Updated Web Rice",
+                "code": "WEB002",
+                "category": "",
+                "stock": "11",
+                "low_stock_threshold": "4",
+                "cost_price": "120.00",
+                "selling_price": "180.00",
+                "vat_status": Product.VAT_STANDARD,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.code, "WEB001")
+        self.assertEqual(self.product.stock, Decimal("2.00"))
+
+
 class CustomerScannerPaymentTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(
