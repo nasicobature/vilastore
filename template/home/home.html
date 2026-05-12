@@ -203,7 +203,7 @@
     <div class="nav-links">
       <a href="#pricing" class="btn-outline">Pricing</a>
       <a href="{% url 'login' %}" class="btn-outline">Sign In</a>
-      <a href="{% url 'shop_signup' %}" class="btn-primary">Register Shop</a>
+      <a href="{% url 'marketplace' %}" class="btn-primary">Marketplace</a>
     </div>
   </nav>
 
@@ -214,7 +214,7 @@
       <h1>Manage Your Business <span>Smarter & Faster</span></h1>
       <p>VilaStore helps you track sales, manage inventory, monitor expenses, and grow your business &mdash; all from one simple dashboard.</p>
       <div class="hero-buttons">
-        <a href="{% url 'shop_signup' %}" class="btn-hero"><i data-lucide="rocket" style="width:20px;height:20px;"></i> Register Shop</a>
+        <a href="{% url 'login' %}" class="btn-hero"><i data-lucide="log-in" style="width:20px;height:20px;"></i> Sign In</a>
         <a href="{% url 'marketplace' %}" class="btn-secondary"><i data-lucide="shopping-bag" style="width:20px;height:20px;"></i> Browse Marketplace</a>
         <a href="{% url 'edu:index' %}" class="btn-secondary"><i data-lucide="graduation-cap" style="width:20px;height:20px;"></i> Open Edu Portal</a>
         <a href="{% url 'housing_signup' %}" class="btn-secondary"><i data-lucide="house-plus" style="width:20px;height:20px;"></i> Register Housing</a>
@@ -238,21 +238,9 @@
       </div>
       <div class="portal-card shopboy">
         <div class="portal-icon"><i data-lucide="user-check" style="width:28px;height:28px;"></i></div>
-        <h3>Shop Boy Login</h3>
-        <p>Quick access for shop assistants &mdash; process sales, update stock, and handle customer orders assigned to you by the owner.</p>
-        <a href="{% url 'shopboy_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Shop Boy Login</a>
-      </div>
-      <div class="portal-card register">
-        <div class="portal-icon"><i data-lucide="user-plus" style="width:28px;height:28px;"></i></div>
-        <h3>Shop Registration</h3>
-        <p>New to VilaStore? Create your account in minutes &mdash; set up your business profile, choose a plan, and start selling right away.</p>
-        <a href="{% url 'shop_signup' %}" class="portal-btn"><i data-lucide="store" style="width:18px;height:18px;"></i> Register Shop</a>
-      </div>
-      <div class="portal-card marketplace">
-        <div class="portal-icon"><i data-lucide="shopping-bag" style="width:28px;height:28px;"></i></div>
-        <h3>Marketplace Login</h3>
-        <p>Sign in to the marketplace to manage your shop profile, listings, and customer orders in one place.</p>
-        <a href="{% url 'marketplace_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Marketplace Login</a>
+        <h3>Staff Login</h3>
+        <p>Quick access for shop staff &mdash; process sales, update stock, and handle customer orders assigned by the owner.</p>
+        <a href="{% url 'shopboy_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Staff Login</a>
       </div>
       <div class="portal-card housing">
         <div class="portal-icon"><i data-lucide="house-plus" style="width:28px;height:28px;"></i></div>
@@ -275,18 +263,6 @@
             <i data-lucide="school" style="width:18px;height:18px;"></i> Register School
           </a>
         </div>
-      </div>
-      <div class="portal-card investor">
-        <div class="portal-icon"><i data-lucide="line-chart" style="width:28px;height:28px;"></i></div>
-        <h3>Investor Login</h3>
-        <p>Access investor updates, performance dashboards, and your ownership summary securely.</p>
-        <a href="{% url 'investor_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Investor Login</a>
-      </div>
-      <div class="portal-card admin">
-        <div class="portal-icon"><i data-lucide="shield-check" style="width:28px;height:28px;"></i></div>
-        <h3>Admin Portal</h3>
-        <p>Administrative access for managing platform operations, users, and system settings.</p>
-        <a href="{% url 'admin_portal_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Admin Login</a>
       </div>
       <div class="portal-card agent">
         <div class="portal-icon"><i data-lucide="users" style="width:28px;height:28px;"></i></div>

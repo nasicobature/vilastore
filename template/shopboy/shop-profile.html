@@ -6,7 +6,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VilaStore - Shop Boy Profile</title>
+  <title>VilaStore - Staff Profile</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -15,7 +15,7 @@
     <main class="main-content" style="margin-left:0;max-width:900px;margin-right:auto;">
       <header class="page-header" style="display:flex;justify-content:space-between;align-items:center;">
         <div>
-          <h1>Shop Boy Panel</h1>
+          <h1>Staff Panel</h1>
           <p>Welcome, {{ shopboy.full_name }}</p>
         </div>
         <a href="{% url 'shopboy_logout' %}" class="btn btn-outline">

@@ -738,7 +738,7 @@
                   </label>
                 </div>
                 <div class="form-group">
-                  <label>Assign a shop boy to handle marketplace orders</label>
+                  <label>Assign a staff member to handle marketplace orders</label>
                   <select name="assigned_shopboy" class="input">
                     <option value="">Auto-assign (first available)</option>
                     {% for sb in shopboys %}
@@ -786,7 +786,7 @@
                 </div>
 
                 <div class="form-group">
-                  <label>Shop Code (for Shop Boy Login)</label>
+                  <label>Shop Code (for Staff Login)</label>
                   <input type="text" class="input" value="{{ request.user.shop_code }}" readonly>
                 </div>
 
@@ -958,17 +958,17 @@
             <section class="card settings-card">
               <div class="settings-card-header">
                 <div>
-                  <h3>Shop boy management</h3>
+                  <h3>Staff management</h3>
                   <p>Add team members, decide who can handle marketplace activity, and keep staff access organized.</p>
                 </div>
                 {% if can_add_shopboy %}
-                <button class="btn btn-primary" type="button" onclick="openShopBoyModal()"><i data-lucide="user-plus"></i> Add Shop Boy</button>
+                <button class="btn btn-primary" type="button" onclick="openShopBoyModal()"><i data-lucide="user-plus"></i> Add Staff</button>
                 {% else %}
                 <button class="btn btn-outline" type="button" disabled title="Your current plan has reached its staff limit."><i data-lucide="lock"></i> Staff locked</button>
                 {% endif %}
               </div>
               {% if not can_add_shopboy %}
-              <div class="settings-note" style="margin-bottom:1rem;"><i data-lucide="lock"></i><span>Your {{ current_plan.name }} plan has reached its staff/shopboy limit. Upgrade your plan to add more staff.</span></div>
+              <div class="settings-note" style="margin-bottom:1rem;"><i data-lucide="lock"></i><span>Your {{ current_plan.name }} plan has reached its staff limit. Upgrade your plan to add more staff.</span></div>
               {% endif %}
 
               {% if shopboys %}
@@ -1085,7 +1085,7 @@
               </div>
               {% else %}
               <div class="settings-empty">
-                <p>No shop boys added yet. Add your first team member to delegate sales or marketplace tasks.</p>
+                <p>No staff members added yet. Add your first team member to delegate sales or marketplace tasks.</p>
               </div>
               {% endif %}
             </section>
@@ -1110,7 +1110,7 @@
                 <div class="settings-list-item">
                   <div>
                     <strong>Staff permissions</strong>
-                    <p>Control which shop boys can log in, which branch they belong to, and who can handle online orders.</p>
+                    <p>Control which staff members can log in, which branch they belong to, and who can handle online orders.</p>
                   </div>
                   <div class="settings-value">{{ marketplace_ready_shopboy_count }} ready</div>
                 </div>
@@ -1238,7 +1238,7 @@
   <div class="modal-overlay settings-modal" id="shopBoyModal">
     <div class="modal modal-lg">
       <div class="modal-header">
-        <h3 class="modal-title">Add Shop Boy</h3>
+        <h3 class="modal-title">Add Staff</h3>
         <button class="modal-close" type="button" onclick="closeShopBoyModal()"><i data-lucide="x"></i></button>
       </div>
       <form method="POST" action="{% url 'add_shopboy' %}" class="modal-form">
@@ -1261,7 +1261,7 @@
           <div class="form-group">
             <label>Role</label>
             <select name="role" class="input">
-              <option value="staff">Staff / Shopboy</option>
+              <option value="staff">Staff</option>
               <option value="manager">Manager</option>
               <option value="owner">Owner</option>
             </select>
