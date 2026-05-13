@@ -49,6 +49,10 @@ function startFlutterwavePayment() {
         notify("Flutterwave public key is missing. Please configure FLUTTERWAVE_PUBLIC_KEY.");
         return;
     }
+    if (!flutterwaveKey.startsWith("FLWPUBK")) {
+        notify("Flutterwave public key is invalid. Use your FLWPUBK public key from Flutterwave.");
+        return;
+    }
 
     const emailInput = document.getElementById("signupEmail");
     const email = ((emailInput && emailInput.value) || window.SIGNUP_EMAIL || "").trim();
@@ -84,7 +88,7 @@ function startFlutterwavePayment() {
         callback: function (response) {
             const refInput = document.getElementById("paymentReferenceInput");
             if (refInput) {
-                refInput.value = response.transaction_id || response.id || "";
+                refInput.value = response.transaction_id || response.id || response.tx_ref || txRef;
             }
             paymentReady = true;
             document.getElementById("shopSetupForm")?.submit();

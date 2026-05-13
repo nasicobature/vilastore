@@ -1,11 +1,81 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import Mock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from .models import AuthToken, BranchInventory, Customer, CustomerScanCart, Product, Sale, SaleItem, ShopBranch, ShopBoy, User
+
+
+@override_settings(FLUTTERWAVE_SECRET_KEY="FLWSECK_TEST-demo", FLUTTERWAVE_PUBLIC_KEY="FLWPUBK_TEST-demo")
+class SubscriptionPaymentGatewayTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="payment-owner",
+            email="payment@example.com",
+            password="TestPass123!",
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Payment Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000001000",
+            address="10 Payment Road",
+            country="Nigeria",
+            plan="starter",
+            is_paid=False,
+            subscription_active_until=None,
+        )
+        session = self.client.session
+        session["pending_payment_user_id"] = self.user.id
+        session.save()
+
+    def _flutterwave_success_response(self, amount="8000.00", email="payment@example.com"):
+        response = Mock()
+        response.status_code = 200
+        response.json.return_value = {
+            "status": "success",
+            "data": {
+                "status": "successful",
+                "amount": amount,
+                "currency": "NGN",
+                "customer": {"email": email},
+            },
+        }
+        return response
+
+    @patch("core.views.requests.get")
+    def test_subscription_payment_verifies_flutterwave_transaction_id(self, mock_get):
+        mock_get.return_value = self._flutterwave_success_response()
+
+        response = self.client.post(
+            reverse("subscription_payment"),
+            data={"payment_reference": "123456789"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        mock_get.assert_called_once()
+        self.assertIn("/transactions/123456789/verify", mock_get.call_args.args[0])
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_paid)
+        self.assertIsNotNone(self.user.subscription_active_until)
+
+    @patch("core.views.requests.get")
+    def test_subscription_payment_verifies_flutterwave_tx_ref(self, mock_get):
+        mock_get.return_value = self._flutterwave_success_response()
+
+        response = self.client.post(
+            reverse("subscription_payment"),
+            data={"payment_reference": "VILASTORE-TEST-REF"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        mock_get.assert_called_once()
+        self.assertIn("/transactions/verify_by_reference", mock_get.call_args.args[0])
+        self.assertEqual(mock_get.call_args.kwargs["params"], {"tx_ref": "VILASTORE-TEST-REF"})
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_paid)
 
 
 class MobileOwnerLoginTests(TestCase):

@@ -2729,7 +2729,6 @@ def _flutterwave_public_key():
     return (
         getattr(django_settings, "FLUTTERWAVE_PUBLIC_KEY", "")
         or os.getenv("FLUTTERWAVE_PUBLIC_KEY", "")
-        or "a2b97709-9d73-42ec-a850-766eda997e6b"
     ).strip()
 
 
@@ -2739,6 +2738,40 @@ def _flutterwave_secret_key():
         or os.getenv("FLUTTERWAVE_SECRET_KEY", "")
         or os.getenv("FLUTTERWAVE_CLIENT_SECRET", "")
     ).strip()
+
+
+def _verify_flutterwave_payment(payment_reference, flutterwave_secret):
+    reference = (payment_reference or "").strip()
+    if not reference:
+        return None, "Payment reference is missing."
+
+    headers = {
+        "Authorization": f"Bearer {flutterwave_secret}",
+        "Content-Type": "application/json",
+    }
+    try:
+        if reference.isdigit():
+            response = requests.get(
+                f"https://api.flutterwave.com/v3/transactions/{reference}/verify",
+                headers=headers,
+                timeout=15,
+            )
+        else:
+            response = requests.get(
+                "https://api.flutterwave.com/v3/transactions/verify_by_reference",
+                headers=headers,
+                params={"tx_ref": reference},
+                timeout=15,
+            )
+        payload = response.json()
+    except Exception:
+        logger.exception("Flutterwave payment verification request failed")
+        return None, "Could not verify payment right now. Please try again."
+
+    if response.status_code >= 400:
+        logger.warning("Flutterwave verification failed with status %s: %s", response.status_code, payload)
+        return payload, "Payment verification failed. Please try again or contact support."
+    return payload, ""
 
 
 def _accounts_for_identifier(identifier):
@@ -3989,15 +4022,9 @@ def subscription_payment(request):
             messages.error(request, "Flutterwave secret key is not configured.")
             return redirect("subscription_payment")
 
-        try:
-            verify_response = requests.get(
-                f"https://api.flutterwave.com/v3/transactions/{payment_reference}/verify",
-                headers={"Authorization": f"Bearer {flutterwave_secret}"},
-                timeout=15,
-            )
-            verify_payload = verify_response.json()
-        except Exception:
-            messages.error(request, "Could not verify payment right now. Please try again.")
+        verify_payload, verify_error = _verify_flutterwave_payment(payment_reference, flutterwave_secret)
+        if verify_error:
+            messages.error(request, verify_error)
             return redirect("subscription_payment")
 
         tx_data = verify_payload.get("data") or {}

@@ -12,6 +12,10 @@ function startSubscriptionPayment() {
         notify("Flutterwave public key is missing. Please configure FLUTTERWAVE_PUBLIC_KEY.");
         return;
     }
+    if (!flutterwaveKey.startsWith("FLWPUBK")) {
+        notify("Flutterwave public key is invalid. Use your FLWPUBK public key from Flutterwave.");
+        return;
+    }
 
     const email = (window.SUBSCRIPTION_EMAIL || "").trim();
     if (!email) {
@@ -50,7 +54,7 @@ function startSubscriptionPayment() {
         callback: function (response) {
             const refInput = document.getElementById("subscriptionPaymentReference");
             if (refInput) {
-                refInput.value = response.transaction_id || response.id || "";
+                refInput.value = response.transaction_id || response.id || response.tx_ref || txRef;
             }
             document.getElementById("subscriptionPaymentForm")?.submit();
         },
