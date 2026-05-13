@@ -135,6 +135,9 @@ def _check_migrations():
         list(Sale.objects.values_list("amount_paid", flat=True)[:1])
         list(Sale.objects.values_list("customer_name", flat=True)[:1])
         list(User.objects.values_list("fixed_assets", flat=True)[:1])
+        list(User.objects.values_list("bank_name", flat=True)[:1])
+        list(User.objects.values_list("bank_account_number", flat=True)[:1])
+        list(User.objects.values_list("bank_account_name", flat=True)[:1])
         return ""
     except (OperationalError, ProgrammingError):
         return "Database migrations are missing. Please run: python manage.py migrate"
