@@ -112,6 +112,13 @@ def _json_success(data=None, status=200):
     return JsonResponse(payload, status=status)
 
 
+USER_BANK_FIELDS = ("bank_name", "bank_account_number", "bank_account_name")
+
+
+def _defer_user_bank_fields(queryset, prefix=""):
+    return queryset.defer(*(f"{prefix}{field}" for field in USER_BANK_FIELDS))
+
+
 @require_http_methods(["GET"])
 def api_health(request):
     return _json_success({
@@ -1133,7 +1140,7 @@ def api_marketplace_shops(request):
     _ensure_marketplace_profiles()
 
     profiles = (
-        MarketplaceShopProfile.objects.select_related("user")
+        _defer_user_bank_fields(MarketplaceShopProfile.objects.select_related("user"), "user__")
         .prefetch_related("user__product_set")
         .filter(user__is_active=True)
         .distinct()
@@ -1310,7 +1317,7 @@ def api_marketplace_house_detail(request, house_id):
 @csrf_exempt
 @require_http_methods(["GET"])
 def api_marketplace_shop_detail(request, username):
-    shop_owner = get_object_or_404(User, username=username, is_active=True)
+    shop_owner = get_object_or_404(_defer_user_bank_fields(User.objects.all()), username=username, is_active=True)
     profile, _ = MarketplaceShopProfile.objects.get_or_create(user=shop_owner)
     products = Product.objects.filter(user=shop_owner).order_by("name")
     branches = _serialize_business_branch_analytics(shop_owner)["branches"] if shop_owner.account_type == User.ACCOUNT_TYPE_SHOP else []
@@ -1331,7 +1338,7 @@ def api_marketplace_place_order(request, username):
     if data is None:
         return _json_error("Invalid JSON payload.")
 
-    shop_owner = get_object_or_404(User, username=username, is_active=True)
+    shop_owner = get_object_or_404(_defer_user_bank_fields(User.objects.all()), username=username, is_active=True)
     buyer, _ = _get_buyer_from_request(request)
 
     buyer_name = (data.get("buyer_name") or "").strip()

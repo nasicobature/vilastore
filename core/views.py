@@ -143,6 +143,13 @@ def _check_migrations():
         return "Database migrations are missing. Please run: python manage.py migrate"
 
 
+USER_BANK_FIELDS = ("bank_name", "bank_account_number", "bank_account_name")
+
+
+def _defer_user_bank_fields(queryset, prefix=""):
+    return queryset.defer(*(f"{prefix}{field}" for field in USER_BANK_FIELDS))
+
+
 def _owner_branches(user):
     branches = list(ShopBranch.objects.filter(user=user, is_active=True).order_by("-is_default", "name", "id"))
     if user.is_shop_account and not branches:
@@ -5420,7 +5427,10 @@ def marketplace(request):
     _ensure_marketplace_profiles()
 
     profiles = (
-        MarketplaceShopProfile.objects.select_related("user")
+        _defer_user_bank_fields(
+            MarketplaceShopProfile.objects.select_related("user"),
+            "user__",
+        )
         .prefetch_related("user__product_set")
         .filter(user__is_active=True, user__account_type=User.ACCOUNT_TYPE_SHOP)
         .distinct()
@@ -5746,7 +5756,7 @@ def marketplace_create_house_inquiry(request, house_id):
 
 
 def marketplace_shop(request, username):
-    shop_owner = get_object_or_404(User, username=username)
+    shop_owner = get_object_or_404(_defer_user_bank_fields(User.objects.all()), username=username)
     profile, _ = MarketplaceShopProfile.objects.get_or_create(user=shop_owner)
     products = Product.objects.filter(user=shop_owner).order_by("name")
 
@@ -5761,7 +5771,7 @@ def marketplace_shop(request, username):
 
 @require_POST
 def marketplace_place_order(request, username):
-    shop_owner = get_object_or_404(User, username=username)
+    shop_owner = get_object_or_404(_defer_user_bank_fields(User.objects.all()), username=username)
     profile, _ = MarketplaceShopProfile.objects.get_or_create(user=shop_owner)
     buyer = _get_marketplace_buyer(request)
     if not buyer:
