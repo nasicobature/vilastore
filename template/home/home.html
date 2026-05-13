@@ -216,7 +216,6 @@
       <div class="hero-buttons">
         <a href="{% url 'login' %}" class="btn-hero"><i data-lucide="log-in" style="width:20px;height:20px;"></i> Sign In</a>
         <a href="{% url 'marketplace' %}" class="btn-secondary"><i data-lucide="shopping-bag" style="width:20px;height:20px;"></i> Browse Marketplace</a>
-        <a href="{% url 'edu:index' %}" class="btn-secondary"><i data-lucide="graduation-cap" style="width:20px;height:20px;"></i> Open Edu Portal</a>
         <a href="{% url 'housing_signup' %}" class="btn-secondary"><i data-lucide="house-plus" style="width:20px;height:20px;"></i> Register Housing</a>
         <a href="#how-it-works" class="btn-secondary"><i data-lucide="play-circle" style="width:20px;height:20px;"></i> How It Works</a>
       </div>
@@ -230,18 +229,6 @@
       <p>Choose where you want to go</p>
     </div>
     <div class="portals-grid">
-      <div class="portal-card owner">
-        <div class="portal-icon"><i data-lucide="briefcase" style="width:28px;height:28px;"></i></div>
-        <h3>Shop Owner Login</h3>
-        <p>Access your full business dashboard &mdash; manage products, view reports, track sales, and control everything about your shop.</p>
-        <a href="{% url 'login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Owner Login</a>
-      </div>
-      <div class="portal-card shopboy">
-        <div class="portal-icon"><i data-lucide="user-check" style="width:28px;height:28px;"></i></div>
-        <h3>Staff Login</h3>
-        <p>Quick access for shop staff &mdash; process sales, update stock, and handle customer orders assigned by the owner.</p>
-        <a href="{% url 'shopboy_login' %}" class="portal-btn"><i data-lucide="log-in" style="width:18px;height:18px;"></i> Staff Login</a>
-      </div>
       <div class="portal-card housing">
         <div class="portal-icon"><i data-lucide="house-plus" style="width:28px;height:28px;"></i></div>
         <h3>House Management</h3>
@@ -250,17 +237,6 @@
           <a href="{% url 'housing_signup' %}" class="portal-btn"><i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register Housing</a>
           <a href="{% url 'login' %}?account_type=housing" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
             <i data-lucide="log-in" style="width:18px;height:18px;"></i> Housing Login
-          </a>
-        </div>
-      </div>
-      <div class="portal-card edu">
-        <div class="portal-icon"><i data-lucide="graduation-cap" style="width:28px;height:28px;"></i></div>
-        <h3>Education Portal</h3>
-        <p>Manage secondary schools and tertiary institutions in the same VilaStore project, including users, classes, fees, payments, and results.</p>
-        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-          <a href="{% url 'edu:index' %}" class="portal-btn"><i data-lucide="arrow-right" style="width:18px;height:18px;"></i> Open Edu Portal</a>
-          <a href="{% url 'edu:secondary_register' %}" class="portal-btn" style="background: transparent;border:1px solid var(--border);color:var(--text);">
-            <i data-lucide="school" style="width:18px;height:18px;"></i> Register School
           </a>
         </div>
       </div>
