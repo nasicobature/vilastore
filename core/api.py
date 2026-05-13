@@ -1908,17 +1908,23 @@ def api_owner_product_detail(request, pk):
     branch = None
     branch_inventory = None
     if branch_id:
-        feature_error = _json_feature_required(owner, "multi_branch")
-        if feature_error:
-            return feature_error
         branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
         if not branch:
             return _json_error("Branch not found.", status=404)
-        branch_inventory, _ = BranchInventory.objects.get_or_create(
-            branch=branch,
-            product=product,
-            defaults={"stock": product.stock, "selling_price": product.selling_price},
-        )
+        if not _plan_has_feature(owner, "multi_branch"):
+            active_branch_count = ShopBranch.objects.filter(user=owner, is_active=True).count()
+            if active_branch_count <= 1:
+                branch = None
+            else:
+                feature_error = _json_feature_required(owner, "multi_branch")
+                if feature_error:
+                    return feature_error
+        if branch:
+            branch_inventory, _ = BranchInventory.objects.get_or_create(
+                branch=branch,
+                product=product,
+                defaults={"stock": product.stock, "selling_price": product.selling_price},
+            )
 
     if "name" in data:
         name = (data.get("name") or "").strip()

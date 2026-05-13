@@ -1156,13 +1156,18 @@ def edit_product(request, pk):
     branch_id = (request.POST.get("branch_id") or "").strip()
     branch = None
     if branch_id:
-        feature_redirect = _require_feature_or_redirect(request, "multi_branch", "inventory")
-        if feature_redirect:
-            return feature_redirect
         branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
         if not branch:
             messages.error(request, "Selected branch is invalid.")
             return redirect('inventory')
+        if not _plan_has_feature(request.user, "multi_branch"):
+            active_branch_count = ShopBranch.objects.filter(user=request.user, is_active=True).count()
+            if active_branch_count <= 1:
+                branch = None
+            else:
+                feature_redirect = _require_feature_or_redirect(request, "multi_branch", "inventory")
+                if feature_redirect:
+                    return feature_redirect
 
     name = (request.POST.get('name') or '').strip()
     if not name:

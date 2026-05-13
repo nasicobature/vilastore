@@ -431,6 +431,35 @@ class OwnerInventoryApiTests(TestCase):
         self.assertEqual(self.product.code, "RICE001")
         self.assertEqual(self.product.stock, Decimal("8.00"))
 
+    def test_starter_can_update_product_when_only_default_branch_id_is_sent(self):
+        self.owner.plan = "starter"
+        self.owner.save(update_fields=["plan"])
+        branch = ShopBranch.objects.create(
+            user=self.owner,
+            name="Main Shop",
+            address="40 Market Road",
+            is_default=True,
+        )
+
+        response = self.client.post(
+            reverse("api_owner_product_detail", kwargs={"pk": self.product.id}),
+            data={
+                "branch_id": str(branch.id),
+                "name": "Starter Default Branch Rice",
+                "stock": "10",
+                "low_stock_threshold": "2",
+                "cost_price": "115.00",
+                "selling_price": "175.00",
+            },
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.name, "Starter Default Branch Rice")
+        self.assertEqual(self.product.stock, Decimal("10.00"))
+        self.assertFalse(BranchInventory.objects.filter(branch=branch, product=self.product).exists())
+
     def test_starter_cannot_change_product_code(self):
         self.owner.plan = "starter"
         self.owner.save(update_fields=["plan"])
@@ -581,6 +610,36 @@ class WebInventoryUpdateTests(TestCase):
         self.assertEqual(self.product.stock, Decimal("12.00"))
         self.assertEqual(self.product.cost_price, Decimal("121.00"))
         self.assertEqual(self.product.selling_price, Decimal("181.00"))
+
+    def test_web_starter_can_update_product_when_only_default_branch_id_is_sent(self):
+        branch = ShopBranch.objects.create(
+            user=self.owner,
+            name="Main Shop",
+            address="41 Market Road",
+            is_default=True,
+        )
+
+        response = self.client.post(
+            reverse("edit_product", kwargs={"pk": self.product.id}),
+            data={
+                "branch_id": str(branch.id),
+                "name": "Updated Web Rice Default Branch",
+                "code": "WEB001",
+                "category": "",
+                "stock": "13",
+                "low_stock_threshold": "4",
+                "cost_price": "122.00",
+                "selling_price": "182.00",
+                "vat_status": Product.VAT_STANDARD,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.name, "Updated Web Rice Default Branch")
+        self.assertEqual(self.product.code, "WEB001")
+        self.assertEqual(self.product.stock, Decimal("13.00"))
+        self.assertFalse(BranchInventory.objects.filter(branch=branch, product=self.product).exists())
 
     def test_web_edit_product_blocks_code_change_without_barcode_plan(self):
         response = self.client.post(
