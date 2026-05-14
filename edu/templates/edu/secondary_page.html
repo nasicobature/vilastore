@@ -66,7 +66,154 @@
       {{ term_map|json_script:"academic-term-map" }}
 
       {% if active_page == 'dashboard' %}
-        {% if role == 'accountant' %}
+        {% if role == 'admin' %}
+          <div id="dashboard" class="space-y-5">
+            <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                  <p class="text-xs uppercase tracking-wider text-muted-foreground">School Control Center</p>
+                  <h2 class="font-display text-2xl font-bold mt-1">Admin Dashboard</h2>
+                  <p class="text-sm text-muted-foreground mt-2">Manage users, classes, teachers, approvals, results, and overall school activity.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <a href="/edu/secondary/admin/users/" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                    <i data-lucide="user-plus" class="w-4 h-4"></i> Create User
+                  </a>
+                  <a href="/edu/secondary/admin/approve-results/" class="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors">
+                    <i data-lucide="file-check" class="w-4 h-4"></i> Approve Results
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {% for card in admin_dashboard_cards %}
+                <div class="bg-card rounded-xl border border-border p-5">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <p class="text-sm text-muted-foreground">{{ card.label }}</p>
+                      <p class="text-2xl font-display font-bold mt-1">{{ card.value }}</p>
+                      <p class="text-xs text-muted-foreground mt-2">{{ card.hint }}</p>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-primary/10 text-primary">
+                      <i data-lucide="{{ card.icon }}" class="w-4 h-4"></i>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              <div class="xl:col-span-2 bg-card rounded-xl border border-border p-5 space-y-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 class="font-display font-semibold">Admin Quick Actions</h3>
+                    <p class="text-xs text-muted-foreground mt-1">Common school management tasks.</p>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <a href="/edu/secondary/admin/register/" class="rounded-xl border border-border bg-background p-4 hover:bg-muted/30 transition-colors">
+                    <div class="flex items-center gap-3">
+                      <span class="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center"><i data-lucide="graduation-cap" class="w-5 h-5"></i></span>
+                      <div><p class="font-medium">Register Student</p><p class="text-xs text-muted-foreground">Create a student profile and login.</p></div>
+                    </div>
+                  </a>
+                  <a href="/edu/secondary/admin/teachers/" class="rounded-xl border border-border bg-background p-4 hover:bg-muted/30 transition-colors">
+                    <div class="flex items-center gap-3">
+                      <span class="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center"><i data-lucide="users" class="w-5 h-5"></i></span>
+                      <div><p class="font-medium">Manage Teachers</p><p class="text-xs text-muted-foreground">Create staff and review assignments.</p></div>
+                    </div>
+                  </a>
+                  <a href="/edu/secondary/admin/classes/" class="rounded-xl border border-border bg-background p-4 hover:bg-muted/30 transition-colors">
+                    <div class="flex items-center gap-3">
+                      <span class="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center"><i data-lucide="school" class="w-5 h-5"></i></span>
+                      <div><p class="font-medium">Classes & Subjects</p><p class="text-xs text-muted-foreground">Set up classes and subject lists.</p></div>
+                    </div>
+                  </a>
+                  <a href="/edu/secondary/admin/assign-teachers/" class="rounded-xl border border-border bg-background p-4 hover:bg-muted/30 transition-colors">
+                    <div class="flex items-center gap-3">
+                      <span class="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center"><i data-lucide="user-check" class="w-5 h-5"></i></span>
+                      <div><p class="font-medium">Assign Teachers</p><p class="text-xs text-muted-foreground">Connect teachers to classes and subjects.</p></div>
+                    </div>
+                  </a>
+                </div>
+              </div>
+
+              <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+                <div>
+                  <h3 class="font-display font-semibold">Pending User Approvals</h3>
+                  <p class="text-xs text-muted-foreground mt-1">New school accounts waiting for access.</p>
+                </div>
+                <div class="space-y-3">
+                  {% for p in pending_profiles|slice:":5" %}
+                    <div class="rounded-lg border border-border bg-background p-3">
+                      <div class="flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium truncate">{{ p.user.username }}</p>
+                          <p class="text-xs text-muted-foreground">{{ p.get_role_display }}</p>
+                        </div>
+                        <a href="/approve/{{ p.id }}/" class="inline-flex items-center rounded-lg bg-secondary text-secondary-foreground px-3 py-1.5 text-xs font-medium">Approve</a>
+                      </div>
+                    </div>
+                  {% empty %}
+                    <p class="text-sm text-muted-foreground">No pending user approvals.</p>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div class="bg-card rounded-xl border border-border overflow-hidden">
+                <div class="flex items-center justify-between p-4 border-b border-border">
+                  <div>
+                    <h3 class="font-display font-semibold">Results Awaiting Final Approval</h3>
+                    <p class="text-xs text-muted-foreground mt-1">Examiner-approved results ready for Admin publishing.</p>
+                  </div>
+                  <a href="/edu/secondary/admin/approve-results/" class="text-sm text-primary font-medium">Review all</a>
+                </div>
+                <div class="divide-y divide-border">
+                  {% for submission in admin_result_submissions|slice:":5" %}
+                    <a href="/edu/secondary/admin/approve-results/?submission={{ submission.id }}" class="block p-4 hover:bg-muted/30 transition-colors">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="font-medium text-sm">{{ submission.academic_class.name }} · {{ submission.subject.name }}</p>
+                          <p class="text-xs text-muted-foreground">Teacher: {{ submission.submitted_by.full_name }} · {{ submission.submitted_at|date:"M d, Y" }}</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">Review</span>
+                      </div>
+                    </a>
+                  {% empty %}
+                    <div class="p-5 text-sm text-muted-foreground">No results waiting for final approval.</div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="bg-card rounded-xl border border-border overflow-hidden">
+                <div class="p-4 border-b border-border">
+                  <h3 class="font-display font-semibold">Recent Result Activity</h3>
+                  <p class="text-xs text-muted-foreground mt-1">Latest submitted, approved, returned, and published results.</p>
+                </div>
+                <div class="divide-y divide-border">
+                  {% for submission in admin_recent_results %}
+                    <div class="p-4">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="font-medium text-sm">{{ submission.academic_class.name }} · {{ submission.subject.name }}</p>
+                          <p class="text-xs text-muted-foreground">{{ submission.submitted_by.full_name }} · {{ submission.submitted_at|date:"M d, Y" }}</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if submission.status == 'published' %}bg-secondary/10 text-secondary{% elif submission.status == 'returned_for_correction' %}bg-destructive/10 text-destructive{% else %}bg-muted text-muted-foreground{% endif %}">
+                          {{ submission.get_status_display }}
+                        </span>
+                      </div>
+                    </div>
+                  {% empty %}
+                    <div class="p-5 text-sm text-muted-foreground">No result activity yet.</div>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+        {% elif role == 'accountant' %}
           <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <div class="bg-card rounded-xl border border-border p-5">
               <p class="text-sm text-muted-foreground">Expected Fees</p>
@@ -423,6 +570,21 @@
       {% endif %}
 
       {% if active_page == 'users' and role == 'admin' %}
+        <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">User Administration</p>
+              <h3 class="font-display text-2xl font-bold mt-1">Users and Access</h3>
+              <p class="text-sm text-muted-foreground mt-2">Create accounts, review staff/student access, and approve pending users.</p>
+            </div>
+            <div class="grid grid-cols-3 gap-3 text-sm">
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Students</span><br><strong>{{ students_all.count }}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Teachers</span><br><strong>{{ teachers.count }}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Pending</span><br><strong>{{ admin_pending_count }}</strong></div>
+            </div>
+          </div>
+        </div>
+
         <div class="bg-card rounded-xl border border-border p-5 space-y-4">
           <div class="flex items-center justify-between">
             <h3 class="font-display font-semibold">Create User Account</h3>
@@ -1494,10 +1656,32 @@
             .no-print { display: none !important; }
           }
         </style>
+        <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">Final Result Approval</p>
+              <h3 class="font-display text-2xl font-bold mt-1">Approve and Publish Results</h3>
+              <p class="text-sm text-muted-foreground mt-2">Review examiner-approved submissions, preview report cards, and publish them to students.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div class="rounded-xl border border-border bg-background px-4 py-3">
+                <span class="text-muted-foreground">Waiting</span><br>
+                <strong>{{ admin_result_submissions.count }}</strong>
+              </div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3">
+                <span class="text-muted-foreground">Users Pending</span><br>
+                <strong>{{ admin_pending_count }}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div class="bg-card rounded-xl border border-border overflow-hidden lg:col-span-1">
             <div class="flex items-center justify-between p-4 border-b border-border">
-              <h3 class="font-display font-semibold">Results Awaiting Admin Approval</h3>
+              <div>
+                <h3 class="font-display font-semibold">Approval Queue</h3>
+                <p class="text-xs text-muted-foreground mt-1">Select a submission to inspect.</p>
+              </div>
             </div>
             <div class="overflow-x-auto">
               <table class="w-full">

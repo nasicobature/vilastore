@@ -1932,6 +1932,9 @@ def secondary_page(request, role, page):
     teacher_class_cards = []
     teacher_recent_submissions = []
     teacher_pending_corrections = []
+    admin_dashboard_cards = []
+    admin_recent_results = ResultSubmission.objects.none()
+    admin_pending_count = 0
     accountant_dashboard_cards = []
     accountant_fee_cards = []
     accountant_class_rows = []
@@ -1998,6 +2001,18 @@ def secondary_page(request, role, page):
             institution=institution,
             status='approved_by_examiner',
         ).select_related('academic_class', 'subject', 'submitted_by').order_by('-submitted_at')
+        admin_pending_count = pending_profiles.count()
+        admin_recent_results = ResultSubmission.objects.filter(
+            institution=institution,
+        ).exclude(status='draft').select_related('academic_class', 'subject', 'submitted_by').order_by('-submitted_at')[:6]
+        admin_dashboard_cards = [
+            {'label': 'Students', 'value': students_all.count(), 'hint': 'Total registered learners', 'icon': 'graduation-cap'},
+            {'label': 'Teachers', 'value': teachers.count(), 'hint': 'Teaching staff accounts', 'icon': 'users'},
+            {'label': 'Classes', 'value': AcademicClass.objects.filter(institution=institution).count(), 'hint': 'Academic class groups', 'icon': 'school'},
+            {'label': 'Pending Users', 'value': admin_pending_count, 'hint': 'Waiting for approval', 'icon': 'user-check'},
+            {'label': 'Results to Approve', 'value': admin_result_submissions.count(), 'hint': 'Examiner-approved results', 'icon': 'file-check'},
+            {'label': 'Outstanding Fees', 'value': f"NGN {fees_pending:.2f}", 'hint': 'School-wide balance', 'icon': 'wallet'},
+        ]
         admin_submission_id = request.GET.get('submission')
         if admin_submission_id:
             selected_admin_submission = admin_result_submissions.filter(id=admin_submission_id).first()
@@ -2527,6 +2542,9 @@ def secondary_page(request, role, page):
         'payment_public_key': institution.payment_public_key,
         'online_payment_enabled': institution.allow_online_payment and bool(institution.payment_public_key) and bool(institution.payment_secret_key),
         'pending_profiles': pending_profiles,
+        'admin_dashboard_cards': admin_dashboard_cards,
+        'admin_recent_results': admin_recent_results,
+        'admin_pending_count': admin_pending_count,
         'role_options': SECONDARY_ROLES,
         'classes': AcademicClass.objects.filter(institution=institution).select_related('academic_session', 'academic_term'),
         'institution_id': institution.id if institution else '',
