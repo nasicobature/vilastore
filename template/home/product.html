@@ -28,7 +28,7 @@
         <a href="{% url 'product' %}" class="nav-link active"><i data-lucide="package"></i><span>Products</span></a>
         <a href="{% url 'inventory' %}" class="nav-link"><i data-lucide="boxes"></i><span>Inventory</span></a>
         <a href="{% url 'sales-history' %}" class="nav-link"><i data-lucide="receipt"></i><span>Sales History</span></a>
-        <a href="{% url 'loans' %}" class="nav-link"><i data-lucide="credit-card"></i><span>Loans</span></a>
+        <a href="{% url 'loans' %}" class="nav-link"><i data-lucide="credit-card"></i><span>Credit</span></a>
         <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
         <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
         <a href="{% url 'customer' %}" class="nav-link"><i data-lucide="users"></i><span>Customers</span></a>
@@ -221,7 +221,7 @@
               <label style="font-size:0.85rem;color:var(--muted-foreground);">Payment Status</label>
               <select name="payment_status" class="input" id="paymentStatusSelect">
                 <option value="paid">Paid</option>
-                <option value="loan">Loan (credit)</option>
+                <option value="loan">Credit</option>
               </select>
               <label style="font-size:0.85rem;color:var(--muted-foreground);">Customer Full Name (optional)</label>
               <input type="text" name="customer_name" class="input" placeholder="e.g. John Doe">

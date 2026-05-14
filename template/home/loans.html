@@ -6,7 +6,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VilaStore - Loans</title>
+  <title>VilaStore - Credit</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="{% static 'js/app.js' %}" defer></script>
@@ -28,7 +28,7 @@
       <a href="{% url 'product' %}" class="nav-link"><i data-lucide="package"></i><span>Products</span></a>
       <a href="{% url 'inventory' %}" class="nav-link"><i data-lucide="boxes"></i><span>Inventory</span></a>
       <a href="{% url 'sales-history' %}" class="nav-link"><i data-lucide="receipt"></i><span>Sales History</span></a>
-      <a href="{% url 'loans' %}" class="nav-link active"><i data-lucide="credit-card"></i><span>Loans</span></a>
+      <a href="{% url 'loans' %}" class="nav-link active"><i data-lucide="credit-card"></i><span>Credit</span></a>
       <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
       <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
       <a href="{% url 'customer' %}" class="nav-link"><i data-lucide="users"></i><span>Customers</span></a>
@@ -40,7 +40,7 @@
   <main class="main-content">
     <header class="page-header">
       <div class="page-header-content">
-        <h1>Loans</h1>
+        <h1>Credit</h1>
         <p>Manage credit sales and repayments</p>
       </div>
       <form method="GET" action="{% url 'loans' %}" class="header-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -101,7 +101,7 @@
                 {% elif sale.payment_status == "partial" %}
                   <span class="badge badge-warning">Partially Paid</span>
                 {% else %}
-                  <span class="badge badge-danger">Loan (Unpaid)</span>
+                  <span class="badge badge-danger">Credit (Unpaid)</span>
                 {% endif %}
               </td>
               <td data-label="Update Payment">
@@ -116,7 +116,7 @@
             <tr>
               <td colspan="8" class="empty-state">
                 <i data-lucide="credit-card"></i>
-                <p>No loan sales found</p>
+                <p>No credit sales found</p>
               </td>
             </tr>
           {% endfor %}

@@ -61,7 +61,7 @@
       </a>
       <a href="{% url 'loans' %}" class="nav-link">
         <i data-lucide="credit-card"></i>
-        <span>Loans</span>
+        <span>Credit</span>
       </a>
       <a href="{% url 'expenses' %}" class="nav-link">
         <i data-lucide="wallet"></i>
@@ -203,7 +203,7 @@
               {% elif sale.payment_status == "partial" %}
                 <span class="badge badge-warning">Partially Paid</span>
               {% else %}
-                <span class="badge badge-danger">Loan (Unpaid)</span>
+                <span class="badge badge-danger">Credit (Unpaid)</span>
               {% endif %}
             </td>
             <td data-label="Paid">₦{{ sale.amount_paid|floatformat:2 }}</td>

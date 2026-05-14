@@ -953,7 +953,7 @@ def checkout(request):
     request.session['cart'] = {}
     request.session['owner_cart_branch_id'] = str(selected_branch.id) if selected_branch else ""
     if payment_status == Sale.PAYMENT_LOAN:
-        messages.success(request, "Sale recorded as loan.")
+        messages.success(request, "Sale recorded as credit.")
     else:
         messages.success(request, "Sale completed successfully.")
     return redirect('product')
@@ -1384,7 +1384,7 @@ def loans(request):
 def update_loan_payment(request, sale_id):
     sale = get_object_or_404(Sale, id=sale_id, user=request.user)
     if sale.remaining_balance <= 0:
-        messages.info(request, "This loan is already fully paid.")
+        messages.info(request, "This credit sale is already fully paid.")
         return redirect("loans")
 
     payment_raw = request.POST.get("payment_amount")
@@ -1405,7 +1405,7 @@ def update_loan_payment(request, sale_id):
     sale.save(update_fields=["amount_paid", "payment_status"])
 
     if sale.payment_status == Sale.PAYMENT_PAID:
-        messages.success(request, "Loan fully paid and marked as Paid.")
+        messages.success(request, "Credit sale fully paid and marked as Paid.")
     else:
         messages.success(request, "Partial payment recorded.")
     return redirect("loans")
