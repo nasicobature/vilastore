@@ -1746,6 +1746,7 @@ def reports(request):
 
     stock_value = Decimal("0.00")
     stock_cost = Decimal("0.00")
+    stock_by_product = {}
     low_stock_products = []
     out_of_stock_count = 0
     slow_moving_products = []
@@ -1754,6 +1755,7 @@ def reports(request):
         stock = row["stock"] or Decimal("0.00")
         selling_price = row["selling_price"] or Decimal("0.00")
         cost_price = row["cost_price"] or Decimal("0.00")
+        stock_by_product[product.id] = stock
         stock_value += selling_price * stock
         stock_cost += cost_price * stock
         if stock <= 0:
@@ -1778,11 +1780,40 @@ def reports(request):
         for item in product_items:
             revenue += (item.price or Decimal("0.00")) * item.quantity
         top_product_rows.append({
+            "product_id": row["product_id"],
             "name": row["product__name"] or "Product",
             "quantity": row["quantity"] or 0,
             "revenue": revenue,
             "profit": row["profit"] or Decimal("0.00"),
         })
+
+    best_profit_products = sorted(top_product_rows, key=lambda item: item["profit"], reverse=True)[:5]
+    low_margin_products = []
+    for row in top_product_rows:
+        margin = ((row["profit"] / row["revenue"]) * 100) if row["revenue"] else Decimal("0.00")
+        if row["revenue"] and margin < 15:
+            low_margin_products.append({**row, "margin": margin})
+    low_margin_products = sorted(low_margin_products, key=lambda item: item["margin"])[:5]
+
+    restock_recommendations = []
+    for row in top_product_rows:
+        current_stock = stock_by_product.get(row["product_id"], Decimal("0.00"))
+        sold_qty = row["quantity"] or Decimal("0.00")
+        if sold_qty > 0 and current_stock <= max(Decimal("3.00"), sold_qty * Decimal("0.35")):
+            restock_recommendations.append({
+                "name": row["name"],
+                "sold": sold_qty,
+                "stock": current_stock,
+                "suggested": max(Decimal("5.00"), sold_qty - current_stock),
+            })
+    if not restock_recommendations:
+        for product in low_stock_products[:5]:
+            restock_recommendations.append({
+                "name": product["name"],
+                "sold": Decimal("0.00"),
+                "stock": product["stock"],
+                "suggested": Decimal("5.00"),
+            })
 
     expense_rows = []
     for row in expenses.values("category").annotate(total=Sum("amount")).order_by("-total")[:5]:
@@ -1792,6 +1823,112 @@ def reports(request):
             "amount": amount,
             "percent": ((amount / total_expenses) * 100) if total_expenses else Decimal("0.00"),
         })
+
+    previous_month_start = (now.replace(day=1) - timedelta(days=1)).replace(day=1)
+    current_month_start = now.replace(day=1)
+    previous_month_end = current_month_start.date() - timedelta(days=1)
+    previous_expenses = Expense.objects.filter(user=request.user, date__gte=previous_month_start.date(), date__lte=previous_month_end)
+    current_month_expenses = Expense.objects.filter(user=request.user, date__gte=current_month_start.date(), date__lte=now.date())
+    if selected_branch:
+        previous_expenses = previous_expenses.filter(branch=selected_branch)
+        current_month_expenses = current_month_expenses.filter(branch=selected_branch)
+    previous_expense_total = previous_expenses.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    current_expense_total = current_month_expenses.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    expense_warnings = []
+    if previous_expense_total and current_expense_total > previous_expense_total * Decimal("1.25"):
+        increase = ((current_expense_total - previous_expense_total) / previous_expense_total) * 100
+        expense_warnings.append({
+            "title": "Monthly expenses increased",
+            "message": f"Expenses are up by {increase.quantize(Decimal('0.1'))}% compared with last month.",
+        })
+    if expense_rows and expense_rows[0]["percent"] > 45:
+        expense_warnings.append({
+            "title": f"{expense_rows[0]['category']} is dominating expenses",
+            "message": f"{expense_rows[0]['category']} takes {expense_rows[0]['percent'].quantize(Decimal('0.1'))}% of expenses in this period.",
+        })
+
+    credit_sales = sales.filter(payment_status__in=[Sale.PAYMENT_LOAN, Sale.PAYMENT_PARTIAL])
+    credit_total = Decimal("0.00")
+    credit_paid = Decimal("0.00")
+    credit_customers = {}
+    for sale in credit_sales:
+        balance = sale.remaining_balance
+        credit_total += balance
+        credit_paid += sale.amount_paid or Decimal("0.00")
+        name = sale.display_customer_name or "Walk-in customer"
+        credit_customers[name] = credit_customers.get(name, Decimal("0.00")) + balance
+    top_credit_customers = [
+        {"name": name, "balance": balance}
+        for name, balance in sorted(credit_customers.items(), key=lambda item: item[1], reverse=True)[:5]
+        if balance > 0
+    ]
+
+    customer_sales = {}
+    for sale in sales:
+        name = sale.display_customer_name or "Walk-in customer"
+        if name == "Walk-in customer":
+            continue
+        row = customer_sales.setdefault(name, {"name": name, "sales": Decimal("0.00"), "visits": 0})
+        row["sales"] += sale.total_amount or Decimal("0.00")
+        row["visits"] += 1
+    top_customers = sorted(customer_sales.values(), key=lambda item: item["sales"], reverse=True)[:5]
+    repeat_customer_count = len([row for row in customer_sales.values() if row["visits"] > 1])
+
+    branch_comparison = []
+    if not selected_branch:
+        for branch in branches:
+            branch_sales = sales.filter(branch=branch)
+            branch_expenses = expenses.filter(branch=branch)
+            branch_revenue = branch_sales.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+            branch_profit = branch_sales.aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
+            branch_expense_total = branch_expenses.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+            branch_comparison.append({
+                "name": branch.name,
+                "sales": branch_revenue,
+                "profit": branch_profit,
+                "expenses": branch_expense_total,
+                "net": branch_profit - branch_expense_total,
+                "transactions": branch_sales.count(),
+            })
+        branch_comparison = sorted(branch_comparison, key=lambda row: row["net"], reverse=True)
+
+    health_score = Decimal("50.00")
+    if total_transactions:
+        health_score += Decimal("10.00")
+    if total_revenue and gross_margin_percent >= 25:
+        health_score += Decimal("15.00")
+    elif total_revenue and gross_margin_percent < 15:
+        health_score -= Decimal("10.00")
+    if net_profit > 0:
+        health_score += Decimal("15.00")
+    else:
+        health_score -= Decimal("15.00")
+    if total_revenue and expense_ratio_percent <= 30:
+        health_score += Decimal("10.00")
+    elif total_revenue and expense_ratio_percent > 50:
+        health_score -= Decimal("10.00")
+    if low_stock_count := len(low_stock_products):
+        health_score -= min(Decimal("10.00"), Decimal(low_stock_count * 2))
+    if credit_total > 0 and total_revenue and credit_total > total_revenue * Decimal("0.25"):
+        health_score -= Decimal("10.00")
+    health_score = max(Decimal("0.00"), min(Decimal("100.00"), health_score)).quantize(Decimal("1"))
+
+    action_recommendations = []
+    if restock_recommendations:
+        action_recommendations.append(f"Restock {restock_recommendations[0]['name']} first; it is selling faster than current stock.")
+    if low_margin_products:
+        action_recommendations.append(f"Review pricing or supplier cost for {low_margin_products[0]['name']} because its margin is low.")
+    if expense_warnings:
+        action_recommendations.append("Check your largest expense category and reduce non-essential spending this week.")
+    if top_credit_customers:
+        action_recommendations.append(f"Follow up with {top_credit_customers[0]['name']} about outstanding credit.")
+    if slow_moving_products:
+        action_recommendations.append(f"Promote or discount {slow_moving_products[0]['name']} because it has stock but no sales in this period.")
+    if branch_comparison:
+        best_branch = branch_comparison[0]
+        action_recommendations.append(f"Use {best_branch['name']} as the branch benchmark because it currently has the best net result.")
+    if not action_recommendations:
+        action_recommendations.append("Keep recording sales, expenses, and customers daily so VilaStore can keep improving recommendations.")
 
     customer_count = Customer.objects.filter(user=request.user).count()
     business_insights = []
@@ -1987,6 +2124,19 @@ def reports(request):
         "slow_moving_products": slow_moving_products[:5],
         "top_product_rows": top_product_rows,
         "expense_rows": expense_rows,
+        "health_score": health_score,
+        "best_profit_products": best_profit_products,
+        "low_margin_products": low_margin_products,
+        "restock_recommendations": restock_recommendations[:5],
+        "expense_warnings": expense_warnings,
+        "credit_total": credit_total,
+        "credit_paid": credit_paid,
+        "credit_sales_count": credit_sales.count(),
+        "top_credit_customers": top_credit_customers,
+        "top_customers": top_customers,
+        "repeat_customer_count": repeat_customer_count,
+        "branch_comparison": branch_comparison,
+        "action_recommendations": action_recommendations,
         "customer_count": customer_count,
         "business_insights": business_insights,
         "period": period,

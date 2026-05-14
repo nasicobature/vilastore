@@ -158,6 +158,10 @@
 
         <div class="summary-grid" style="margin-bottom:1rem;">
           <div class="summary-item">
+            <span class="summary-label">Business Health Score</span>
+            <span class="summary-value {% if health_score < 50 %}text-destructive{% else %}text-profit{% endif %}">{{ health_score }}/100</span>
+          </div>
+          <div class="summary-item">
             <span class="summary-label">Gross Margin</span>
             <span class="summary-value text-profit">{{ gross_margin_percent|floatformat:1 }}%</span>
           </div>
@@ -174,12 +178,27 @@
             <span class="summary-value">{{ customer_count }}</span>
           </div>
           <div class="summary-item">
+            <span class="summary-label">Credit Outstanding</span>
+            <span class="summary-value {% if credit_total > 0 %}text-destructive{% endif %}">₦{{ credit_total|floatformat:2 }}</span>
+          </div>
+          <div class="summary-item">
             <span class="summary-label">Stock Value</span>
             <span class="summary-value">₦{{ stock_value|floatformat:2 }}</span>
           </div>
           <div class="summary-item">
             <span class="summary-label">Stock Profit Potential</span>
             <span class="summary-value text-profit">₦{{ inventory_profit_potential|floatformat:2 }}</span>
+          </div>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <h4 style="margin-bottom:0.65rem;">Recommended Actions</h4>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0.65rem;">
+            {% for recommendation in action_recommendations %}
+              <div class="card" style="padding:0.75rem 1rem;border:1px dashed var(--border);">
+                {{ recommendation }}
+              </div>
+            {% endfor %}
           </div>
         </div>
 
@@ -216,6 +235,63 @@
           </div>
 
           <div>
+            <h4 style="margin-bottom:0.65rem;">Best Profit Products</h4>
+            {% if best_profit_products %}
+              <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                {% for product in best_profit_products %}
+                <div style="display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+                  <div>
+                    <strong>{{ product.name }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">{{ product.quantity|floatformat:2 }} sold</div>
+                  </div>
+                  <strong class="text-profit">₦{{ product.profit|floatformat:2 }}</strong>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p style="color:var(--muted-foreground);">No profitable product data yet.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Low Margin Products</h4>
+            {% if low_margin_products %}
+              <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                {% for product in low_margin_products %}
+                <div style="display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+                  <div>
+                    <strong>{{ product.name }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">Margin {{ product.margin|floatformat:1 }}%</div>
+                  </div>
+                  <strong>₦{{ product.profit|floatformat:2 }}</strong>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p style="color:var(--muted-foreground);">No low-margin products found in this period.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Restock Recommendations</h4>
+            {% if restock_recommendations %}
+              <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                {% for product in restock_recommendations %}
+                <div style="display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+                  <div>
+                    <strong>{{ product.name }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">Sold {{ product.sold|floatformat:2 }}, left {{ product.stock|floatformat:2 }}</div>
+                  </div>
+                  <strong>Buy {{ product.suggested|floatformat:0 }}+</strong>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p style="color:var(--muted-foreground);">No urgent restock recommendation right now.</p>
+            {% endif %}
+          </div>
+
+          <div>
             <h4 style="margin-bottom:0.65rem;">Expense Analysis</h4>
             {% if expense_rows %}
               <div style="display:flex;flex-direction:column;gap:0.5rem;">
@@ -231,6 +307,16 @@
               </div>
             {% else %}
               <p style="color:var(--muted-foreground);">No expenses recorded for this period.</p>
+            {% endif %}
+            {% if expense_warnings %}
+              <div style="margin-top:0.75rem;">
+                {% for warning in expense_warnings %}
+                  <div class="card" style="padding:0.65rem 0.75rem;margin-top:0.5rem;border-left:4px solid #d97706;">
+                    <strong>{{ warning.title }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">{{ warning.message }}</div>
+                  </div>
+                {% endfor %}
+              </div>
             {% endif %}
           </div>
 
@@ -260,6 +346,59 @@
               <p style="color:var(--muted-foreground);">Inventory looks balanced for this period.</p>
             {% endif %}
           </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Customer Insights</h4>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+              <span class="badge badge-success">{{ repeat_customer_count }} repeat customers</span>
+              <span class="badge badge-warning">{{ credit_sales_count }} credit sales</span>
+            </div>
+            {% if top_customers %}
+              {% for customer in top_customers %}
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:0.35rem 0;">
+                  <span>{{ customer.name }}</span>
+                  <span>₦{{ customer.sales|floatformat:2 }}</span>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p style="color:var(--muted-foreground);">No named customer sales yet. Add customer names to unlock better insights.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Credit Analysis</h4>
+            <div class="summary-item" style="margin-bottom:0.75rem;">
+              <span class="summary-label">Outstanding Credit</span>
+              <span class="summary-value text-destructive">₦{{ credit_total|floatformat:2 }}</span>
+            </div>
+            {% if top_credit_customers %}
+              {% for customer in top_credit_customers %}
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:0.35rem 0;">
+                  <span>{{ customer.name }}</span>
+                  <span>₦{{ customer.balance|floatformat:2 }}</span>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p style="color:var(--muted-foreground);">No unpaid credit found for this period.</p>
+            {% endif %}
+          </div>
+
+          {% if branch_comparison %}
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Branch Comparison</h4>
+            {% for branch in branch_comparison %}
+              <div style="border-bottom:1px solid var(--border);padding:0.45rem 0;">
+                <div style="display:flex;justify-content:space-between;gap:1rem;">
+                  <strong>{{ branch.name }}</strong>
+                  <strong class="{% if branch.net < 0 %}text-destructive{% else %}text-profit{% endif %}">₦{{ branch.net|floatformat:2 }}</strong>
+                </div>
+                <div style="color:var(--muted-foreground);font-size:0.85rem;">
+                  Sales ₦{{ branch.sales|floatformat:2 }} · Profit ₦{{ branch.profit|floatformat:2 }} · Expenses ₦{{ branch.expenses|floatformat:2 }} · {{ branch.transactions }} sales
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          {% endif %}
         </div>
       </section>
 
