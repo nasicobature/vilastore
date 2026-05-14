@@ -66,24 +66,213 @@
       {{ term_map|json_script:"academic-term-map" }}
 
       {% if active_page == 'dashboard' %}
-        <div id="dashboard">
-          <h2 class="font-display text-2xl font-bold mb-4">{{ role_label }} Dashboard</h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {% for stat in stats %}
-              <div class="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow">
-                <div class="flex items-start justify-between">
-                  <div>
-                    <p class="text-sm text-muted-foreground">{{ stat.label }}</p>
-                    <p class="text-2xl font-display font-bold mt-1">{{ stat.value }}</p>
-                  </div>
-                  <div class="p-2.5 rounded-lg bg-primary/10 text-primary">
-                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-                  </div>
+        {% if role == 'teacher' %}
+          <div id="dashboard" class="space-y-5">
+            <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                  <p class="text-xs uppercase tracking-wider text-muted-foreground">Teacher Workspace</p>
+                  <h2 class="font-display text-2xl font-bold mt-1">Welcome, {{ user_name }}</h2>
+                  <p class="text-sm text-muted-foreground mt-2">{{ current_session_name|default:"No active session" }}{% if current_term_name %} / {{ current_term_name }}{% endif %}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <a href="/edu/secondary/teacher/enter-scores/" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                    <i data-lucide="edit-3" class="w-4 h-4"></i> Enter Scores
+                  </a>
+                  <a href="/edu/secondary/teacher/submit-results/" class="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors">
+                    <i data-lucide="send" class="w-4 h-4"></i> Submit Results
+                  </a>
                 </div>
               </div>
-            {% endfor %}
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {% for stat in teacher_dashboard_stats %}
+                <div class="bg-card rounded-xl border border-border p-5">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <p class="text-sm text-muted-foreground">{{ stat.label }}</p>
+                      <p class="text-2xl font-display font-bold mt-1">{{ stat.value }}</p>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-primary/10 text-primary">
+                      <i data-lucide="{{ stat.icon }}" class="w-4 h-4"></i>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              <div class="xl:col-span-2 bg-card rounded-xl border border-border p-5 space-y-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 class="font-display font-semibold">Current Work</h3>
+                    <p class="text-xs text-muted-foreground mt-1">Classes and subjects assigned to you</p>
+                  </div>
+                  <a href="/edu/secondary/teacher/my-classes/" class="text-sm text-primary font-medium">View all</a>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {% for item in teacher_class_cards|slice:":4" %}
+                    <div class="rounded-xl border border-border bg-background p-4 space-y-3">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="font-display font-semibold">{{ item.class.name }}</p>
+                          <p class="text-xs text-muted-foreground">{{ item.student_count }} students</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full bg-secondary/10 text-secondary px-2 py-0.5 text-xs font-medium">
+                          {% if item.term %}{{ item.term.get_term_display }}{% else %}Current{% endif %}
+                        </span>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        {% for subject in item.subjects|slice:":4" %}
+                          <span class="inline-flex items-center rounded-full bg-muted px-2 py-1 text-xs">{{ subject.subject.name }}</span>
+                        {% empty %}
+                          <span class="text-xs text-muted-foreground">No subject assigned yet.</span>
+                        {% endfor %}
+                      </div>
+                      <div class="flex flex-wrap gap-2 pt-1">
+                        <a href="/edu/secondary/teacher/enter-scores/" class="text-xs font-medium text-primary">Enter Scores</a>
+                        <span class="text-xs text-muted-foreground">/</span>
+                        <a href="/edu/secondary/teacher/submit-results/" class="text-xs font-medium text-primary">Submit Result</a>
+                      </div>
+                    </div>
+                  {% empty %}
+                    <div class="md:col-span-2 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No classes assigned yet.</div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+                <div>
+                  <h3 class="font-display font-semibold">Recent Submissions</h3>
+                  <p class="text-xs text-muted-foreground mt-1">Result movement and approval status</p>
+                </div>
+                <div class="space-y-3">
+                  {% for submission in teacher_recent_submissions %}
+                    <div class="rounded-lg border border-border bg-background p-3">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="text-sm font-medium">{{ submission.subject.name }}</p>
+                          <p class="text-xs text-muted-foreground">{{ submission.academic_class.name }} · {{ submission.submitted_at|date:"M d, Y" }}</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if submission.status == 'returned_for_correction' %}bg-destructive/10 text-destructive{% elif submission.status == 'published' %}bg-secondary/10 text-secondary{% else %}bg-muted text-muted-foreground{% endif %}">
+                          {{ submission.get_status_display }}
+                        </span>
+                      </div>
+                    </div>
+                  {% empty %}
+                    <p class="text-sm text-muted-foreground">No result submissions yet.</p>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        {% elif role == 'student' %}
+          <div id="dashboard" class="space-y-5">
+            <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                  <p class="text-xs uppercase tracking-wider text-muted-foreground">Student Portal</p>
+                  <h2 class="font-display text-2xl font-bold mt-1">{% if student_record %}{{ student_record.full_name }}{% else %}My Dashboard{% endif %}</h2>
+                  <p class="text-sm text-muted-foreground mt-2">{{ current_session_name|default:"No active session" }}{% if current_term_name %} / {{ current_term_name }}{% endif %}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <a href="/edu/secondary/student/pay-fees/" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                    <i data-lucide="wallet" class="w-4 h-4"></i> Pay Fees
+                  </a>
+                  <a href="/edu/secondary/student/results/" class="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors">
+                    <i data-lucide="file-check" class="w-4 h-4"></i> View Result
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              {% for card in student_dashboard_cards %}
+                <div class="bg-card rounded-xl border border-border p-5">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <p class="text-sm text-muted-foreground">{{ card.label }}</p>
+                      <p class="text-xl font-display font-bold mt-1">{{ card.value }}</p>
+                      <p class="text-xs text-muted-foreground mt-2">{{ card.hint }}</p>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-primary/10 text-primary">
+                      <i data-lucide="{{ card.icon }}" class="w-4 h-4"></i>
+                    </div>
+                  </div>
+                </div>
+              {% empty %}
+                <div class="sm:col-span-2 xl:col-span-4 rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">Student profile not found.</div>
+              {% endfor %}
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div class="lg:col-span-2 bg-card rounded-xl border border-border p-5 space-y-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="font-display font-semibold">Learning Progress</h3>
+                    <p class="text-xs text-muted-foreground mt-1">Your current and previous classes</p>
+                  </div>
+                  <a href="/edu/secondary/student/subjects-student/" class="text-sm text-primary font-medium">Open My Classes</a>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {% for item in student_class_rows|slice:":4" %}
+                    <a href="/edu/secondary/student/subjects-student/?class_key={{ item.key }}" class="rounded-xl border border-border bg-background p-4 hover:bg-muted/30 transition-colors">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="font-display font-semibold">{{ item.class.name }}</p>
+                          <p class="text-xs text-muted-foreground mt-1">{% if item.session %}{{ item.session.name }}{% else %}No session{% endif %}{% if item.term %} / {{ item.term.get_term_display }}{% endif %}</p>
+                        </div>
+                        {% if item.is_current %}
+                          <span class="rounded-full bg-secondary/10 text-secondary px-2 py-0.5 text-xs font-medium">Current Class</span>
+                        {% endif %}
+                      </div>
+                    </a>
+                  {% empty %}
+                    <p class="text-sm text-muted-foreground">No class history yet.</p>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+                <div>
+                  <h3 class="font-display font-semibold">Quick Links</h3>
+                  <p class="text-xs text-muted-foreground mt-1">Common student actions</p>
+                </div>
+                <div class="grid gap-2">
+                  <a href="/edu/secondary/student/test-scores/" class="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-3 text-sm hover:bg-muted/30">
+                    <span>Current Test Scores</span><i data-lucide="chevron-right" class="w-4 h-4"></i>
+                  </a>
+                  <a href="/edu/secondary/student/pay-fees/" class="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-3 text-sm hover:bg-muted/30">
+                    <span>Fees and Receipts</span><i data-lucide="chevron-right" class="w-4 h-4"></i>
+                  </a>
+                  <a href="/edu/secondary/student/profile/" class="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-3 text-sm hover:bg-muted/30">
+                    <span>Update Profile</span><i data-lucide="chevron-right" class="w-4 h-4"></i>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% else %}
+          <div id="dashboard">
+            <h2 class="font-display text-2xl font-bold mb-4">{{ role_label }} Dashboard</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {% for stat in stats %}
+                <div class="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow">
+                  <div class="flex items-start justify-between">
+                    <div>
+                      <p class="text-sm text-muted-foreground">{{ stat.label }}</p>
+                      <p class="text-2xl font-display font-bold mt-1">{{ stat.value }}</p>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-primary/10 text-primary">
+                      <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
       {% endif %}
 
       {% if active_page == 'users' and role == 'admin' %}
@@ -777,29 +966,77 @@
       {% endif %}
 
       {% if active_page == 'my-classes' and role == 'teacher' %}
-        <div class="bg-card rounded-xl border border-border overflow-hidden">
-          <div class="flex items-center justify-between p-4 border-b border-border">
-            <h3 class="font-display font-semibold">My Classes</h3>
+        <div class="space-y-5">
+          <div class="bg-card rounded-2xl border border-border p-5">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <p class="text-xs uppercase tracking-wider text-muted-foreground">Teaching Load</p>
+                <h3 class="font-display text-2xl font-bold mt-1">My Classes</h3>
+                <p class="text-sm text-muted-foreground mt-2">Each class shows your subjects, students, and current result status.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <a href="/edu/secondary/teacher/enter-scores/" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                  <i data-lucide="edit-3" class="w-4 h-4"></i> Enter Scores
+                </a>
+                <a href="/edu/secondary/teacher/my-students/" class="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors">
+                  <i data-lucide="users" class="w-4 h-4"></i> My Students
+                </a>
+              </div>
+            </div>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead>
-                <tr class="bg-muted/50">
-                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
-                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Students</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-border">
-                {% for cls in teacher_classes %}
-                  <tr class="hover:bg-muted/30 transition-colors">
-                    <td class="px-4 py-3 text-sm">{{ cls.name }}</td>
-                    <td class="px-4 py-3 text-sm">{{ cls.students.count }}</td>
-                  </tr>
-                {% empty %}
-                  <tr><td colspan="2" class="px-4 py-3 text-sm">No classes assigned yet.</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {% for item in teacher_class_cards %}
+              <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <h4 class="font-display text-lg font-semibold">{{ item.class.name }}</h4>
+                    <p class="text-sm text-muted-foreground mt-1">
+                      {% if item.session %}{{ item.session.name }}{% else %}No session{% endif %}
+                      {% if item.term %} / {{ item.term.get_term_display }}{% endif %}
+                    </p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-2xl font-display font-bold">{{ item.student_count }}</p>
+                    <p class="text-xs text-muted-foreground">Students</p>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <p class="text-xs uppercase tracking-wider text-muted-foreground">Assigned Subjects</p>
+                  {% for subject in item.subjects %}
+                    <div class="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2.5">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                          <i data-lucide="book-open" class="w-4 h-4"></i>
+                        </span>
+                        <span class="text-sm font-medium truncate">{{ subject.subject.name }}</span>
+                      </div>
+                      <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if subject.status_code == 'returned_for_correction' %}bg-destructive/10 text-destructive{% elif subject.status_code == 'published' %}bg-secondary/10 text-secondary{% elif subject.status_code == 'draft' %}bg-muted text-muted-foreground{% else %}bg-primary/10 text-primary{% endif %}">
+                        {{ subject.status }}
+                      </span>
+                    </div>
+                  {% empty %}
+                    <div class="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">No subject assigned for this class yet.</div>
+                  {% endfor %}
+                </div>
+
+                <div class="flex flex-wrap gap-2 pt-1">
+                  <a href="/edu/secondary/teacher/enter-scores/" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-3 py-2 text-xs font-medium hover:bg-primary/90 transition-colors">
+                    Enter Scores
+                  </a>
+                  <a href="/edu/secondary/teacher/submit-results/" class="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-muted transition-colors">
+                    Submit Result
+                  </a>
+                </div>
+              </div>
+            {% empty %}
+              <div class="xl:col-span-2 rounded-xl border border-dashed border-border bg-card p-8 text-center">
+                <i data-lucide="school" class="w-8 h-8 mx-auto text-muted-foreground"></i>
+                <p class="font-medium mt-3">No classes assigned yet.</p>
+                <p class="text-sm text-muted-foreground mt-1">Ask Registry/Admin to assign this teacher to a class and subject.</p>
+              </div>
+            {% endfor %}
           </div>
         </div>
       {% endif %}
@@ -1741,96 +1978,127 @@
             .no-print { display: none !important; }
           }
         </style>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="bg-card rounded-xl border border-border overflow-hidden">
-            <div class="p-4 border-b border-border">
-              <h3 class="font-display font-semibold">My Classes</h3>
-              <p class="text-xs text-muted-foreground mt-1">Current and previous classes</p>
-            </div>
-            <div class="divide-y divide-border">
-              {% for item in student_class_rows %}
-                <a href="/edu/secondary/student/subjects-student/?class_key={{ item.key }}" class="block p-4 hover:bg-muted/30 transition-colors {% if selected_student_class.key == item.key %}bg-muted/40{% endif %}">
-                  <div class="flex items-center justify-between gap-3">
-                    <div>
-                      <p class="font-medium text-sm">{{ item.class.name }}</p>
-                      <p class="text-xs text-muted-foreground">{% if item.session %}{{ item.session.name }}{% else %}No session{% endif %}{% if item.term %} / {{ item.term.get_term_display }}{% endif %}</p>
-                    </div>
-                    {% if item.is_current %}
-                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary/10 text-secondary">Current Class</span>
-                    {% endif %}
-                  </div>
-                </a>
-              {% empty %}
-                <div class="p-4 text-sm text-muted-foreground">No class history found yet.</div>
-              {% endfor %}
+        <div class="space-y-5">
+          <div class="bg-card rounded-2xl border border-border p-5">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <p class="text-xs uppercase tracking-wider text-muted-foreground">Academic Journey</p>
+                <h3 class="font-display text-2xl font-bold mt-1">My Classes</h3>
+                <p class="text-sm text-muted-foreground mt-2">View your current class, previous classes, subjects, grades, and report cards.</p>
+              </div>
+              {% if selected_class_results %}
+                <button type="button" class="no-print inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors" data-print-student-ids>
+                  <i data-lucide="printer" class="w-4 h-4"></i> Print / Download
+                </button>
+              {% endif %}
             </div>
           </div>
 
-          <div class="lg:col-span-2 space-y-4">
-            <div class="bg-card rounded-xl border border-border p-5 class-report-print space-y-4">
-              <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                <div>
-                  <h3 class="font-display font-semibold text-lg">{% if selected_student_class %}{{ selected_student_class.class.name }}{% else %}Class Report{% endif %}</h3>
-                  <p class="text-sm text-muted-foreground">
-                    {% if selected_student_class.session %}{{ selected_student_class.session.name }}{% else %}No session{% endif %}
-                    {% if selected_student_class.term %} / {{ selected_student_class.term.get_term_display }}{% endif %}
-                  </p>
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div class="lg:col-span-4 bg-card rounded-xl border border-border overflow-hidden">
+              <div class="p-4 border-b border-border">
+                <h4 class="font-display font-semibold">Class Timeline</h4>
+                <p class="text-xs text-muted-foreground mt-1">Current and previous academic records</p>
+              </div>
+              <div class="p-3 space-y-3">
+                {% for item in student_class_rows %}
+                  <a href="/edu/secondary/student/subjects-student/?class_key={{ item.key }}" class="block rounded-xl border {% if selected_student_class.key == item.key %}border-primary bg-primary/5{% else %}border-border bg-background hover:bg-muted/30{% endif %} p-4 transition-colors">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0">
+                        <p class="font-display font-semibold truncate">{{ item.class.name }}</p>
+                        <p class="text-xs text-muted-foreground mt-1">{% if item.session %}{{ item.session.name }}{% else %}No session{% endif %}{% if item.term %} / {{ item.term.get_term_display }}{% endif %}</p>
+                      </div>
+                      {% if item.is_current %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary/10 text-secondary flex-shrink-0">Current Class</span>
+                      {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground flex-shrink-0">Previous</span>
+                      {% endif %}
+                    </div>
+                    <div class="flex items-center justify-between mt-4 text-xs">
+                      <span class="text-muted-foreground">Open report</span>
+                      <i data-lucide="chevron-right" class="w-4 h-4 text-muted-foreground"></i>
+                    </div>
+                  </a>
+                {% empty %}
+                  <div class="rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground text-center">No class history found yet.</div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="lg:col-span-8 space-y-4">
+              <div class="bg-card rounded-xl border border-border p-5 class-report-print space-y-5">
+                <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                  <div>
+                    <p class="text-xs uppercase tracking-wider text-muted-foreground">Selected Class</p>
+                    <h4 class="font-display text-xl font-bold mt-1">{% if selected_student_class %}{{ selected_student_class.class.name }}{% else %}Class Report{% endif %}</h4>
+                    <p class="text-sm text-muted-foreground mt-1">
+                      {% if selected_student_class.session %}{{ selected_student_class.session.name }}{% else %}No session{% endif %}
+                      {% if selected_student_class.term %} / {{ selected_student_class.term.get_term_display }}{% endif %}
+                    </p>
+                  </div>
+                  <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium {% if selected_class_results %}bg-secondary/10 text-secondary{% else %}bg-muted text-muted-foreground{% endif %}">
+                    {% if selected_class_results %}Report Published{% else %}Not Published{% endif %}
+                  </span>
                 </div>
-                <button type="button" class="no-print inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors" data-print-student-ids>
-                  Print / Download
-                </button>
-              </div>
 
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                <div><span class="text-muted-foreground">Student:</span> {{ student_record.full_name }}</div>
-                <div><span class="text-muted-foreground">Admission No:</span> {{ student_record.student_id }}</div>
-                <div><span class="text-muted-foreground">Position:</span> {{ selected_class_report_position|default:"-" }}</div>
-              </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div class="rounded-xl border border-border bg-background p-4">
+                    <p class="text-xs text-muted-foreground">Student</p>
+                    <p class="font-semibold mt-1">{{ student_record.full_name|default:"-" }}</p>
+                  </div>
+                  <div class="rounded-xl border border-border bg-background p-4">
+                    <p class="text-xs text-muted-foreground">Admission No</p>
+                    <p class="font-semibold mt-1">{{ student_record.student_id|default:"-" }}</p>
+                  </div>
+                  <div class="rounded-xl border border-border bg-background p-4">
+                    <p class="text-xs text-muted-foreground">Average</p>
+                    <p class="font-semibold mt-1">{{ selected_class_report_average }}</p>
+                  </div>
+                  <div class="rounded-xl border border-border bg-background p-4">
+                    <p class="text-xs text-muted-foreground">Position</p>
+                    <p class="font-semibold mt-1">{{ selected_class_report_position|default:"-" }}</p>
+                  </div>
+                </div>
 
-              <div class="overflow-x-auto rounded-xl border border-border">
-                <table class="w-full">
-                  <thead>
-                    <tr class="bg-muted/50">
-                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
-                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 1</th>
-                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 2</th>
-                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Assignment</th>
-                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Exam</th>
-                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Total</th>
-                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Grade</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-border">
+                {% if selected_class_results %}
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {% for result in selected_class_results %}
-                      <tr>
-                        <td class="px-4 py-3 text-sm">{{ result.subject.name }}</td>
-                        <td class="px-4 py-3 text-sm">{{ result.test1 }}</td>
-                        <td class="px-4 py-3 text-sm">{{ result.test2 }}</td>
-                        <td class="px-4 py-3 text-sm">{{ result.assignment }}</td>
-                        <td class="px-4 py-3 text-sm">{{ result.exam }}</td>
-                        <td class="px-4 py-3 text-sm">{{ result.total }}</td>
-                        <td class="px-4 py-3 text-sm">{{ result.grade }}</td>
-                      </tr>
-                    {% empty %}
-                      {% for subject in selected_class_subjects %}
-                        <tr>
-                          <td class="px-4 py-3 text-sm">{{ subject.name }}</td>
-                          <td colspan="6" class="px-4 py-3 text-sm text-muted-foreground">Report card not published for this class/session yet.</td>
-                        </tr>
-                      {% empty %}
-                        <tr><td colspan="7" class="px-4 py-3 text-sm text-muted-foreground">No subjects found for this class.</td></tr>
-                      {% endfor %}
+                      <div class="rounded-xl border border-border bg-background p-4">
+                        <div class="flex items-start justify-between gap-3">
+                          <div>
+                            <p class="font-semibold">{{ result.subject.name }}</p>
+                            <p class="text-xs text-muted-foreground mt-1">Test 1: {{ result.test1 }} · Test 2: {{ result.test2 }} · Assignment: {{ result.assignment }}</p>
+                          </div>
+                          <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 text-primary font-bold">{{ result.grade }}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 mt-4 text-sm">
+                          <div class="rounded-lg bg-muted/40 p-2"><span class="text-muted-foreground">Exam</span><br><strong>{{ result.exam }}</strong></div>
+                          <div class="rounded-lg bg-muted/40 p-2"><span class="text-muted-foreground">Total</span><br><strong>{{ result.total }}</strong></div>
+                        </div>
+                      </div>
                     {% endfor %}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+                {% else %}
+                  <div class="rounded-xl border border-dashed border-border p-6">
+                    <p class="font-medium">Report card is not published yet.</p>
+                    <p class="text-sm text-muted-foreground mt-1">Subjects for this class will appear with scores after Examiner and Admin approval.</p>
+                    <div class="flex flex-wrap gap-2 mt-4">
+                      {% for subject in selected_class_subjects %}
+                        <span class="inline-flex items-center rounded-full bg-muted px-2 py-1 text-xs">{{ subject.name }}</span>
+                      {% empty %}
+                        <span class="text-sm text-muted-foreground">No subjects found for this class.</span>
+                      {% endfor %}
+                    </div>
+                  </div>
+                {% endif %}
 
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                <div><span class="text-muted-foreground">Total Score:</span> {{ selected_class_report_total }}</div>
-                <div><span class="text-muted-foreground">Average:</span> {{ selected_class_report_average }}</div>
-                <div><span class="text-muted-foreground">Approval:</span> {{ selected_class_report_submission.get_status_display|default:"Not Published" }}</div>
-                <div class="md:col-span-3"><span class="text-muted-foreground">Teacher Comment:</span> {{ selected_class_report_submission.teacher_comment|default:"-" }}</div>
-                <div class="md:col-span-3"><span class="text-muted-foreground">Examiner/Admin:</span> {{ selected_class_report_submission.examiner_comment|default:"-" }} / {{ selected_class_report_submission.admin_comment|default:"-" }}</div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <div class="rounded-xl border border-border bg-background p-4"><span class="text-muted-foreground">Total Score</span><br><strong>{{ selected_class_report_total }}</strong></div>
+                  <div class="rounded-xl border border-border bg-background p-4"><span class="text-muted-foreground">Approval</span><br><strong>{{ selected_class_report_submission.get_status_display|default:"Not Published" }}</strong></div>
+                  <div class="rounded-xl border border-border bg-background p-4"><span class="text-muted-foreground">Subjects</span><br><strong>{% if selected_class_results %}{{ selected_class_results.count }}{% else %}{{ selected_class_subjects.count }}{% endif %}</strong></div>
+                  <div class="md:col-span-3 rounded-xl border border-border bg-background p-4"><span class="text-muted-foreground">Teacher Comment</span><br><strong>{{ selected_class_report_submission.teacher_comment|default:"-" }}</strong></div>
+                  <div class="md:col-span-3 rounded-xl border border-border bg-background p-4"><span class="text-muted-foreground">Examiner/Admin Comment</span><br><strong>{{ selected_class_report_submission.examiner_comment|default:"-" }} / {{ selected_class_report_submission.admin_comment|default:"-" }}</strong></div>
+                </div>
               </div>
             </div>
           </div>

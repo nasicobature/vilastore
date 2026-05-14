@@ -1927,6 +1927,10 @@ def secondary_page(request, role, page):
     teacher_subject_map = {}
     teacher_results_map = {}
     teacher_submissions = ResultSubmission.objects.none()
+    teacher_dashboard_stats = []
+    teacher_class_cards = []
+    teacher_recent_submissions = []
+    teacher_pending_corrections = []
     teacher_subject_assignments = TeacherSubjectAssignment.objects.filter(institution=institution).select_related('teacher', 'academic_class', 'subject')
     admin_result_submissions = ResultSubmission.objects.none()
     selected_admin_submission = None
@@ -1973,6 +1977,7 @@ def secondary_page(request, role, page):
     student_fee_total = Decimal('0.00')
     student_paid_total = Decimal('0.00')
     student_outstanding_total = Decimal('0.00')
+    student_dashboard_cards = []
     selected_id_card_class_id = request.GET.get('class', '').strip()
     selected_id_card_session_id = request.GET.get('session', '').strip()
     if page == 'student-ids':
@@ -2025,6 +2030,50 @@ def secondary_page(request, role, page):
                 }
 
             teacher_submissions = ResultSubmission.objects.filter(submitted_by=staff).select_related('academic_class', 'subject').order_by('-submitted_at')
+            teacher_recent_submissions = teacher_submissions[:6]
+            teacher_pending_corrections = teacher_submissions.filter(status='returned_for_correction')[:5]
+            assigned_subject_ids = subject_assignments.values_list('subject_id', flat=True)
+            saved_scores = Result.objects.filter(
+                institution=institution,
+                teacher=staff,
+                academic_class__in=teacher_classes,
+                subject_id__in=assigned_subject_ids,
+            )
+            if current_session:
+                saved_scores = saved_scores.filter(academic_session=current_session)
+            if current_term:
+                saved_scores = saved_scores.filter(academic_term=current_term)
+            submitted_count = teacher_submissions.exclude(status='draft').count()
+            teacher_dashboard_stats = [
+                {'label': 'Assigned Classes', 'value': teacher_classes.count(), 'icon': 'school'},
+                {'label': 'Assigned Subjects', 'value': subject_assignments.count(), 'icon': 'book-open'},
+                {'label': 'My Students', 'value': teacher_students.count(), 'icon': 'users'},
+                {'label': 'Scores Saved', 'value': saved_scores.count(), 'icon': 'clipboard-check'},
+                {'label': 'Submitted Results', 'value': submitted_count, 'icon': 'send'},
+                {'label': 'Corrections Needed', 'value': teacher_submissions.filter(status='returned_for_correction').count(), 'icon': 'alert-circle'},
+            ]
+            for cls in teacher_classes:
+                class_subjects_for_teacher = list(subject_assignments.filter(academic_class=cls))
+                subject_rows = []
+                for assignment in class_subjects_for_teacher:
+                    submission = teacher_submissions.filter(
+                        academic_class=cls,
+                        subject=assignment.subject,
+                        academic_session=current_session,
+                        academic_term=current_term,
+                    ).first()
+                    subject_rows.append({
+                        'subject': assignment.subject,
+                        'status': submission.get_status_display() if submission else 'Draft',
+                        'status_code': submission.status if submission else 'draft',
+                    })
+                teacher_class_cards.append({
+                    'class': cls,
+                    'student_count': teacher_students.filter(academic_class=cls).count(),
+                    'subjects': subject_rows,
+                    'session': cls.academic_session or current_session,
+                    'term': cls.academic_term or current_term,
+                })
     elif role == 'student':
         student_record = Student.objects.filter(user=request.user, institution=institution).select_related('academic_class').first()
         if student_record:
@@ -2259,6 +2308,32 @@ def secondary_page(request, role, page):
                     'outstanding': outstanding,
                     'is_paid': outstanding <= 0,
                 })
+            student_dashboard_cards = [
+                {
+                    'label': 'Current Class',
+                    'value': student_record.academic_class.name if student_record.academic_class else '-',
+                    'hint': f"{current_session.name if current_session else 'No session'} / {current_term.get_term_display() if current_term else 'No term'}",
+                    'icon': 'school',
+                },
+                {
+                    'label': 'Outstanding Fees',
+                    'value': f"NGN {student_outstanding_total}",
+                    'hint': 'Balance from assigned fees',
+                    'icon': 'wallet',
+                },
+                {
+                    'label': 'Current Scores',
+                    'value': student_current_results.count(),
+                    'hint': 'Subjects with saved test records',
+                    'icon': 'clipboard-list',
+                },
+                {
+                    'label': 'Report Card',
+                    'value': 'Published' if student_report_results.exists() else 'Not Published',
+                    'hint': 'Visible after admin approval',
+                    'icon': 'file-check',
+                },
+            ]
     elif role == 'examiner':
         examiner_submissions = ResultSubmission.objects.filter(
             institution=institution,
@@ -2380,6 +2455,10 @@ def secondary_page(request, role, page):
         'teacher_subject_map': teacher_subject_map,
         'teacher_results_map': teacher_results_map,
         'teacher_submissions': teacher_submissions,
+        'teacher_dashboard_stats': teacher_dashboard_stats,
+        'teacher_class_cards': teacher_class_cards,
+        'teacher_recent_submissions': teacher_recent_submissions,
+        'teacher_pending_corrections': teacher_pending_corrections,
         'teacher_subject_assignments': teacher_subject_assignments,
         'admin_result_submissions': admin_result_submissions,
         'selected_admin_submission': selected_admin_submission,
@@ -2420,6 +2499,7 @@ def secondary_page(request, role, page):
         'student_fee_total': student_fee_total,
         'student_paid_total': student_paid_total,
         'student_outstanding_total': student_outstanding_total,
+        'student_dashboard_cards': student_dashboard_cards,
         'selected_id_card_class_id': selected_id_card_class_id,
         'selected_id_card_session_id': selected_id_card_session_id,
         'current_session_name': current_session.name if current_session else '',
