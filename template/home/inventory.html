@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="{% static 'js/app.js' %}" defer></script>
+  <script src="{% static 'js/offline-web.js' %}" defer></script>
 </head>
 
 <body>
@@ -162,7 +163,14 @@
 
         <tbody>
         {% for product in products %}
-          <tr>
+          <tr
+            data-offline-product
+            data-product-id="{{ product.id }}"
+            data-product-name="{{ product.name|escapejs }}"
+            data-product-code="{{ product.code|default:''|escapejs }}"
+            data-product-price="{{ product.display_price }}"
+            data-product-stock="{{ product.display_stock }}"
+          >
             <td data-label="Name">{{ product.name }}</td>
             <td data-label="Code">{{ product.code|default:"-" }}</td>
             <td data-label="Category">{{ product.category.name|default:"-" }}</td>

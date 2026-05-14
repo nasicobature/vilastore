@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="{% static 'js/app.js' %}" defer></script>
+  <script src="{% static 'js/offline-web.js' %}" defer></script>
 </head>
 <body class="has-cart-panel">
 <div class="app-container">
@@ -101,7 +102,15 @@
 
         <div class="products-grid">
           {% for product in products %}
-            <div class="product-card">
+            <div
+              class="product-card"
+              data-offline-product
+              data-product-id="{{ product.id }}"
+              data-product-name="{{ product.name|escapejs }}"
+              data-product-code="{{ product.code|default:''|escapejs }}"
+              data-product-price="{{ product.display_price }}"
+              data-product-stock="{{ product.display_stock }}"
+            >
 
               <form method="POST" action="{% url 'add_to_cart' product.id %}">
                 {% csrf_token %}
@@ -144,6 +153,7 @@
       <div class="cart-panel">
 
         <h3>Shopping Cart</h3>
+        <div id="offlineCartMirror"></div>
         <form method="POST" action="{% url 'add_to_cart_by_code' %}" style="margin-bottom:0.75rem;">
           {% csrf_token %}
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -170,7 +180,14 @@
         {% if cart %}
           <ul>
             {% for key, item in cart.items %}
-              <li style="margin-bottom:10px;">
+              <li
+                style="margin-bottom:10px;"
+                data-offline-cart-item
+                data-product-id="{{ key }}"
+                data-product-name="{{ item.name|escapejs }}"
+                data-product-price="{{ item.price }}"
+                data-product-quantity="{{ item.quantity }}"
+              >
                 <strong>{{ item.name }}</strong><br>
                 {{ item.quantity }} × ₦{{ item.price }}
 
@@ -290,7 +307,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         setPreview(`Found: ${data.name} (Stock: ${data.stock})`);
       } catch (err) {
-        setPreview('Unable to lookup code right now.');
+        const offlineProduct = window.VilaStoreOffline && window.VilaStoreOffline.findProductByCode(code);
+        if (offlineProduct) {
+          setPreview(`Found offline: ${offlineProduct.name} (Last stock: ${offlineProduct.stock})`);
+        } else {
+          setPreview('Unable to lookup code right now.');
+        }
       }
     }
 
