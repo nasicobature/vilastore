@@ -1654,6 +1654,255 @@ button {
   font-weight: 700;
 }
 
+/* Business Analysis */
+.business-analysis {
+  margin-bottom: 1.75rem;
+  padding: 1.25rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+}
+
+.business-analysis-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.analysis-eyebrow {
+  display: inline-flex;
+  margin-bottom: 0.35rem;
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.business-analysis-header h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.business-analysis-header p {
+  max-width: 680px;
+  margin-top: 0.25rem;
+  color: var(--muted-foreground);
+}
+
+.health-score-card {
+  min-width: 128px;
+  padding: 0.85rem 1rem;
+  text-align: right;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 0.25rem);
+  background: var(--background);
+}
+
+.health-score-card span,
+.health-score-card small {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.health-score-card strong {
+  display: inline-block;
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.health-score-card.is-healthy strong {
+  color: var(--profit);
+}
+
+.health-score-card.is-watch strong {
+  color: var(--warning-foreground);
+}
+
+.health-score-card.is-risk strong {
+  color: var(--destructive);
+}
+
+.business-analysis .summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem !important;
+}
+
+.business-analysis .summary-item {
+  min-height: 86px;
+  padding: 0.85rem;
+  text-align: left;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 0.25rem);
+}
+
+.business-analysis .summary-label {
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.business-analysis .summary-value {
+  display: block;
+  font-size: 1.1rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.analysis-section {
+  margin-bottom: 1rem;
+}
+
+.analysis-section-title,
+.analysis-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.analysis-section-title h3,
+.analysis-card-header h3 {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.analysis-section-title span,
+.analysis-card-header span {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.recommendation-grid,
+.insight-grid,
+.analysis-card-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.recommendation-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.recommendation-card,
+.insight-card,
+.analysis-card-grid > div {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 0.2rem);
+  background: var(--background);
+}
+
+.recommendation-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  font-weight: 600;
+}
+
+.recommendation-card svg {
+  width: 18px;
+  height: 18px;
+  margin-top: 0.15rem;
+  color: var(--primary);
+  flex: 0 0 auto;
+}
+
+.insight-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  margin-bottom: 1rem !important;
+}
+
+.insight-card {
+  padding: 0.9rem 1rem !important;
+  border-left: 4px solid var(--primary);
+}
+
+.insight-card p {
+  margin-top: 0.35rem !important;
+  color: var(--muted-foreground) !important;
+  font-size: 0.88rem !important;
+}
+
+.insight-danger {
+  border-left-color: var(--destructive);
+}
+
+.insight-warning {
+  border-left-color: var(--warning);
+}
+
+.insight-success {
+  border-left-color: var(--profit);
+}
+
+.analysis-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+  gap: 1rem !important;
+  margin-bottom: 0 !important;
+}
+
+.analysis-card-grid > div {
+  padding: 1rem;
+  min-width: 0;
+}
+
+.analysis-card-grid > div > h4 {
+  margin-bottom: 0.75rem !important;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.analysis-card-grid > div > div:not(.summary-item):not(.analysis-card-header) {
+  gap: 0 !important;
+}
+
+.analysis-card-grid > div [style*="border-bottom"] {
+  padding: 0.55rem 0 !important;
+}
+
+.analysis-card-grid > div [style*="color:var(--muted-foreground)"] {
+  color: var(--muted-foreground) !important;
+}
+
+.analysis-card-grid > div [style*="text-align:right"] {
+  text-align: right !important;
+}
+
+.analysis-card-grid .summary-item {
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 0.25rem);
+  background: var(--card);
+}
+
+@media (max-width: 768px) {
+  .business-analysis-header {
+    flex-direction: column;
+  }
+
+  .health-score-card {
+    width: 100%;
+    text-align: left;
+  }
+}
+
 /* Button Full Width */
 .btn-full {
   width: 100%;

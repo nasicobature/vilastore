@@ -148,19 +148,21 @@
         </div>
       </section>
 
-      <section class="card" style="padding:1rem 1.25rem;margin-bottom:1.5rem;">
-        <div class="card-header" style="margin-bottom:1rem;">
+      <section class="business-analysis">
+        <div class="business-analysis-header">
           <div>
-            <h3>Business Data Analysis</h3>
-            <p style="color:var(--muted-foreground);margin:0.25rem 0 0;">Automatic insights from sales, profit, inventory, customers, and expenses.</p>
+            <span class="analysis-eyebrow">Decision Center</span>
+            <h2>Business Data Analysis</h2>
+            <p>Automatic insights from sales, profit, inventory, customers, credit, branches, and expenses.</p>
+          </div>
+          <div class="health-score-card {% if health_score < 50 %}is-risk{% elif health_score < 75 %}is-watch{% else %}is-healthy{% endif %}">
+            <span>Health Score</span>
+            <strong>{{ health_score }}</strong>
+            <small>/100</small>
           </div>
         </div>
 
         <div class="summary-grid" style="margin-bottom:1rem;">
-          <div class="summary-item">
-            <span class="summary-label">Business Health Score</span>
-            <span class="summary-value {% if health_score < 50 %}text-destructive{% else %}text-profit{% endif %}">{{ health_score }}/100</span>
-          </div>
           <div class="summary-item">
             <span class="summary-label">Gross Margin</span>
             <span class="summary-value text-profit">{{ gross_margin_percent|floatformat:1 }}%</span>
@@ -191,27 +193,31 @@
           </div>
         </div>
 
-        <div style="margin-bottom:1rem;">
-          <h4 style="margin-bottom:0.65rem;">Recommended Actions</h4>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0.65rem;">
+        <div class="analysis-section">
+          <div class="analysis-section-title">
+            <h3>Recommended Actions</h3>
+            <span>{{ action_recommendations|length }} priorities</span>
+          </div>
+          <div class="recommendation-grid">
             {% for recommendation in action_recommendations %}
-              <div class="card" style="padding:0.75rem 1rem;border:1px dashed var(--border);">
-                {{ recommendation }}
+              <div class="recommendation-card">
+                <i data-lucide="check-circle-2"></i>
+                <span>{{ recommendation }}</span>
               </div>
             {% endfor %}
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;margin-bottom:1rem;">
+        <div class="insight-grid">
           {% for insight in business_insights %}
-          <div class="card" style="padding:0.85rem 1rem;border-left:4px solid {% if insight.tone == 'danger' %}#dc2626{% elif insight.tone == 'warning' %}#d97706{% elif insight.tone == 'success' %}#059669{% else %}#2563eb{% endif %};">
+          <div class="insight-card insight-{{ insight.tone }}">
             <strong>{{ insight.title }}</strong>
-            <p style="color:var(--muted-foreground);font-size:0.9rem;margin:0.35rem 0 0;">{{ insight.message }}</p>
+            <p>{{ insight.message }}</p>
           </div>
           {% endfor %}
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;">
+        <div class="analysis-card-grid">
           <div>
             <h4 style="margin-bottom:0.65rem;">Top Product Analysis</h4>
             {% if top_product_rows %}
