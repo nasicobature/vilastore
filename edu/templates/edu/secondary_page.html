@@ -2974,6 +2974,19 @@
       {% endif %}
 
       {% if active_page == 'test-scores' and role == 'student' %}
+        <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">Current Assessment</p>
+              <h3 class="font-display text-2xl font-bold mt-1">Test Scores</h3>
+              <p class="text-sm text-muted-foreground mt-2">Current class, current session, and current term scores only.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Class</span><br><strong>{% if student_record.academic_class %}{{ student_record.academic_class.name }}{% else %}-{% endif %}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Subjects</span><br><strong>{{ student_current_results.count }}</strong></div>
+            </div>
+          </div>
+        </div>
         <div class="bg-card rounded-xl border border-border overflow-hidden">
           <div class="flex items-center justify-between p-4 border-b border-border">
             <h3 class="font-display font-semibold">My Test Scores</h3>
@@ -3007,29 +3020,28 @@
       {% endif %}
 
       {% if active_page == 'results' and role == 'student' %}
+        <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">Published Report</p>
+              <h3 class="font-display text-2xl font-bold mt-1">Exam Result</h3>
+              <p class="text-sm text-muted-foreground mt-2">Your report card appears only after Examiner review and Admin publication.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Status</span><br><strong>{% if student_report_results %}Published{% else %}Not Published{% endif %}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Average</span><br><strong>{{ student_report_average }}</strong></div>
+            </div>
+          </div>
+        </div>
         {% if student_report_results %}
           <style>
             @media print {
               body * { visibility: hidden; }
               .report-card-print, .report-card-print * { visibility: visible; }
               .report-card-print { position: absolute; left: 0; top: 0; width: 100%; }
-            .no-print { display: none !important; }
-          }
-        </style>
-        {% if role == 'registry' %}
-          <div class="bg-card rounded-2xl border border-border p-5 md:p-6 no-print">
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div>
-                <p class="text-xs uppercase tracking-wider text-muted-foreground">Identity Records</p>
-                <h3 class="font-display text-2xl font-bold mt-1">Student ID Cards</h3>
-                <p class="text-sm text-muted-foreground mt-2">Filter students by class/session, then print or download clean ID cards.</p>
-              </div>
-              <div class="rounded-xl border border-border bg-background px-4 py-3 text-sm">
-                <span class="text-muted-foreground">Available Students</span><br><strong>{{ id_card_students.count }}</strong>
-              </div>
-            </div>
-          </div>
-        {% endif %}
+              .no-print { display: none !important; }
+            }
+          </style>
         <div class="space-y-4">
             <div class="flex justify-end">
               <button type="button" class="no-print inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors" data-print-student-ids>Print / Download</button>
@@ -3049,6 +3061,20 @@
       {% endif %}
 
       {% if active_page == 'pay-fees' and role == 'student' %}
+        <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">Fees and Receipts</p>
+              <h3 class="font-display text-2xl font-bold mt-1">Pay Fees</h3>
+              <p class="text-sm text-muted-foreground mt-2">See assigned fees, outstanding balance, online payment access, and receipt history.</p>
+            </div>
+            <div class="grid grid-cols-3 gap-3 text-sm">
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Total</span><br><strong>NGN {{ student_fee_total|floatformat:2 }}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Paid</span><br><strong>NGN {{ student_paid_total|floatformat:2 }}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Balance</span><br><strong>NGN {{ student_outstanding_total|floatformat:2 }}</strong></div>
+            </div>
+          </div>
+        </div>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div class="bg-card rounded-xl border border-border p-5">
             <p class="text-sm text-muted-foreground">Total Fees</p>
@@ -3151,6 +3177,19 @@
       {% endif %}
 
       {% if active_page == 'profile' and role == 'student' %}
+        <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">Personal Information</p>
+              <h3 class="font-display text-2xl font-bold mt-1">My Profile</h3>
+              <p class="text-sm text-muted-foreground mt-2">Update contact and guardian details. School records stay protected.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Admission No</span><br><strong>{{ student_record.student_id|default:"-" }}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Class</span><br><strong>{% if student_record.academic_class %}{{ student_record.academic_class.name }}{% else %}-{% endif %}</strong></div>
+            </div>
+          </div>
+        </div>
         <div class="bg-card rounded-xl border border-border p-5 space-y-4">
           <div class="flex items-center gap-4">
             <div class="w-20 h-24 rounded-xl bg-muted overflow-hidden flex items-center justify-center">
@@ -3223,15 +3262,17 @@
         </div>
       {% endif %}
 
-      {% for item in nav_placeholders %}
-        {% if active_page == item.id %}
-          <div class="bg-card rounded-xl border border-border p-5">
-            <span class="coming-soon-pill">Coming Soon</span>
-            <h3 class="font-display font-semibold mb-2">{{ item.label }}</h3>
-            <p class="text-sm text-muted-foreground">This module is planned for a future EduPortal release and should not be sold as fully active yet.</p>
-          </div>
-        {% endif %}
-      {% endfor %}
+      {% if role != 'student' %}
+        {% for item in nav_placeholders %}
+          {% if active_page == item.id %}
+            <div class="bg-card rounded-xl border border-border p-5">
+              <span class="coming-soon-pill">Coming Soon</span>
+              <h3 class="font-display font-semibold mb-2">{{ item.label }}</h3>
+              <p class="text-sm text-muted-foreground">This module is planned for a future EduPortal release and should not be sold as fully active yet.</p>
+            </div>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
     </main>
   </div>
 </div>
