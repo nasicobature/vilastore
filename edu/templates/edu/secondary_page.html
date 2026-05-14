@@ -66,7 +66,85 @@
       {{ term_map|json_script:"academic-term-map" }}
 
       {% if active_page == 'dashboard' %}
-        {% if role == 'registry' %}
+        {% if role == 'examiner' %}
+          <div id="dashboard" class="space-y-5">
+            <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                  <p class="text-xs uppercase tracking-wider text-muted-foreground">Examination Office</p>
+                  <h2 class="font-display text-2xl font-bold mt-1">Examiner Dashboard</h2>
+                  <p class="text-sm text-muted-foreground mt-2">Review teacher submissions, return corrections, approve results, and generate class rankings.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <a href="/edu/secondary/examiner/review-results/" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                    <i data-lucide="clipboard-check" class="w-4 h-4"></i> Review Results
+                  </a>
+                  <a href="/edu/secondary/examiner/result-sheets/" class="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors">
+                    <i data-lucide="list-ordered" class="w-4 h-4"></i> Result Sheets
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {% for card in examiner_dashboard_cards %}
+                <div class="bg-card rounded-xl border border-border p-5">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <p class="text-sm text-muted-foreground">{{ card.label }}</p>
+                      <p class="text-2xl font-display font-bold mt-1">{{ card.value }}</p>
+                      <p class="text-xs text-muted-foreground mt-2">{{ card.hint }}</p>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-primary/10 text-primary">
+                      <i data-lucide="{{ card.icon }}" class="w-4 h-4"></i>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              <div class="xl:col-span-2 bg-card rounded-xl border border-border overflow-hidden">
+                <div class="flex items-center justify-between p-4 border-b border-border">
+                  <div>
+                    <h3 class="font-display font-semibold">Review Queue</h3>
+                    <p class="text-xs text-muted-foreground mt-1">Teacher submissions and current processing status.</p>
+                  </div>
+                  <a href="/edu/secondary/examiner/review-results/" class="text-sm text-primary font-medium">Open queue</a>
+                </div>
+                <div class="divide-y divide-border">
+                  {% for submission in examiner_recent_submissions %}
+                    <a href="/edu/secondary/examiner/review-results/?submission={{ submission.id }}" class="block p-4 hover:bg-muted/30 transition-colors">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="font-medium text-sm">{{ submission.academic_class.name }} · {{ submission.subject.name }}</p>
+                          <p class="text-xs text-muted-foreground">Teacher: {{ submission.submitted_by.full_name }} · {{ submission.submitted_at|date:"M d, Y" }}</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if submission.status == 'submitted_to_examiner' %}bg-primary/10 text-primary{% elif submission.status == 'returned_for_correction' %}bg-destructive/10 text-destructive{% elif submission.status == 'published' %}bg-secondary/10 text-secondary{% else %}bg-muted text-muted-foreground{% endif %}">
+                          {{ submission.get_status_display }}
+                        </span>
+                      </div>
+                    </a>
+                  {% empty %}
+                    <div class="p-5 text-sm text-muted-foreground">No result submissions yet.</div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+                <div>
+                  <h3 class="font-display font-semibold">Examiner Workflow</h3>
+                  <p class="text-xs text-muted-foreground mt-1">A clean approval path for published results.</p>
+                </div>
+                <div class="space-y-3">
+                  <div class="rounded-lg border border-border bg-background p-3"><p class="text-sm font-medium">1. Review Teacher Scores</p><p class="text-xs text-muted-foreground mt-1">Check submitted class and subject scores.</p></div>
+                  <div class="rounded-lg border border-border bg-background p-3"><p class="text-sm font-medium">2. Return or Approve</p><p class="text-xs text-muted-foreground mt-1">Send mistakes back or approve to Admin.</p></div>
+                  <div class="rounded-lg border border-border bg-background p-3"><p class="text-sm font-medium">3. Generate Result Sheets</p><p class="text-xs text-muted-foreground mt-1">Rank students by class and term.</p></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% elif role == 'registry' %}
           <div id="dashboard" class="space-y-5">
             <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
               <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -2059,10 +2137,28 @@
             .no-print { display: none !important; }
           }
         </style>
+        <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">Result Processing</p>
+              <h3 class="font-display text-2xl font-bold mt-1">Review Results</h3>
+              <p class="text-sm text-muted-foreground mt-2">Inspect teacher submissions, preview report cards, approve to Admin, or return corrections.</p>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Submitted</span><br><strong>{{ examiner_submissions.count }}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Selected</span><br><strong>{% if selected_submission %}1{% else %}0{% endif %}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Students</span><br><strong>{{ examiner_results.count }}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Previews</span><br><strong>{{ examiner_report_previews|length }}</strong></div>
+            </div>
+          </div>
+        </div>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div class="bg-card rounded-xl border border-border overflow-hidden lg:col-span-1">
             <div class="flex items-center justify-between p-4 border-b border-border">
-              <h3 class="font-display font-semibold">Submitted Results</h3>
+              <div>
+                <h3 class="font-display font-semibold">Submitted Results</h3>
+                <p class="text-xs text-muted-foreground mt-1">Open a class/subject to review.</p>
+              </div>
             </div>
             <div class="overflow-x-auto">
               <table class="w-full">
@@ -2182,6 +2278,18 @@
       {% endif %}
 
       {% if active_page == 'result-sheets' and role == 'examiner' %}
+        <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">Class Ranking</p>
+              <h3 class="font-display text-2xl font-bold mt-1">Result Sheets</h3>
+              <p class="text-sm text-muted-foreground mt-2">Generate ranking sheets by class, academic session, and term.</p>
+            </div>
+            <button type="button" onclick="window.print()" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+              <i data-lucide="printer" class="w-4 h-4"></i> Print Sheet
+            </button>
+          </div>
+        </div>
         <div class="bg-card rounded-xl border border-border p-5 space-y-4">
           <div class="flex items-center justify-between">
             <h3 class="font-display font-semibold">Class Result Sheet</h3>
@@ -2215,7 +2323,13 @@
 
         <div class="bg-card rounded-xl border border-border overflow-hidden">
           <div class="flex items-center justify-between p-4 border-b border-border">
-            <h3 class="font-display font-semibold">Class Ranking</h3>
+            <div>
+              <h3 class="font-display font-semibold">Class Ranking</h3>
+              <p class="text-xs text-muted-foreground mt-1">
+                {% if result_sheet_class %}{{ result_sheet_class.name }} · {{ result_sheet_session }}{% if result_sheet_term %} / {{ result_sheet_term }}{% endif %}{% else %}Select a class to generate ranking.{% endif %}
+              </p>
+            </div>
+            <span class="text-xs text-muted-foreground">{{ result_sheet_rows|length }} students</span>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full">

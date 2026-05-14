@@ -1995,6 +1995,8 @@ def secondary_page(request, role, page):
     examiner_results = Result.objects.none()
     selected_submission = None
     examiner_report_previews = []
+    examiner_dashboard_cards = []
+    examiner_recent_submissions = ResultSubmission.objects.none()
     result_sheet_rows = []
     result_sheet_class = None
     result_sheet_session = ''
@@ -2484,6 +2486,15 @@ def secondary_page(request, role, page):
         examiner_submissions = ResultSubmission.objects.filter(
             institution=institution,
         ).exclude(status='draft').select_related('academic_class', 'subject', 'submitted_by').order_by('-submitted_at')
+        examiner_recent_submissions = examiner_submissions[:8]
+        examiner_dashboard_cards = [
+            {'label': 'Submitted Results', 'value': examiner_submissions.filter(status='submitted_to_examiner').count(), 'hint': 'Waiting for examiner review', 'icon': 'inbox'},
+            {'label': 'Returned Corrections', 'value': examiner_submissions.filter(status='returned_for_correction').count(), 'hint': 'Sent back to teachers', 'icon': 'rotate-ccw'},
+            {'label': 'Approved by Examiner', 'value': examiner_submissions.filter(status='approved_by_examiner').count(), 'hint': 'Waiting for admin approval', 'icon': 'check-circle'},
+            {'label': 'Published Results', 'value': examiner_submissions.filter(status='published').count(), 'hint': 'Visible to students', 'icon': 'file-check'},
+            {'label': 'Classes', 'value': AcademicClass.objects.filter(institution=institution).count(), 'hint': 'Available for result sheets', 'icon': 'school'},
+            {'label': 'Students', 'value': students_all.count(), 'hint': 'Ranking population', 'icon': 'users'},
+        ]
         submission_id = request.GET.get('submission')
         if submission_id:
             selected_submission = examiner_submissions.filter(id=submission_id).first()
@@ -2630,6 +2641,8 @@ def secondary_page(request, role, page):
         'examiner_results': examiner_results,
         'selected_submission': selected_submission,
         'examiner_report_previews': examiner_report_previews,
+        'examiner_dashboard_cards': examiner_dashboard_cards,
+        'examiner_recent_submissions': examiner_recent_submissions,
         'result_sheet_rows': result_sheet_rows,
         'result_sheet_class': result_sheet_class,
         'result_sheet_session': result_sheet_session,
