@@ -394,7 +394,7 @@ def healthz(request):
 
 def service_worker(request):
     script = """
-const CACHE_NAME = "vilastore-web-offline-v2";
+const CACHE_NAME = "vilastore-web-offline-v3";
 const STATIC_ASSETS = [
   "/static/css/styles.css",
   "/static/js/app.js",
@@ -403,6 +403,28 @@ const STATIC_ASSETS = [
   "/static/img/vilastore-logo.png",
   "/static/site.webmanifest"
 ];
+const OFFLINE_HTML = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VilaStore Offline</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#111827;display:grid;min-height:100vh;place-items:center;padding:1rem}
+    main{max-width:520px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:1.25rem;box-shadow:0 16px 40px rgba(15,23,42,.08)}
+    h1{font-size:1.3rem;margin:0 0 .5rem}
+    p{line-height:1.5;color:#4b5563}
+    a{color:#92400e;font-weight:700}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Offline page not saved yet</h1>
+    <p>This page has not been opened online on this browser yet. Go back to any VilaStore page you already opened, or reconnect once so VilaStore can save this page for offline use.</p>
+    <p><a href="javascript:history.back()">Go back</a></p>
+  </main>
+</body>
+</html>`;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -447,7 +469,13 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
+      .catch(() => caches.match(request, { ignoreSearch: true }).then((cached) => {
+        if (cached) return cached;
+        return new Response(OFFLINE_HTML, {
+          status: 503,
+          headers: { "Content-Type": "text/html; charset=utf-8" }
+        });
+      }))
   );
 });
 """.strip()

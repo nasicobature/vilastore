@@ -9,6 +9,17 @@
   const EXPENSES_KEY = "vilastore_web_expenses_v1";
   const ACTIVITIES_KEY = "vilastore_web_activities_v1";
   const MAX_ACTIVITY_ROWS = 80;
+  const OFFLINE_PAGE_URLS = [
+    "/index/",
+    "/product/",
+    "/inventory",
+    "/sales-history",
+    "/loans",
+    "/expenses",
+    "/reports",
+    "/customer",
+    "/settings",
+  ];
 
   function read(key, fallback) {
     try {
@@ -581,6 +592,29 @@
     });
   }
 
+  function warmOfflinePages() {
+    if (!navigator.onLine) return;
+    if (!("serviceWorker" in navigator)) return;
+    const currentPath = window.location.pathname;
+    if (
+      currentPath.includes("/login") ||
+      currentPath.includes("/signup") ||
+      currentPath.includes("/marketplace") ||
+      currentPath.includes("/subscription/payment")
+    ) {
+      return;
+    }
+    OFFLINE_PAGE_URLS.forEach((url, index) => {
+      window.setTimeout(() => {
+        fetch(url, {
+          credentials: "same-origin",
+          cache: "reload",
+          headers: { "X-Offline-Warmup": "1" },
+        }).catch(() => {});
+      }, 800 + index * 350);
+    });
+  }
+
   window.VilaStoreOffline = {
     findProductByCode(code) {
       return findProduct(code, true);
@@ -599,7 +633,9 @@
     bindForms();
     updateStatus();
     flushQueue();
+    warmOfflinePages();
   });
   window.addEventListener("online", flushQueue);
+  window.addEventListener("online", warmOfflinePages);
   window.addEventListener("offline", updateStatus);
 })();
