@@ -1543,6 +1543,42 @@ def secondary_add_student(request):
 
 
 @login_required(login_url='/edu/secondary/login/')
+def secondary_assign_student_class(request):
+    creator_profile = getattr(request.user, 'profile', None)
+    if not creator_profile or creator_profile.institution_type != 'secondary' or creator_profile.role not in ['admin', 'registry']:
+        messages.error(request, 'Only Admin/Registry can assign student classes.')
+        return redirect('edu:secondary_dashboard', role=creator_profile.role if creator_profile else 'registry')
+
+    if request.method == 'POST':
+        student_id = request.POST.get('student')
+        class_id = request.POST.get('academic_class')
+        session_id = request.POST.get('academic_session')
+        term_id = request.POST.get('academic_term')
+        student = Student.objects.filter(id=student_id, institution=creator_profile.institution).first()
+        academic_class = AcademicClass.objects.filter(id=class_id, institution=creator_profile.institution).first()
+        session = AcademicSession.objects.filter(id=session_id, institution=creator_profile.institution).first()
+        term = AcademicTerm.objects.filter(id=term_id, session__institution=creator_profile.institution).first()
+
+        if not student or not academic_class:
+            messages.error(request, 'Please select a valid student and class.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='assign-class')
+
+        StudentClassHistory.objects.filter(student=student).update(is_current=False)
+        student.academic_class = academic_class
+        student.save(update_fields=['academic_class'])
+        StudentClassHistory.objects.update_or_create(
+            student=student,
+            academic_class=academic_class,
+            academic_session=session or academic_class.academic_session,
+            academic_term=term or academic_class.academic_term,
+            defaults={'is_current': True},
+        )
+        messages.success(request, f'{student.full_name} assigned to {academic_class.name}.')
+
+    return redirect('edu:secondary_page', role=creator_profile.role, page='assign-class')
+
+
+@login_required(login_url='/edu/secondary/login/')
 def secondary_assign_teacher(request):
     creator_profile = getattr(request.user, 'profile', None)
     if not creator_profile or creator_profile.institution_type != 'secondary' or creator_profile.role not in ['admin', 'registry']:
@@ -1935,6 +1971,9 @@ def secondary_page(request, role, page):
     admin_dashboard_cards = []
     admin_recent_results = ResultSubmission.objects.none()
     admin_pending_count = 0
+    registry_dashboard_cards = []
+    registry_recent_students = Student.objects.none()
+    registry_class_rows = []
     accountant_dashboard_cards = []
     accountant_fee_cards = []
     accountant_class_rows = []
@@ -2021,6 +2060,27 @@ def secondary_page(request, role, page):
         if selected_admin_submission:
             admin_review_results = _results_for_submission(selected_admin_submission)
             admin_report_previews = _report_card_previews_for_submission(selected_admin_submission)
+
+    if role == 'registry':
+        registry_recent_students = students_all.order_by('-created_at')[:8]
+        registry_class_rows = [
+            {
+                'class': cls,
+                'students': students_all.filter(academic_class=cls).count(),
+                'session': cls.academic_session,
+                'term': cls.academic_term,
+                'subjects': cls.class_subjects.count() if hasattr(cls, 'class_subjects') else 0,
+            }
+            for cls in AcademicClass.objects.filter(institution=institution).prefetch_related('class_subjects').order_by('level', 'name')
+        ]
+        registry_dashboard_cards = [
+            {'label': 'Students', 'value': students_all.count(), 'hint': 'Total student records', 'icon': 'graduation-cap'},
+            {'label': 'Classes', 'value': len(registry_class_rows), 'hint': 'Class records', 'icon': 'school'},
+            {'label': 'Teachers', 'value': teachers.count(), 'hint': 'Staff records available', 'icon': 'users'},
+            {'label': 'Sessions', 'value': sessions.count(), 'hint': 'Academic sessions', 'icon': 'calendar-days'},
+            {'label': 'Current Session', 'value': current_session.name if current_session else '-', 'hint': current_term.get_term_display() if current_term else 'No current term', 'icon': 'calendar-check'},
+            {'label': 'ID Cards', 'value': students_all.count(), 'hint': 'Students available for ID cards', 'icon': 'id-card'},
+        ]
 
     if role == 'accountant':
         today = timezone.localdate()
@@ -2489,6 +2549,7 @@ def secondary_page(request, role, page):
         'classes',
         'subjects',
         'assign-teachers',
+        'assign-class',
         'register',
         'sessions',
         'student-ids',
@@ -2545,6 +2606,9 @@ def secondary_page(request, role, page):
         'admin_dashboard_cards': admin_dashboard_cards,
         'admin_recent_results': admin_recent_results,
         'admin_pending_count': admin_pending_count,
+        'registry_dashboard_cards': registry_dashboard_cards,
+        'registry_recent_students': registry_recent_students,
+        'registry_class_rows': registry_class_rows,
         'role_options': SECONDARY_ROLES,
         'classes': AcademicClass.objects.filter(institution=institution).select_related('academic_session', 'academic_term'),
         'institution_id': institution.id if institution else '',

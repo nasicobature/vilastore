@@ -13,6 +13,7 @@ urlpatterns = [
     path('secondary/sessions/add/', views.secondary_add_session_term, name='secondary_add_session_term'),
     path('secondary/classes/session-term/', views.secondary_assign_class_session_term, name='secondary_assign_class_session_term'),
     path('secondary/students/add/', views.secondary_add_student, name='secondary_add_student'),
+    path('secondary/students/assign-class/', views.secondary_assign_student_class, name='secondary_assign_student_class'),
     path('secondary/teachers/assign/', views.secondary_assign_teacher, name='secondary_assign_teacher'),
     path('secondary/teachers/assign-subject/', views.secondary_assign_teacher_subject, name='secondary_assign_teacher_subject'),
     path('secondary/subjects/add/', views.secondary_add_subject, name='secondary_add_subject'),
