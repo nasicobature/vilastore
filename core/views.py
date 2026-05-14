@@ -1712,6 +1712,138 @@ def reports(request):
         sale__in=sales
     ).aggregate(total=Sum("quantity"))["total"] or 0
 
+    gross_margin_percent = ((total_profit / total_revenue) * 100) if total_revenue else Decimal("0.00")
+    net_margin_percent = ((net_profit / total_revenue) * 100) if total_revenue else Decimal("0.00")
+    expense_ratio_percent = ((total_expenses / total_revenue) * 100) if total_revenue else Decimal("0.00")
+
+    sold_product_ids = set(
+        SaleItem.objects.filter(sale__in=sales)
+        .values_list("product_id", flat=True)
+        .distinct()
+    )
+    products_qs = Product.objects.filter(user=request.user)
+    if selected_branch:
+        branch_inventory = BranchInventory.objects.filter(branch=selected_branch, product__user=request.user)
+        product_stock_rows = [
+            {
+                "product": row.product,
+                "stock": row.stock if row.track_separately else row.product.stock,
+                "selling_price": row.selling_price if row.selling_price is not None else row.product.selling_price,
+                "cost_price": row.product.cost_price,
+            }
+            for row in branch_inventory.select_related("product")
+        ]
+    else:
+        product_stock_rows = [
+            {
+                "product": product,
+                "stock": product.stock,
+                "selling_price": product.selling_price,
+                "cost_price": product.cost_price,
+            }
+            for product in products_qs
+        ]
+
+    stock_value = Decimal("0.00")
+    stock_cost = Decimal("0.00")
+    low_stock_products = []
+    out_of_stock_count = 0
+    slow_moving_products = []
+    for row in product_stock_rows:
+        product = row["product"]
+        stock = row["stock"] or Decimal("0.00")
+        selling_price = row["selling_price"] or Decimal("0.00")
+        cost_price = row["cost_price"] or Decimal("0.00")
+        stock_value += selling_price * stock
+        stock_cost += cost_price * stock
+        if stock <= 0:
+            out_of_stock_count += 1
+        elif stock <= product.low_stock_threshold:
+            low_stock_products.append({"name": product.name, "stock": stock})
+        if stock > 0 and product.id not in sold_product_ids:
+            slow_moving_products.append({"name": product.name, "stock": stock})
+
+    inventory_profit_potential = stock_value - stock_cost
+
+    top_product_rows = []
+    top_product_data = (
+        SaleItem.objects.filter(sale__in=sales)
+        .values("product_id", "product__name")
+        .annotate(quantity=Sum("quantity"), profit=Sum("profit"))
+        .order_by("-quantity")[:5]
+    )
+    for row in top_product_data:
+        product_items = SaleItem.objects.filter(sale__in=sales, product_id=row["product_id"])
+        revenue = Decimal("0.00")
+        for item in product_items:
+            revenue += (item.price or Decimal("0.00")) * item.quantity
+        top_product_rows.append({
+            "name": row["product__name"] or "Product",
+            "quantity": row["quantity"] or 0,
+            "revenue": revenue,
+            "profit": row["profit"] or Decimal("0.00"),
+        })
+
+    expense_rows = []
+    for row in expenses.values("category").annotate(total=Sum("amount")).order_by("-total")[:5]:
+        amount = row["total"] or Decimal("0.00")
+        expense_rows.append({
+            "category": row["category"] or "Other",
+            "amount": amount,
+            "percent": ((amount / total_expenses) * 100) if total_expenses else Decimal("0.00"),
+        })
+
+    customer_count = Customer.objects.filter(user=request.user).count()
+    business_insights = []
+    if total_transactions == 0:
+        business_insights.append({
+            "tone": "warning",
+            "title": "No sales in this period",
+            "message": "Record sales consistently so VilaStore can show useful trends and product performance.",
+        })
+    if total_revenue and gross_margin_percent < 20:
+        business_insights.append({
+            "tone": "warning",
+            "title": "Profit margin is low",
+            "message": "Review selling prices, supplier costs, and discounts. A stronger margin gives the business more breathing room.",
+        })
+    if net_profit < 0:
+        business_insights.append({
+            "tone": "danger",
+            "title": "Expenses are eating profit",
+            "message": "Your net profit is negative for this period. Check the biggest expenses and reduce non-essential spending.",
+        })
+    elif total_revenue and expense_ratio_percent > 40:
+        business_insights.append({
+            "tone": "warning",
+            "title": "Expense ratio is high",
+            "message": "Expenses are taking a large share of revenue. Compare rent, salaries, transport, and supplies.",
+        })
+    if top_product_rows:
+        business_insights.append({
+            "tone": "success",
+            "title": "Best-selling product found",
+            "message": f"{top_product_rows[0]['name']} sold the most in this period. Keep it in stock and consider promoting related items.",
+        })
+    if low_stock_products:
+        business_insights.append({
+            "tone": "warning",
+            "title": "Low stock needs attention",
+            "message": f"{len(low_stock_products)} product(s) are close to running out. Restock fast-moving items before sales are lost.",
+        })
+    if slow_moving_products:
+        business_insights.append({
+            "tone": "neutral",
+            "title": "Some stock is not moving",
+            "message": "Products with stock but no sales in this period may need discounts, better display, or supplier review.",
+        })
+    if not business_insights:
+        business_insights.append({
+            "tone": "success",
+            "title": "Business looks healthy",
+            "message": "Sales, profit, and expenses look balanced for this period. Keep tracking daily to spot changes early.",
+        })
+
     # =========================
     # ===== CIT CALCULATION ===
     # =========================
@@ -1844,6 +1976,19 @@ def reports(request):
         "items_sold": items_sold,
         "avg_transaction": avg_transaction,
         "avg_profit_per_sale": avg_profit_per_sale,
+        "gross_margin_percent": gross_margin_percent,
+        "net_margin_percent": net_margin_percent,
+        "expense_ratio_percent": expense_ratio_percent,
+        "stock_value": stock_value,
+        "inventory_profit_potential": inventory_profit_potential,
+        "low_stock_products": low_stock_products[:5],
+        "low_stock_count": len(low_stock_products),
+        "out_of_stock_count": out_of_stock_count,
+        "slow_moving_products": slow_moving_products[:5],
+        "top_product_rows": top_product_rows,
+        "expense_rows": expense_rows,
+        "customer_count": customer_count,
+        "business_insights": business_insights,
         "period": period,
         "start_date": start_date,
         "end_date": end_date,

@@ -148,6 +148,121 @@
         </div>
       </section>
 
+      <section class="card" style="padding:1rem 1.25rem;margin-bottom:1.5rem;">
+        <div class="card-header" style="margin-bottom:1rem;">
+          <div>
+            <h3>Business Data Analysis</h3>
+            <p style="color:var(--muted-foreground);margin:0.25rem 0 0;">Automatic insights from sales, profit, inventory, customers, and expenses.</p>
+          </div>
+        </div>
+
+        <div class="summary-grid" style="margin-bottom:1rem;">
+          <div class="summary-item">
+            <span class="summary-label">Gross Margin</span>
+            <span class="summary-value text-profit">{{ gross_margin_percent|floatformat:1 }}%</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Net Margin</span>
+            <span class="summary-value {% if net_profit < 0 %}text-destructive{% else %}text-profit{% endif %}">{{ net_margin_percent|floatformat:1 }}%</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Expense Ratio</span>
+            <span class="summary-value">{{ expense_ratio_percent|floatformat:1 }}%</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Customers</span>
+            <span class="summary-value">{{ customer_count }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Stock Value</span>
+            <span class="summary-value">₦{{ stock_value|floatformat:2 }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Stock Profit Potential</span>
+            <span class="summary-value text-profit">₦{{ inventory_profit_potential|floatformat:2 }}</span>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;margin-bottom:1rem;">
+          {% for insight in business_insights %}
+          <div class="card" style="padding:0.85rem 1rem;border-left:4px solid {% if insight.tone == 'danger' %}#dc2626{% elif insight.tone == 'warning' %}#d97706{% elif insight.tone == 'success' %}#059669{% else %}#2563eb{% endif %};">
+            <strong>{{ insight.title }}</strong>
+            <p style="color:var(--muted-foreground);font-size:0.9rem;margin:0.35rem 0 0;">{{ insight.message }}</p>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;">
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Top Product Analysis</h4>
+            {% if top_product_rows %}
+              <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                {% for product in top_product_rows %}
+                <div style="display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+                  <div>
+                    <strong>{{ product.name }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">{{ product.quantity|floatformat:2 }} sold</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <strong>₦{{ product.revenue|floatformat:2 }}</strong>
+                    <div class="text-profit" style="font-size:0.85rem;">₦{{ product.profit|floatformat:2 }} profit</div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p style="color:var(--muted-foreground);">No product sales yet for this period.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Expense Analysis</h4>
+            {% if expense_rows %}
+              <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                {% for expense in expense_rows %}
+                <div style="display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+                  <div>
+                    <strong>{{ expense.category }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">{{ expense.percent|floatformat:1 }}% of expenses</div>
+                  </div>
+                  <strong>₦{{ expense.amount|floatformat:2 }}</strong>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p style="color:var(--muted-foreground);">No expenses recorded for this period.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Inventory Signals</h4>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+              <span class="badge badge-warning">{{ low_stock_count }} low stock</span>
+              <span class="badge badge-destructive">{{ out_of_stock_count }} out of stock</span>
+            </div>
+            {% if low_stock_products %}
+              <strong style="display:block;margin-bottom:0.35rem;">Restock soon</strong>
+              {% for product in low_stock_products %}
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:0.35rem 0;">
+                  <span>{{ product.name }}</span>
+                  <span>{{ product.stock|floatformat:2 }} left</span>
+                </div>
+              {% endfor %}
+            {% elif slow_moving_products %}
+              <strong style="display:block;margin-bottom:0.35rem;">Slow moving stock</strong>
+              {% for product in slow_moving_products %}
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:0.35rem 0;">
+                  <span>{{ product.name }}</span>
+                  <span>{{ product.stock|floatformat:2 }} in stock</span>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p style="color:var(--muted-foreground);">Inventory looks balanced for this period.</p>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
       <section class="reports-grid">
         <div class="card report-card">
           <div class="card-header">
@@ -160,7 +275,7 @@
                 <circle class="progress" cx="50" cy="50" r="45" id="profitProgress"/>
               </svg>
               <div class="profit-value" id="profitMarginValue">
-                {% if total_revenue %}{{ total_profit|floatformat:0 }}%{% else %}0%{% endif %}
+                {{ gross_margin_percent|floatformat:0 }}%
               </div>
             </div>
             <div class="profit-legend">
