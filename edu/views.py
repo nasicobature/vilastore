@@ -1892,7 +1892,8 @@ def secondary_page(request, role, page):
     fees_total = fee_summary['paid_total']
     fees_pending = fee_summary['outstanding_total']
     fees = Fee.objects.filter(institution=institution).prefetch_related('classes', 'departments').order_by('-id')
-    payments = Payment.objects.filter(institution=institution).select_related('student', 'fee').order_by('-paid_at')[:20]
+    payments_all = Payment.objects.filter(institution=institution).select_related('student', 'fee').order_by('-paid_at')
+    payments = payments_all[:20]
 
     stats = [
         {"label": "Total Students", "value": str(Student.objects.filter(institution=institution).count())},
@@ -1931,6 +1932,12 @@ def secondary_page(request, role, page):
     teacher_class_cards = []
     teacher_recent_submissions = []
     teacher_pending_corrections = []
+    accountant_dashboard_cards = []
+    accountant_fee_cards = []
+    accountant_class_rows = []
+    accountant_debtor_rows = []
+    accountant_today_total = Decimal('0.00')
+    accountant_pending_payments = Payment.objects.none()
     teacher_subject_assignments = TeacherSubjectAssignment.objects.filter(institution=institution).select_related('teacher', 'academic_class', 'subject')
     admin_result_submissions = ResultSubmission.objects.none()
     selected_admin_submission = None
@@ -1999,6 +2006,70 @@ def secondary_page(request, role, page):
         if selected_admin_submission:
             admin_review_results = _results_for_submission(selected_admin_submission)
             admin_report_previews = _report_card_previews_for_submission(selected_admin_submission)
+
+    if role == 'accountant':
+        today = timezone.localdate()
+        accountant_today_total = payments_all.filter(status='Paid', paid_at__date=today).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        accountant_pending_payments = payments_all.exclude(status='Paid')[:8]
+        accountant_dashboard_cards = [
+            {'label': 'Expected Fees', 'value': f"NGN {fee_summary['expected_total']:.2f}", 'hint': 'All assigned school fees', 'icon': 'receipt'},
+            {'label': 'Total Collected', 'value': f"NGN {fees_total:.2f}", 'hint': 'Successful payments', 'icon': 'wallet'},
+            {'label': 'Outstanding Balance', 'value': f"NGN {fees_pending:.2f}", 'hint': 'Unpaid and pending fees', 'icon': 'alert-circle'},
+            {'label': "Today's Collection", 'value': f"NGN {accountant_today_total:.2f}", 'hint': today.strftime('%b %d, %Y'), 'icon': 'calendar-days'},
+            {'label': 'Pending Payments', 'value': accountant_pending_payments.count(), 'hint': 'Needs follow-up', 'icon': 'clock'},
+            {'label': 'Students Owing', 'value': 0, 'hint': 'Students with balance', 'icon': 'users'},
+        ]
+        for fee in fees:
+            eligible_count = _fee_student_queryset(fee).count()
+            expected = fee.amount * eligible_count
+            collected = Payment.objects.filter(institution=institution, fee=fee, status='Paid').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            outstanding = expected - collected
+            if outstanding < 0:
+                outstanding = Decimal('0.00')
+            accountant_fee_cards.append({
+                'fee': fee,
+                'eligible_count': eligible_count,
+                'expected': expected,
+                'collected': collected,
+                'outstanding': outstanding,
+                'is_complete': outstanding <= 0 and expected > 0,
+            })
+        for cls in AcademicClass.objects.filter(institution=institution).order_by('level', 'name'):
+            class_students = students_all.filter(academic_class=cls)
+            expected = Decimal('0.00')
+            for fee in fees:
+                if _fee_student_queryset(fee).filter(academic_class=cls).exists():
+                    expected += fee.amount * class_students.count()
+            collected = payments_all.filter(student__academic_class=cls, status='Paid').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            outstanding = expected - collected
+            if outstanding < 0:
+                outstanding = Decimal('0.00')
+            if expected or collected:
+                accountant_class_rows.append({
+                    'class': cls,
+                    'students': class_students.count(),
+                    'expected': expected,
+                    'collected': collected,
+                    'outstanding': outstanding,
+                })
+        for student in students_all.order_by('academic_class__level', 'full_name'):
+            expected = Decimal('0.00')
+            for fee in fees:
+                if _fee_student_queryset(fee).filter(id=student.id).exists():
+                    expected += fee.amount
+            paid = payments_all.filter(student=student, status='Paid').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            outstanding = expected - paid
+            if outstanding > 0:
+                accountant_debtor_rows.append({
+                    'student': student,
+                    'expected': expected,
+                    'paid': paid,
+                    'outstanding': outstanding,
+                })
+        accountant_debtor_total = len(accountant_debtor_rows)
+        accountant_debtor_rows = sorted(accountant_debtor_rows, key=lambda row: row['outstanding'], reverse=True)[:10]
+        if accountant_dashboard_cards:
+            accountant_dashboard_cards[5]['value'] = accountant_debtor_total
 
     if role == 'teacher':
         staff = Staff.objects.filter(user=request.user, institution=institution).first()
@@ -2408,6 +2479,9 @@ def secondary_page(request, role, page):
         'student-ids',
         'approve-results',
         'fees',
+        'payments',
+        'receipts',
+        'reports',
         'my-classes',
         'my-students',
         'enter-scores',
@@ -2442,6 +2516,12 @@ def secondary_page(request, role, page):
         'fees_total': fees_total,
         'fees_pending': fees_pending,
         'fees_expected': fee_summary['expected_total'],
+        'accountant_dashboard_cards': accountant_dashboard_cards,
+        'accountant_fee_cards': accountant_fee_cards,
+        'accountant_class_rows': accountant_class_rows,
+        'accountant_debtor_rows': accountant_debtor_rows,
+        'accountant_today_total': accountant_today_total,
+        'accountant_pending_payments': accountant_pending_payments,
         'fees': fees,
         'payments': payments,
         'payment_public_key': institution.payment_public_key,

@@ -66,7 +66,154 @@
       {{ term_map|json_script:"academic-term-map" }}
 
       {% if active_page == 'dashboard' %}
-        {% if role == 'teacher' %}
+        {% if role == 'accountant' %}
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Expected Fees</p>
+              <p class="text-2xl font-display font-bold mt-1">NGN {{ fees_expected|floatformat:2 }}</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Collected</p>
+              <p class="text-2xl font-display font-bold mt-1">NGN {{ fees_total|floatformat:2 }}</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Outstanding</p>
+              <p class="text-2xl font-display font-bold mt-1">NGN {{ fees_pending|floatformat:2 }}</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Today's Collection</p>
+              <p class="text-2xl font-display font-bold mt-1">NGN {{ accountant_today_total|floatformat:2 }}</p>
+            </div>
+          </div>
+
+          <div id="dashboard" class="space-y-5">
+            <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
+              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                  <p class="text-xs uppercase tracking-wider text-muted-foreground">Finance Workspace</p>
+                  <h2 class="font-display text-2xl font-bold mt-1">Accountant Dashboard</h2>
+                  <p class="text-sm text-muted-foreground mt-2">Track collections, unpaid balances, receipts, and school fee activity.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <a href="/edu/secondary/accountant/fees/" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i> Create Fee
+                  </a>
+                  <a href="/edu/secondary/accountant/fees/#record-payment" class="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors">
+                    <i data-lucide="receipt" class="w-4 h-4"></i> Record Payment
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {% for card in accountant_dashboard_cards %}
+                <div class="bg-card rounded-xl border border-border p-5">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <p class="text-sm text-muted-foreground">{{ card.label }}</p>
+                      <p class="text-2xl font-display font-bold mt-1">{{ card.value }}</p>
+                      <p class="text-xs text-muted-foreground mt-2">{{ card.hint }}</p>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-primary/10 text-primary">
+                      <i data-lucide="{{ card.icon }}" class="w-4 h-4"></i>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              <div class="xl:col-span-2 bg-card rounded-xl border border-border p-5 space-y-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 class="font-display font-semibold">Collection by Class</h3>
+                    <p class="text-xs text-muted-foreground mt-1">Expected, collected, and outstanding fee totals.</p>
+                  </div>
+                  <a href="/edu/secondary/accountant/fees/" class="text-sm text-primary font-medium">Open finance</a>
+                </div>
+                <div class="space-y-3">
+                  {% for row in accountant_class_rows|slice:":6" %}
+                    <div class="rounded-xl border border-border bg-background p-4">
+                      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                          <p class="font-display font-semibold">{{ row.class.name }}</p>
+                          <p class="text-xs text-muted-foreground">{{ row.students }} students</p>
+                        </div>
+                        <div class="grid grid-cols-3 gap-3 text-sm md:min-w-[360px]">
+                          <div><span class="text-muted-foreground">Expected</span><br><strong>NGN {{ row.expected|floatformat:2 }}</strong></div>
+                          <div><span class="text-muted-foreground">Collected</span><br><strong>NGN {{ row.collected|floatformat:2 }}</strong></div>
+                          <div><span class="text-muted-foreground">Balance</span><br><strong>NGN {{ row.outstanding|floatformat:2 }}</strong></div>
+                        </div>
+                      </div>
+                    </div>
+                  {% empty %}
+                    <div class="rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground text-center">No class collection data yet.</div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+                <div>
+                  <h3 class="font-display font-semibold">Top Outstanding Balances</h3>
+                  <p class="text-xs text-muted-foreground mt-1">Students with the highest balances.</p>
+                </div>
+                <div class="space-y-3">
+                  {% for row in accountant_debtor_rows|slice:":6" %}
+                    <div class="rounded-lg border border-border bg-background p-3">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium truncate">{{ row.student.full_name }}</p>
+                          <p class="text-xs text-muted-foreground">{% if row.student.academic_class %}{{ row.student.academic_class.name }}{% else %}No class{% endif %} · {{ row.student.student_id }}</p>
+                        </div>
+                        <span class="text-sm font-semibold text-destructive whitespace-nowrap">NGN {{ row.outstanding|floatformat:2 }}</span>
+                      </div>
+                    </div>
+                  {% empty %}
+                    <p class="text-sm text-muted-foreground">No outstanding student balances.</p>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-card rounded-xl border border-border overflow-hidden">
+              <div class="flex items-center justify-between p-4 border-b border-border">
+                <div>
+                  <h3 class="font-display font-semibold">Recent Payments</h3>
+                  <p class="text-xs text-muted-foreground mt-1">Latest school fee activity.</p>
+                </div>
+                <a href="/edu/secondary/accountant/fees/#recent-payments" class="text-sm text-primary font-medium">View receipts</a>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full">
+                  <thead>
+                    <tr class="bg-muted/50">
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Student</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Fee</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Amount</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Status</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Receipt</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-border">
+                    {% for payment in payments|slice:":6" %}
+                      <tr class="hover:bg-muted/30 transition-colors">
+                        <td class="px-4 py-3 text-sm">{% if payment.student %}{{ payment.student.full_name }}{% else %}-{% endif %}</td>
+                        <td class="px-4 py-3 text-sm">{% if payment.fee %}{{ payment.fee.name }}{% else %}-{% endif %}</td>
+                        <td class="px-4 py-3 text-sm">NGN {{ payment.amount }}</td>
+                        <td class="px-4 py-3 text-sm">
+                          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if payment.status == 'Paid' %}bg-secondary/10 text-secondary{% else %}bg-muted text-muted-foreground{% endif %}">{{ payment.status }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-sm"><a class="text-xs text-primary hover:underline" href="/edu/secondary/payments/{{ payment.reference }}/receipt/" target="_blank" rel="noopener">Receipt</a></td>
+                      </tr>
+                    {% empty %}
+                      <tr><td colspan="5" class="px-4 py-3 text-sm text-muted-foreground">No payments recorded yet.</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        {% elif role == 'teacher' %}
           <div id="dashboard" class="space-y-5">
             <div class="bg-card rounded-2xl border border-border p-5 md:p-6">
               <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -1709,6 +1856,25 @@
         </div>
 
         {% if role == 'accountant' %}
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Expected Fees</p>
+              <p class="text-2xl font-display font-bold mt-1">NGN {{ fees_expected|floatformat:2 }}</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Collected</p>
+              <p class="text-2xl font-display font-bold mt-1">NGN {{ fees_total|floatformat:2 }}</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Outstanding</p>
+              <p class="text-2xl font-display font-bold mt-1">NGN {{ fees_pending|floatformat:2 }}</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Today's Collection</p>
+              <p class="text-2xl font-display font-bold mt-1">NGN {{ accountant_today_total|floatformat:2 }}</p>
+            </div>
+          </div>
+
           <div class="bg-card rounded-xl border border-border p-5 space-y-4">
             <div class="flex items-center justify-between">
               <h3 class="font-display font-semibold">Create School Fee</h3>
@@ -1967,6 +2133,185 @@
             </form>
           </div>
         {% endif %}
+      {% endif %}
+
+      {% if active_page == 'payments' and role == 'accountant' %}
+        <div class="space-y-5">
+          <div class="bg-card rounded-2xl border border-border p-5">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+                <p class="text-xs uppercase tracking-wider text-muted-foreground">Payments</p>
+                <h3 class="font-display text-2xl font-bold mt-1">Payment Records</h3>
+                <p class="text-sm text-muted-foreground mt-2">Review manual and online payments, status, methods, and receipts.</p>
+              </div>
+              <a href="/edu/secondary/accountant/fees/#record-payment" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i> Record Payment
+              </a>
+            </div>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border p-5">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <input type="text" placeholder="Search student or receipt" class="md:col-span-2 px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              <select class="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option>All Status</option>
+                <option>Paid</option>
+                <option>Pending</option>
+              </select>
+              <select class="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option>All Methods</option>
+                <option>Manual</option>
+                <option>Flutterwave</option>
+              </select>
+              <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors">
+                Filter
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border overflow-hidden">
+            <div class="flex items-center justify-between p-4 border-b border-border">
+              <h3 class="font-display font-semibold">All Payments</h3>
+              <span class="text-xs text-muted-foreground">{{ payments|length }} recent records</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="bg-muted/50">
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Receipt No</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Student</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Fee</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Amount</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Method</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Status</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Receipt</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  {% for payment in payments %}
+                    <tr class="hover:bg-muted/30 transition-colors">
+                      <td class="px-4 py-3 text-sm">{{ payment.reference|default:"-" }}</td>
+                      <td class="px-4 py-3 text-sm">{% if payment.student %}{{ payment.student.full_name }}{% else %}-{% endif %}</td>
+                      <td class="px-4 py-3 text-sm">{% if payment.student and payment.student.academic_class %}{{ payment.student.academic_class.name }}{% else %}-{% endif %}</td>
+                      <td class="px-4 py-3 text-sm">{% if payment.fee %}{{ payment.fee.name }}{% else %}-{% endif %}</td>
+                      <td class="px-4 py-3 text-sm">NGN {{ payment.amount }}</td>
+                      <td class="px-4 py-3 text-sm">{{ payment.payment_method }}</td>
+                      <td class="px-4 py-3 text-sm">
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if payment.status == 'Paid' %}bg-secondary/10 text-secondary{% else %}bg-muted text-muted-foreground{% endif %}">{{ payment.status }}</span>
+                      </td>
+                      <td class="px-4 py-3 text-sm"><a class="text-xs text-primary hover:underline" href="/edu/secondary/payments/{{ payment.reference }}/receipt/" target="_blank" rel="noopener">Print</a></td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="8" class="px-4 py-3 text-sm text-muted-foreground">No payments recorded yet.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'receipts' and role == 'accountant' %}
+        <div class="space-y-5">
+          <div class="bg-card rounded-2xl border border-border p-5">
+            <p class="text-xs uppercase tracking-wider text-muted-foreground">Receipt Archive</p>
+            <h3 class="font-display text-2xl font-bold mt-1">Receipts</h3>
+            <p class="text-sm text-muted-foreground mt-2">Search, print, and download student payment receipts.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="md:col-span-2 bg-card rounded-xl border border-border p-5">
+              <input type="text" placeholder="Search by receipt number, student name, or admission number" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Receipts Available</p>
+              <p class="text-2xl font-display font-bold mt-1">{{ payments|length }}</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {% for payment in payments %}
+              <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <p class="font-display font-semibold">{{ payment.reference|default:"Receipt" }}</p>
+                    <p class="text-xs text-muted-foreground mt-1">{{ payment.paid_at|date:"M j, Y" }} · {{ payment.payment_method }}</p>
+                  </div>
+                  <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if payment.status == 'Paid' %}bg-secondary/10 text-secondary{% else %}bg-muted text-muted-foreground{% endif %}">{{ payment.status }}</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <div><span class="text-muted-foreground">Student</span><br><strong>{% if payment.student %}{{ payment.student.full_name }}{% else %}-{% endif %}</strong></div>
+                  <div><span class="text-muted-foreground">Fee</span><br><strong>{% if payment.fee %}{{ payment.fee.name }}{% else %}-{% endif %}</strong></div>
+                  <div><span class="text-muted-foreground">Amount</span><br><strong>NGN {{ payment.amount }}</strong></div>
+                </div>
+                <a class="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-muted transition-colors" href="/edu/secondary/payments/{{ payment.reference }}/receipt/" target="_blank" rel="noopener">
+                  <i data-lucide="printer" class="w-4 h-4"></i> Print / Download
+                </a>
+              </div>
+            {% empty %}
+              <div class="xl:col-span-2 rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">No receipts yet.</div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if active_page == 'reports' and role == 'accountant' %}
+        <div class="space-y-5">
+          <div class="bg-card rounded-2xl border border-border p-5">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+                <p class="text-xs uppercase tracking-wider text-muted-foreground">Finance Reports</p>
+                <h3 class="font-display text-2xl font-bold mt-1">Reports and Analytics</h3>
+                <p class="text-sm text-muted-foreground mt-2">Review collections by class, student debtors, and payment activity.</p>
+              </div>
+              <button type="button" onclick="window.print()" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                <i data-lucide="printer" class="w-4 h-4"></i> Print Report
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="bg-card rounded-xl border border-border p-5"><p class="text-sm text-muted-foreground">Expected</p><p class="text-2xl font-display font-bold mt-1">NGN {{ fees_expected|floatformat:2 }}</p></div>
+            <div class="bg-card rounded-xl border border-border p-5"><p class="text-sm text-muted-foreground">Collected</p><p class="text-2xl font-display font-bold mt-1">NGN {{ fees_total|floatformat:2 }}</p></div>
+            <div class="bg-card rounded-xl border border-border p-5"><p class="text-sm text-muted-foreground">Outstanding</p><p class="text-2xl font-display font-bold mt-1">NGN {{ fees_pending|floatformat:2 }}</p></div>
+            <div class="bg-card rounded-xl border border-border p-5"><p class="text-sm text-muted-foreground">Today</p><p class="text-2xl font-display font-bold mt-1">NGN {{ accountant_today_total|floatformat:2 }}</p></div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div class="bg-card rounded-xl border border-border overflow-hidden">
+              <div class="p-4 border-b border-border"><h3 class="font-display font-semibold">Class Fee Report</h3></div>
+              <div class="overflow-x-auto">
+                <table class="w-full">
+                  <thead><tr class="bg-muted/50"><th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th><th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Expected</th><th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Collected</th><th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Balance</th></tr></thead>
+                  <tbody class="divide-y divide-border">
+                    {% for row in accountant_class_rows %}
+                      <tr><td class="px-4 py-3 text-sm">{{ row.class.name }}</td><td class="px-4 py-3 text-sm">NGN {{ row.expected|floatformat:2 }}</td><td class="px-4 py-3 text-sm">NGN {{ row.collected|floatformat:2 }}</td><td class="px-4 py-3 text-sm">NGN {{ row.outstanding|floatformat:2 }}</td></tr>
+                    {% empty %}
+                      <tr><td colspan="4" class="px-4 py-3 text-sm text-muted-foreground">No class report yet.</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="bg-card rounded-xl border border-border overflow-hidden">
+              <div class="p-4 border-b border-border"><h3 class="font-display font-semibold">Student Debtor List</h3></div>
+              <div class="overflow-x-auto">
+                <table class="w-full">
+                  <thead><tr class="bg-muted/50"><th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Student</th><th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Class</th><th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Paid</th><th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Balance</th></tr></thead>
+                  <tbody class="divide-y divide-border">
+                    {% for row in accountant_debtor_rows %}
+                      <tr><td class="px-4 py-3 text-sm">{{ row.student.full_name }}</td><td class="px-4 py-3 text-sm">{% if row.student.academic_class %}{{ row.student.academic_class.name }}{% else %}-{% endif %}</td><td class="px-4 py-3 text-sm">NGN {{ row.paid|floatformat:2 }}</td><td class="px-4 py-3 text-sm">NGN {{ row.outstanding|floatformat:2 }}</td></tr>
+                    {% empty %}
+                      <tr><td colspan="4" class="px-4 py-3 text-sm text-muted-foreground">No outstanding balances.</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       {% endif %}
 
       {% if active_page == 'subjects-student' and role == 'student' %}
