@@ -11,6 +11,7 @@
   const OFFLINE_AUTH_KEY = "vilastore_web_offline_auth_v1";
   const LAST_SYNC_KEY = "vilastore_web_last_sync_v1";
   const LAST_SYNC_ERROR_KEY = "vilastore_web_last_sync_error_v1";
+  const OFFLINE_RECEIPTS_KEY = "vilastore_web_offline_receipts_v1";
   const MAX_ACTIVITY_ROWS = 80;
   const OFFLINE_PAGE_URLS = [
     "/index/",
@@ -54,6 +55,15 @@
 
   function nowId(prefix) {
     return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
   function fieldValue(fields, name, fallback) {
@@ -259,6 +269,119 @@
     };
   }
 
+  function receiptDateCode(date) {
+    const d = date ? new Date(date) : new Date();
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function nextOfflineReceiptNumber() {
+    const todayCode = receiptDateCode();
+    const receipts = read(OFFLINE_RECEIPTS_KEY, []);
+    const todayCount = receipts.filter((receipt) => String(receipt.receipt_no || "").includes(`OFF-${todayCode}-`)).length + 1;
+    return `OFF-${todayCode}-${String(todayCount).padStart(3, "0")}`;
+  }
+
+  function saveOfflineReceipt(fields) {
+    const cart = getCart();
+    const receipt = {
+      id: nowId("offline-receipt"),
+      receipt_no: nextOfflineReceiptNumber(),
+      created_at: new Date().toISOString(),
+      customer_name: fieldValue(fields, "customer_name", "Walk-in customer") || "Walk-in customer",
+      payment_status: fieldValue(fields, "payment_status", "paid"),
+      initial_payment: money(fieldValue(fields, "initial_payment", 0)),
+      total: cart.total,
+      items: cart.items || [],
+      sync_status: "Pending sync",
+    };
+    const receipts = read(OFFLINE_RECEIPTS_KEY, []);
+    receipts.unshift(receipt);
+    write(OFFLINE_RECEIPTS_KEY, receipts.slice(0, 50));
+    return receipt;
+  }
+
+  function markPendingReceiptsSynced() {
+    const receipts = read(OFFLINE_RECEIPTS_KEY, []);
+    write(
+      OFFLINE_RECEIPTS_KEY,
+      receipts.map((receipt) =>
+        receipt.sync_status === "Pending sync"
+          ? { ...receipt, sync_status: "Synced", synced_at: new Date().toISOString() }
+          : receipt
+      )
+    );
+  }
+
+  function receiptHtml(receipt, printReady) {
+    const rows = (receipt.items || [])
+      .map(
+        (item) => `
+          <tr>
+            <td>${escapeHtml(item.name)}</td>
+            <td style="text-align:center;">${escapeHtml(item.quantity)}</td>
+            <td style="text-align:right;">NGN ${escapeHtml(item.price)}</td>
+            <td style="text-align:right;">NGN ${money(Number(item.price || 0) * Number(item.quantity || 0))}</td>
+          </tr>
+        `
+      )
+      .join("");
+    return `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>${escapeHtml(receipt.receipt_no)}</title>
+        <style>
+          body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#111827;margin:0;padding:1rem}
+          main{max-width:720px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:1.25rem}
+          h1{margin:0;font-size:1.4rem}.muted{color:#64748b;font-size:.9rem}
+          .top{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;border-bottom:1px solid #e5e7eb;padding-bottom:1rem;margin-bottom:1rem}
+          table{width:100%;border-collapse:collapse;margin-top:1rem}th,td{border-bottom:1px solid #e5e7eb;padding:.7rem;text-align:left;font-size:.92rem}
+          th{background:#f8fafc;color:#475569;font-size:.78rem;text-transform:uppercase}.total{display:flex;justify-content:flex-end;margin-top:1rem;font-size:1.2rem;font-weight:800}
+          .badge{display:inline-block;border-radius:999px;background:#fef3c7;color:#92400e;padding:.25rem .55rem;font-size:.75rem;font-weight:800}
+          .actions{margin-top:1rem;display:flex;gap:.5rem;justify-content:flex-end}button{border:0;border-radius:10px;background:#111827;color:#fff;padding:.75rem 1rem;font-weight:800;cursor:pointer}
+          @media print{body{background:#fff;padding:0}.actions{display:none}main{border:0;border-radius:0;max-width:none}}
+        </style>
+      </head>
+      <body>
+        <main>
+          <div class="top">
+            <div><h1>VilaStore Offline Receipt</h1><div class="muted">Temporary receipt. It will be confirmed after cloud sync.</div></div>
+            <div style="text-align:right;"><strong>${escapeHtml(receipt.receipt_no)}</strong><br><span class="badge">${escapeHtml(receipt.sync_status)}</span></div>
+          </div>
+          <div class="muted">Date: ${escapeHtml(formatDateTime(receipt.created_at))}</div>
+          <div class="muted">Customer: ${escapeHtml(receipt.customer_name)}</div>
+          <div class="muted">Payment: ${escapeHtml(receipt.payment_status)}</div>
+          <table>
+            <thead><tr><th>Product</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Total</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="4">No items recorded.</td></tr>`}</tbody>
+          </table>
+          <div class="total">Total: NGN ${escapeHtml(receipt.total)}</div>
+          <div class="actions"><button onclick="window.print()">Print Receipt</button></div>
+        </main>
+        ${printReady ? "<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},300)})</script>" : ""}
+      </body>
+      </html>
+    `;
+  }
+
+  function openOfflineReceipt(receiptId, printReady) {
+    const receipt = read(OFFLINE_RECEIPTS_KEY, []).find((item) => item.id === receiptId || item.receipt_no === receiptId);
+    if (!receipt) {
+      notify("Offline receipt not found.", true);
+      return;
+    }
+    const popup = window.open("", "_blank", "noopener,noreferrer,width=780,height=900");
+    if (!popup) {
+      notify("Allow popups to view or print this offline receipt.", true);
+      return;
+    }
+    popup.document.open();
+    popup.document.write(receiptHtml(receipt, printReady));
+    popup.document.close();
+  }
+
   function ensureStatusWidget() {
     let button = document.getElementById("offlineStatusButton");
     if (!button) {
@@ -344,6 +467,7 @@
 
     const pending = queueBreakdown();
     const counts = localRecordCounts();
+    const receipts = read(OFFLINE_RECEIPTS_KEY, []);
     const lastSync = read(LAST_SYNC_KEY, "");
     const lastError = read(LAST_SYNC_ERROR_KEY, "");
     const online = navigator.onLine;
@@ -375,6 +499,30 @@
       ${statusCard("Local Records", `${counts.products} products cached`, `${counts.cart} cart items, ${counts.customers} local customers, ${counts.expenses} local expenses, ${counts.activities} recent activities.`)}
       ${statusCard("Last Successful Sync", formatDateTime(lastSync))}
       ${lastError ? statusCard("Last Sync Error", lastError) : ""}
+      ${
+        receipts.length
+          ? `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:.8rem;background:#fff;">
+              <div style="font-size:.75rem;color:#64748b;font-weight:800;margin-bottom:.5rem;">Offline Receipts</div>
+              ${receipts
+                .slice(0, 5)
+                .map(
+                  (receipt) => `
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.5rem 0;border-top:1px solid #f1f5f9;">
+                      <div>
+                        <strong>${escapeHtml(receipt.receipt_no)}</strong>
+                        <div style="font-size:.78rem;color:#64748b;">NGN ${escapeHtml(receipt.total)} - ${escapeHtml(receipt.sync_status)}</div>
+                      </div>
+                      <div style="display:flex;gap:.35rem;">
+                        <button type="button" data-offline-view-receipt="${escapeHtml(receipt.id)}" style="border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#111827;padding:.45rem .6rem;font-weight:800;cursor:pointer;">View</button>
+                        <button type="button" data-offline-print-receipt="${escapeHtml(receipt.id)}" style="border:0;border-radius:8px;background:#111827;color:#fff;padding:.45rem .6rem;font-weight:800;cursor:pointer;">Print</button>
+                      </div>
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>`
+          : ""
+      }
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
         <button type="button" data-offline-sync-now style="border:0;border-radius:10px;background:#111827;color:#fff;padding:.75rem 1rem;font-weight:800;cursor:pointer;">Sync Now</button>
         <button type="button" data-offline-refresh-status style="border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111827;padding:.75rem 1rem;font-weight:800;cursor:pointer;">Refresh</button>
@@ -385,6 +533,12 @@
     `;
     body.querySelector("[data-offline-sync-now]")?.addEventListener("click", flushQueue);
     body.querySelector("[data-offline-refresh-status]")?.addEventListener("click", renderOfflineStatus);
+    body.querySelectorAll("[data-offline-view-receipt]").forEach((button) => {
+      button.addEventListener("click", () => openOfflineReceipt(button.dataset.offlineViewReceipt, false));
+    });
+    body.querySelectorAll("[data-offline-print-receipt]").forEach((button) => {
+      button.addEventListener("click", () => openOfflineReceipt(button.dataset.offlinePrintReceipt, true));
+    });
   }
 
   function formFields(form, submitter) {
@@ -453,6 +607,7 @@
       write(LAST_SYNC_KEY, new Date().toISOString());
       write(LAST_SYNC_ERROR_KEY, "");
       if (!remaining.length) {
+        markPendingReceiptsSynced();
         write(CUSTOMERS_KEY, []);
         write(EXPENSES_KEY, []);
         write(ACTIVITIES_KEY, []);
@@ -777,11 +932,13 @@
       const productId = (actionPath.match(/remove-from-cart\/([^/]+)/) || [])[1];
       updateOfflineCart(productId, "remove");
     } else if (actionPath.includes("/checkout/")) {
-      const saleTotal = getCart().total;
+      const receipt = saveOfflineReceipt(fields);
+      const saleTotal = receipt.total;
       write(CART_KEY, { items: [], total: "0.00" });
       renderCart();
-      rememberActivity({ kind: "Sale", label: `NGN ${saleTotal}`, detail: "Sale saved offline and waiting to sync." });
-      notify("Sale saved offline. It will sync when internet returns.");
+      rememberActivity({ kind: "Sale", label: `${receipt.receipt_no} - NGN ${saleTotal}`, detail: "Offline receipt generated and waiting to sync." });
+      notify(`Offline receipt ${receipt.receipt_no} generated. It will sync when internet returns.`, true);
+      openOfflineReceipt(receipt.id, false);
     } else if (actionPath.includes("/add_product") || actionPath.includes("/add-product") || actionPath.includes("/edit-product/")) {
       upsertLocalProduct(fields, actionPath);
       notify("Product saved offline. It will sync when internet returns.");
