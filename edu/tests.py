@@ -19,6 +19,7 @@ from .models import (
     Profile,
     Result,
     ResultSubmission,
+    SalaryVoucher,
     Staff,
     Student,
     StudentClassHistory,
@@ -351,6 +352,69 @@ class EduPortalFeesTests(TestCase):
         self.academic_class.refresh_from_db()
         self.assertEqual(self.academic_class.academic_session, session)
         self.assertEqual(self.academic_class.academic_term, term)
+
+    def test_accountant_creates_salary_voucher_for_admin_approval(self):
+        staff = Staff.objects.create(
+            institution=self.institution,
+            full_name="Salary Teacher",
+            staff_id="SAL/001",
+            role="teacher",
+        )
+
+        response = self.client.post(reverse("edu:secondary_create_salary_voucher"), {
+            "staff": str(staff.id),
+            "bank_account_number": "0123456789",
+            "bank_name": "Test Bank",
+            "verified_account_name": "Salary Teacher",
+            "salary_amount": "150000.00",
+            "payment_date": timezone.localdate().isoformat(),
+            "payment_frequency": "monthly",
+            "payment_gateway": "flutterwave",
+        })
+
+        self.assertRedirects(response, reverse("edu:secondary_page", kwargs={"role": "accountant", "page": "salary-vouchers"}))
+        voucher = SalaryVoucher.objects.get(institution=self.institution, staff=staff)
+        self.assertEqual(voucher.status, "pending")
+        self.assertEqual(voucher.account_verification_status, "manual_review")
+        self.assertEqual(voucher.verified_account_name, "Salary Teacher")
+
+    def test_admin_approves_salary_voucher(self):
+        staff = Staff.objects.create(
+            institution=self.institution,
+            full_name="Approved Teacher",
+            staff_id="SAL/002",
+            role="teacher",
+        )
+        voucher = SalaryVoucher.objects.create(
+            institution=self.institution,
+            staff=staff,
+            staff_name=staff.full_name,
+            bank_account_number="0123456789",
+            bank_name="Test Bank",
+            verified_account_name=staff.full_name,
+            salary_amount="120000.00",
+            payment_date=timezone.localdate(),
+            account_verification_status="manual_review",
+            created_by=self.accountant,
+        )
+        admin = get_user_model().objects.create_user(
+            username="salary-admin",
+            password="StrongPass123!",
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        admin.profile.institution = self.institution
+        admin.profile.institution_type = "secondary"
+        admin.profile.role = "admin"
+        admin.profile.is_approved = True
+        admin.profile.save()
+        self.client.force_login(admin)
+
+        response = self.client.post(reverse("edu:secondary_approve_salary_voucher", kwargs={"voucher_id": voucher.id}))
+
+        self.assertRedirects(response, reverse("edu:secondary_page", kwargs={"role": "admin", "page": "salary-vouchers"}))
+        voucher.refresh_from_db()
+        self.assertEqual(voucher.status, "approved")
+        self.assertEqual(voucher.approved_by, admin)
 
     def test_teacher_scores_use_registry_session_term_and_save_metadata(self):
         session = AcademicSession.objects.create(institution=self.institution, name="2025/2026")

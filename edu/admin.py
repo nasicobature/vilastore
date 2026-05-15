@@ -14,6 +14,7 @@ from .models import (
     Staff,
     Fee,
     Payment,
+    SalaryVoucher,
     Result,
     TeacherAssignment,
     ClassSubject,
@@ -207,6 +208,14 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = ('student', 'fee', 'institution', 'amount', 'status', 'payment_method', 'reference', 'paid_at')
     list_filter = ('institution', 'fee', 'status', 'payment_method')
     search_fields = ('reference', 'gateway_reference', 'student__full_name', 'student__student_id')
+
+
+@admin.register(SalaryVoucher)
+class SalaryVoucherAdmin(admin.ModelAdmin):
+    list_display = ('reference', 'staff_name', 'institution', 'salary_amount', 'payment_gateway', 'payment_date', 'status', 'account_verification_status')
+    list_filter = ('institution', 'payment_gateway', 'payment_frequency', 'status', 'account_verification_status', 'payment_date')
+    search_fields = ('reference', 'staff_name', 'bank_account_number', 'verified_account_name', 'gateway_reference')
+    readonly_fields = ('reference', 'created_at', 'updated_at', 'approved_at', 'processed_at')
 
 
 @admin.register(Result)

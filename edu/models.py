@@ -333,6 +333,74 @@ class Payment(models.Model):
         return f"{self.student} - {self.amount}"
 
 
+class SalaryVoucher(models.Model):
+    GATEWAY_CHOICES = [
+        ('flutterwave', 'Flutterwave'),
+        ('paystack', 'Paystack'),
+        ('remita', 'Remita'),
+    ]
+    FREQUENCY_CHOICES = [
+        ('monthly', 'Monthly'),
+        ('weekly', 'Weekly'),
+        ('one_time', 'One-time'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('paid', 'Paid'),
+        ('failed', 'Failed'),
+    ]
+    ACCOUNT_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('verified', 'Verified'),
+        ('failed', 'Failed'),
+        ('manual_review', 'Manual Review'),
+    ]
+
+    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='salary_vouchers')
+    staff = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='salary_vouchers')
+    staff_name = models.CharField(max_length=150)
+    bank_account_number = models.CharField(max_length=30)
+    bank_name = models.CharField(max_length=120)
+    bank_code = models.CharField(max_length=30, blank=True)
+    verified_account_name = models.CharField(max_length=150)
+    salary_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_date = models.DateField()
+    payment_frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, default='monthly')
+    payment_gateway = models.CharField(max_length=20, choices=GATEWAY_CHOICES, default='flutterwave')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    account_verification_status = models.CharField(max_length=20, choices=ACCOUNT_STATUS_CHOICES, default='pending')
+    account_verification_note = models.TextField(blank=True)
+    reference = models.CharField(max_length=80, unique=True, null=True, blank=True)
+    gateway_reference = models.CharField(max_length=120, blank=True)
+    failure_reason = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_salary_vouchers')
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_salary_vouchers')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-payment_date', '-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            prefix = 'EDUSAL'
+            timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+            base = f"{prefix}-{timestamp}"
+            reference = base
+            counter = 1
+            while SalaryVoucher.objects.filter(reference=reference).exclude(pk=self.pk).exists():
+                counter += 1
+                reference = f"{base}-{counter}"
+            self.reference = reference
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.staff_name} - {self.salary_amount} ({self.status})"
+
+
 class Result(models.Model):
     institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='results')
     student = models.ForeignKey(Student, on_delete=models.CASCADE)

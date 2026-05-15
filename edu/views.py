@@ -11,7 +11,7 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .models import Institution, Student, Staff, Fee, Payment, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
+from .models import Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
 from .verification import create_document_verifications
 
 
@@ -68,6 +68,122 @@ def _verify_flutterwave_reference(payment_reference):
     if response.status_code >= 400:
         return payload, 'Payment verification failed. Please try again.'
     return payload, ''
+
+
+def _normalize_gateway(value):
+    gateway = (value or '').strip().lower()
+    if gateway in {'flutterwave', 'paystack', 'remita'}:
+        return gateway
+    return 'flutterwave'
+
+
+def _verify_salary_account(institution, gateway, account_number, bank_code, provided_name):
+    gateway = _normalize_gateway(gateway)
+    account_number = (account_number or '').strip()
+    bank_code = (bank_code or '').strip()
+    provided_name = (provided_name or '').strip()
+    if not account_number or len(account_number) < 10:
+        return False, '', 'failed', 'Enter a valid bank account number.'
+    if not bank_code and gateway in {'flutterwave', 'paystack'}:
+        if provided_name:
+            return True, provided_name, 'manual_review', 'Bank code is missing, so the account name was saved for manual review.'
+        return False, '', 'failed', 'Bank code is required for automatic account verification.'
+
+    secret = (institution.payment_secret_key or '').strip()
+    if gateway == 'flutterwave' and secret:
+        try:
+            response = requests.post(
+                'https://api.flutterwave.com/v3/accounts/resolve',
+                headers={'Authorization': f'Bearer {secret}', 'Content-Type': 'application/json'},
+                json={'account_number': account_number, 'account_bank': bank_code},
+                timeout=15,
+            )
+            payload = response.json()
+            data = payload.get('data') or {}
+            account_name = (data.get('account_name') or '').strip()
+            if response.ok and account_name:
+                return True, account_name, 'verified', 'Account verified with Flutterwave.'
+            return False, provided_name, 'failed', payload.get('message') or 'Flutterwave could not verify this account.'
+        except Exception:
+            return False, provided_name, 'failed', 'Flutterwave account verification failed. Please try again.'
+
+    if gateway == 'paystack' and secret:
+        try:
+            response = requests.get(
+                'https://api.paystack.co/bank/resolve',
+                headers={'Authorization': f'Bearer {secret}'},
+                params={'account_number': account_number, 'bank_code': bank_code},
+                timeout=15,
+            )
+            payload = response.json()
+            data = payload.get('data') or {}
+            account_name = (data.get('account_name') or '').strip()
+            if response.ok and account_name:
+                return True, account_name, 'verified', 'Account verified with Paystack.'
+            return False, provided_name, 'failed', payload.get('message') or 'Paystack could not verify this account.'
+        except Exception:
+            return False, provided_name, 'failed', 'Paystack account verification failed. Please try again.'
+
+    if provided_name:
+        label = gateway.title()
+        return True, provided_name, 'manual_review', f'{label} automatic verification is not configured yet; saved for admin review.'
+    return False, '', 'failed', 'Verified account name is required when automatic verification is not configured.'
+
+
+def _process_salary_voucher(voucher):
+    if voucher.status != 'approved':
+        return False, 'Only approved vouchers can be processed.'
+    if voucher.payment_date > timezone.localdate():
+        return False, 'Payment date has not reached yet.'
+
+    institution = voucher.institution
+    secret = (institution.payment_secret_key or '').strip()
+    gateway = _normalize_gateway(voucher.payment_gateway)
+    if not secret:
+        voucher.status = 'failed'
+        voucher.failure_reason = 'Payment gateway secret key is not configured.'
+        voucher.processed_at = timezone.now()
+        voucher.save(update_fields=['status', 'failure_reason', 'processed_at', 'updated_at'])
+        return False, voucher.failure_reason
+
+    try:
+        if gateway == 'flutterwave':
+            response = requests.post(
+                'https://api.flutterwave.com/v3/transfers',
+                headers={'Authorization': f'Bearer {secret}', 'Content-Type': 'application/json'},
+                json={
+                    'account_bank': voucher.bank_code,
+                    'account_number': voucher.bank_account_number,
+                    'amount': float(voucher.salary_amount),
+                    'currency': institution.currency or 'NGN',
+                    'narration': f'Salary payout {voucher.reference}',
+                    'reference': voucher.reference,
+                },
+                timeout=20,
+            )
+            payload = response.json()
+            data = payload.get('data') or {}
+            if response.ok and str(payload.get('status')).lower() == 'success':
+                voucher.status = 'paid'
+                voucher.gateway_reference = str(data.get('id') or data.get('reference') or voucher.reference)
+                voucher.failure_reason = ''
+                voucher.processed_at = timezone.now()
+                voucher.save(update_fields=['status', 'gateway_reference', 'failure_reason', 'processed_at', 'updated_at'])
+                return True, 'Salary payout processed with Flutterwave.'
+            message = payload.get('message') or 'Flutterwave payout failed.'
+        elif gateway == 'paystack':
+            message = 'Paystack transfer requires transfer recipient setup; voucher kept as failed for manual retry.'
+        else:
+            message = 'Remita payout API is not configured yet; process this voucher manually or add Remita integration keys.'
+    except Exception:
+        message = 'Payment gateway payout request failed. Please try again.'
+
+    voucher.status = 'failed'
+    voucher.failure_reason = message
+    voucher.processed_at = timezone.now()
+    voucher.save(update_fields=['status', 'failure_reason', 'processed_at', 'updated_at'])
+    return False, message
+
 
 SECONDARY_ROLES = [
     {"slug": "admin", "label": "Admin"},
@@ -480,6 +596,7 @@ def _get_secondary_nav(role):
         'payments': 'credit-card',
         'receipts': 'file-text',
         'reports': 'file-text',
+        'salary-vouchers': 'banknote',
         'my-classes': 'school',
         'my-students': 'users',
         'enter-scores': 'clipboard-check',
@@ -494,9 +611,9 @@ def _get_secondary_nav(role):
     }
 
     role_map = {
-        'admin': ['dashboard', 'users', 'teachers', 'classes', 'subjects', 'assign-teachers', 'approve-results', 'settings'],
+        'admin': ['dashboard', 'users', 'teachers', 'classes', 'subjects', 'assign-teachers', 'approve-results', 'salary-vouchers', 'settings'],
         'registry': ['dashboard', 'register', 'teachers', 'assign-class', 'sessions', 'student-ids'],
-        'accountant': ['dashboard', 'fees', 'payments', 'receipts', 'reports'],
+        'accountant': ['dashboard', 'fees', 'salary-vouchers', 'payments', 'receipts', 'reports'],
         'teacher': ['dashboard', 'my-classes', 'my-students', 'enter-scores', 'submit-results'],
         'examiner': ['dashboard', 'review-results', 'result-sheets'],
         'student': ['dashboard', 'subjects-student', 'test-scores', 'results', 'pay-fees', 'profile'],
@@ -519,6 +636,7 @@ def _get_secondary_nav(role):
         'payments': 'Payments',
         'receipts': 'Receipts',
         'reports': 'Reports',
+        'salary-vouchers': 'Salary Vouchers',
         'my-classes': 'My Classes',
         'my-students': 'My Students',
         'enter-scores': 'Enter Scores',
@@ -1239,6 +1357,135 @@ def secondary_payment_settings(request):
         institution.save(update_fields=['payment_provider', 'payment_public_key', 'payment_secret_key', 'allow_online_payment'])
         messages.success(request, 'Payment settings updated.')
     return redirect('edu:secondary_page', role=creator_profile.role, page='fees')
+
+
+@login_required
+def secondary_create_salary_voucher(request):
+    profile = getattr(request.user, 'profile', None)
+    if not profile or profile.institution_type != 'secondary' or profile.role != 'accountant':
+        messages.error(request, 'Only Accountants can create salary vouchers.')
+        return redirect('edu:secondary_dashboard', role=profile.role if profile else 'accountant')
+
+    institution = profile.institution
+    if request.method == 'POST':
+        staff_id = request.POST.get('staff', '').strip()
+        staff = Staff.objects.filter(id=staff_id, institution=institution).first()
+        staff_name = (request.POST.get('staff_name') or (staff.full_name if staff else '')).strip()
+        account_number = request.POST.get('bank_account_number', '').strip()
+        bank_name = request.POST.get('bank_name', '').strip()
+        bank_code = request.POST.get('bank_code', '').strip()
+        provided_account_name = request.POST.get('verified_account_name', '').strip()
+        gateway = _normalize_gateway(request.POST.get('payment_gateway'))
+        frequency = request.POST.get('payment_frequency', 'monthly').strip() or 'monthly'
+        payment_date_raw = request.POST.get('payment_date', '').strip()
+        amount_raw = request.POST.get('salary_amount', '').strip()
+
+        try:
+            salary_amount = Decimal(amount_raw)
+            if salary_amount <= 0:
+                raise ValueError
+        except Exception:
+            messages.error(request, 'Enter a valid salary amount.')
+            return redirect('edu:secondary_page', role=profile.role, page='salary-vouchers')
+
+        try:
+            payment_date = timezone.datetime.strptime(payment_date_raw, '%Y-%m-%d').date()
+        except Exception:
+            messages.error(request, 'Select a valid salary payment date.')
+            return redirect('edu:secondary_page', role=profile.role, page='salary-vouchers')
+
+        if not staff_name or not bank_name:
+            messages.error(request, 'Staff name and bank name are required.')
+            return redirect('edu:secondary_page', role=profile.role, page='salary-vouchers')
+
+        verified, account_name, account_status, note = _verify_salary_account(
+            institution,
+            gateway,
+            account_number,
+            bank_code,
+            provided_account_name,
+        )
+        if not verified:
+            messages.error(request, note)
+            return redirect('edu:secondary_page', role=profile.role, page='salary-vouchers')
+
+        SalaryVoucher.objects.create(
+            institution=institution,
+            staff=staff,
+            staff_name=staff_name,
+            bank_account_number=account_number,
+            bank_name=bank_name,
+            bank_code=bank_code,
+            verified_account_name=account_name,
+            salary_amount=salary_amount,
+            payment_date=payment_date,
+            payment_frequency=frequency if frequency in dict(SalaryVoucher.FREQUENCY_CHOICES) else 'monthly',
+            payment_gateway=gateway,
+            status='pending',
+            account_verification_status=account_status,
+            account_verification_note=note,
+            created_by=request.user,
+        )
+        messages.success(request, 'Salary voucher created and sent to Admin for approval.')
+    return redirect('edu:secondary_page', role=profile.role, page='salary-vouchers')
+
+
+@login_required
+def secondary_approve_salary_voucher(request, voucher_id):
+    profile = getattr(request.user, 'profile', None)
+    if not profile or profile.institution_type != 'secondary' or profile.role != 'admin':
+        messages.error(request, 'Only Admin can approve salary vouchers.')
+        return redirect('edu:secondary_dashboard', role=profile.role if profile else 'admin')
+
+    voucher = get_object_or_404(SalaryVoucher, id=voucher_id, institution=profile.institution)
+    if request.method == 'POST':
+        if voucher.status != 'pending':
+            messages.error(request, 'Only pending salary vouchers can be approved.')
+        elif voucher.account_verification_status not in {'verified', 'manual_review'}:
+            messages.error(request, 'Voucher account must be verified or marked for manual review before approval.')
+        else:
+            voucher.status = 'approved'
+            voucher.approved_by = request.user
+            voucher.approved_at = timezone.now()
+            voucher.failure_reason = ''
+            voucher.save(update_fields=['status', 'approved_by', 'approved_at', 'failure_reason', 'updated_at'])
+            messages.success(request, 'Salary voucher approved. It will be processed on the selected payment date.')
+    return redirect('edu:secondary_page', role=profile.role, page='salary-vouchers')
+
+
+@login_required
+def secondary_process_salary_vouchers(request):
+    profile = getattr(request.user, 'profile', None)
+    if not profile or profile.institution_type != 'secondary' or profile.role not in {'admin', 'accountant'}:
+        messages.error(request, 'Only Admin or Accountant can process due salary vouchers.')
+        return redirect('edu:secondary_dashboard', role=profile.role if profile else 'admin')
+
+    if request.method == 'POST':
+        voucher_id = request.POST.get('voucher_id', '').strip()
+        vouchers = SalaryVoucher.objects.filter(
+            institution=profile.institution,
+            status='approved',
+            payment_date__lte=timezone.localdate(),
+        )
+        if voucher_id:
+            vouchers = vouchers.filter(id=voucher_id)
+        processed = 0
+        failed = 0
+        last_message = ''
+        for voucher in vouchers:
+            ok, message = _process_salary_voucher(voucher)
+            last_message = message
+            if ok:
+                processed += 1
+            else:
+                failed += 1
+        if processed:
+            messages.success(request, f'{processed} salary payout(s) processed successfully.')
+        if failed:
+            messages.error(request, f'{failed} salary payout(s) failed. {last_message}')
+        if not processed and not failed:
+            messages.info(request, 'No approved salary vouchers are due for processing.')
+    return redirect('edu:secondary_page', role=profile.role, page='salary-vouchers')
 
 
 @login_required
@@ -2065,6 +2312,7 @@ def secondary_page(request, role, page):
     role = profile.role
 
     institution = profile.institution
+    today = timezone.localdate()
     students = Student.objects.filter(institution=institution).select_related('academic_class')[:5]
     fee_summary = _school_fee_summary(institution)
     fees_total = fee_summary['paid_total']
@@ -2072,6 +2320,10 @@ def secondary_page(request, role, page):
     fees = Fee.objects.filter(institution=institution).prefetch_related('classes', 'departments').order_by('-id')
     payments_all = Payment.objects.filter(institution=institution).select_related('student', 'fee').order_by('-paid_at')
     payments = payments_all[:20]
+    salary_vouchers_all = SalaryVoucher.objects.filter(institution=institution).select_related('staff', 'created_by', 'approved_by')
+    salary_vouchers = salary_vouchers_all[:30]
+    pending_salary_vouchers = salary_vouchers_all.filter(status='pending')
+    approved_due_salary_vouchers = salary_vouchers_all.filter(status='approved', payment_date__lte=today)
 
     stats = [
         {"label": "Total Students", "value": str(Student.objects.filter(institution=institution).count())},
@@ -2090,6 +2342,7 @@ def secondary_page(request, role, page):
         ).select_related('user')
 
     students_all = Student.objects.filter(institution=institution).select_related('academic_class')
+    staff_members = Staff.objects.filter(institution=institution).order_by('full_name')
     teachers = Staff.objects.filter(institution=institution, role='teacher').prefetch_related('assignments__academic_class', 'subject_assignments__academic_class', 'subject_assignments__subject')
     sessions = AcademicSession.objects.filter(institution=institution).order_by('-name')
     terms = AcademicTerm.objects.filter(session__institution=institution).select_related('session').order_by('-session__name', 'term')
@@ -2227,7 +2480,6 @@ def secondary_page(request, role, page):
         ]
 
     if role == 'accountant':
-        today = timezone.localdate()
         accountant_today_total = payments_all.filter(status='Paid', paid_at__date=today).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         accountant_pending_payments = payments_all.exclude(status='Paid')[:8]
         accountant_dashboard_cards = [
@@ -2711,6 +2963,7 @@ def secondary_page(request, role, page):
         'payments',
         'receipts',
         'reports',
+        'salary-vouchers',
         'my-classes',
         'my-students',
         'enter-scores',
@@ -2736,6 +2989,7 @@ def secondary_page(request, role, page):
         'students': students,
         'students_all': students_all,
         'teachers': teachers,
+        'staff_members': staff_members,
         'sessions': sessions,
         'terms': terms,
         'subjects': subjects,
@@ -2753,6 +3007,9 @@ def secondary_page(request, role, page):
         'accountant_pending_payments': accountant_pending_payments,
         'fees': fees,
         'payments': payments,
+        'salary_vouchers': salary_vouchers,
+        'pending_salary_vouchers': pending_salary_vouchers,
+        'approved_due_salary_vouchers': approved_due_salary_vouchers,
         'payment_public_key': institution.payment_public_key,
         'online_payment_enabled': institution.allow_online_payment and bool(institution.payment_public_key) and bool(institution.payment_secret_key),
         'pending_profiles': pending_profiles,
@@ -2823,6 +3080,7 @@ def secondary_page(request, role, page):
         'current_term_name': current_term.get_term_display() if current_term else '',
         'current_session_id': current_session.id if current_session else '',
         'current_term_id': current_term.id if current_term else '',
+        'today': today,
     })
 
 

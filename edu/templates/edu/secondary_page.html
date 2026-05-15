@@ -2735,6 +2735,178 @@
         </div>
       {% endif %}
 
+      {% if active_page == 'salary-vouchers' and role == 'accountant' or active_page == 'salary-vouchers' and role == 'admin' %}
+        <div class="space-y-5">
+          <div class="bg-card rounded-2xl border border-border p-5">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+                <p class="text-xs uppercase tracking-wider text-muted-foreground">Staff Payouts</p>
+                <h3 class="font-display text-2xl font-bold mt-1">Salary Vouchers</h3>
+                <p class="text-sm text-muted-foreground mt-2">Accountant creates vouchers, Admin approves, then due salary payouts are processed through the selected gateway.</p>
+              </div>
+              <form method="post" action="/edu/secondary/salary-vouchers/process/">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                  <i data-lucide="send" class="w-4 h-4"></i> Process Due Payouts
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Pending Approval</p>
+              <p class="text-2xl font-display font-bold mt-1">{{ pending_salary_vouchers|length }}</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Due Now</p>
+              <p class="text-2xl font-display font-bold mt-1">{{ approved_due_salary_vouchers|length }}</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Recent Vouchers</p>
+              <p class="text-2xl font-display font-bold mt-1">{{ salary_vouchers|length }}</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-5">
+              <p class="text-sm text-muted-foreground">Gateway</p>
+              <p class="text-2xl font-display font-bold mt-1">{{ user.profile.institution.payment_provider|default:"Not set" }}</p>
+            </div>
+          </div>
+
+          {% if role == 'accountant' %}
+            <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="font-display font-semibold">Create Salary Voucher</h3>
+                <span class="text-xs text-muted-foreground">Requires account verification</span>
+              </div>
+              <form method="post" action="/edu/secondary/salary-vouchers/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% csrf_token %}
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Teacher / Staff</label>
+                  <select name="staff" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="">Select staff or enter name below</option>
+                    {% for staff in staff_members %}
+                      <option value="{{ staff.id }}">{{ staff.full_name }} - {{ staff.get_role_display }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Staff Name *</label>
+                  <input type="text" name="staff_name" placeholder="Used if no staff is selected" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Bank Account Number *</label>
+                  <input type="text" name="bank_account_number" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Bank Name *</label>
+                  <input type="text" name="bank_name" required placeholder="Access Bank, GTBank, UBA..." class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Bank Code</label>
+                  <input type="text" name="bank_code" placeholder="Required for automatic verification" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Verified Account Name *</label>
+                  <input type="text" name="verified_account_name" placeholder="Auto verified when gateway keys are ready" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Salary Amount *</label>
+                  <input type="number" step="0.01" name="salary_amount" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Payment Date *</label>
+                  <input type="date" name="payment_date" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Frequency</label>
+                  <select name="payment_frequency" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="monthly">Monthly</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="one_time">One-time</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5">Payment Gateway</label>
+                  <select name="payment_gateway" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="flutterwave">Flutterwave</option>
+                    <option value="paystack">Paystack</option>
+                    <option value="remita">Remita</option>
+                  </select>
+                </div>
+                <div class="md:col-span-2">
+                  <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                    Create Voucher
+                  </button>
+                </div>
+              </form>
+            </div>
+          {% endif %}
+
+          <div class="bg-card rounded-xl border border-border overflow-hidden">
+            <div class="flex items-center justify-between p-4 border-b border-border">
+              <h3 class="font-display font-semibold">{% if role == 'admin' %}Approve Salary Vouchers{% else %}Voucher History{% endif %}</h3>
+              <span class="text-xs text-muted-foreground">{{ salary_vouchers|length }} recent records</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="bg-muted/50">
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Reference</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Staff</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Account</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Amount</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Date</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Gateway</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Status</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  {% for voucher in salary_vouchers %}
+                    <tr class="hover:bg-muted/30 transition-colors">
+                      <td class="px-4 py-3 text-sm">{{ voucher.reference }}</td>
+                      <td class="px-4 py-3 text-sm">
+                        <div class="font-medium">{{ voucher.staff_name }}</div>
+                        <div class="text-xs text-muted-foreground">{{ voucher.get_payment_frequency_display }}</div>
+                      </td>
+                      <td class="px-4 py-3 text-sm">
+                        <div>{{ voucher.bank_name }} - {{ voucher.bank_account_number }}</div>
+                        <div class="text-xs text-muted-foreground">{{ voucher.verified_account_name }} / {{ voucher.get_account_verification_status_display }}</div>
+                      </td>
+                      <td class="px-4 py-3 text-sm">NGN {{ voucher.salary_amount }}</td>
+                      <td class="px-4 py-3 text-sm">{{ voucher.payment_date|date:"M j, Y" }}</td>
+                      <td class="px-4 py-3 text-sm">{{ voucher.get_payment_gateway_display }}</td>
+                      <td class="px-4 py-3 text-sm">
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if voucher.status == 'paid' %}bg-secondary/10 text-secondary{% elif voucher.status == 'failed' %}bg-destructive/10 text-destructive{% elif voucher.status == 'approved' %}bg-primary/10 text-primary{% else %}bg-muted text-muted-foreground{% endif %}">{{ voucher.get_status_display }}</span>
+                        {% if voucher.failure_reason %}<div class="text-xs text-destructive mt-1">{{ voucher.failure_reason }}</div>{% endif %}
+                      </td>
+                      <td class="px-4 py-3 text-sm">
+                        {% if role == 'admin' and voucher.status == 'pending' %}
+                          <form method="post" action="/edu/secondary/salary-vouchers/{{ voucher.id }}/approve/">
+                            {% csrf_token %}
+                            <button type="submit" class="text-xs text-primary hover:underline">Approve</button>
+                          </form>
+                        {% elif voucher.status == 'approved' and voucher.payment_date <= today %}
+                          <form method="post" action="/edu/secondary/salary-vouchers/process/">
+                            {% csrf_token %}
+                            <input type="hidden" name="voucher_id" value="{{ voucher.id }}">
+                            <button type="submit" class="text-xs text-primary hover:underline">Process</button>
+                          </form>
+                        {% else %}
+                          <span class="text-xs text-muted-foreground">-</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="8" class="px-4 py-3 text-sm text-muted-foreground">No salary vouchers yet.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
       {% if active_page == 'receipts' and role == 'accountant' %}
         <div class="space-y-5">
           <div class="bg-card rounded-2xl border border-border p-5">
