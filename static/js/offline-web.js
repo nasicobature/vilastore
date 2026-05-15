@@ -9,6 +9,8 @@
   const EXPENSES_KEY = "vilastore_web_expenses_v1";
   const ACTIVITIES_KEY = "vilastore_web_activities_v1";
   const OFFLINE_AUTH_KEY = "vilastore_web_offline_auth_v1";
+  const LAST_SYNC_KEY = "vilastore_web_last_sync_v1";
+  const LAST_SYNC_ERROR_KEY = "vilastore_web_last_sync_error_v1";
   const MAX_ACTIVITY_ROWS = 80;
   const OFFLINE_PAGE_URLS = [
     "/index/",
@@ -39,6 +41,15 @@
   function money(value) {
     const parsed = Number(value || 0);
     return Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
+  }
+
+  function formatDateTime(value) {
+    if (!value) return "Never";
+    try {
+      return new Date(value).toLocaleString();
+    } catch (err) {
+      return String(value);
+    }
   }
 
   function nowId(prefix) {
@@ -137,6 +148,7 @@
     });
     write(ACTIVITIES_KEY, rows.slice(0, MAX_ACTIVITY_ROWS));
     renderLocalRecords();
+    renderOfflineStatus();
   }
 
   function ensurePanel() {
@@ -195,6 +207,7 @@
   function updateStatus() {
     const panel = ensurePanel();
     const pending = getQueue().length;
+    renderOfflineStatus();
     if (!navigator.onLine) {
       panel.textContent = pending
         ? `Offline mode: ${pending} pending action${pending === 1 ? "" : "s"} will sync when internet returns.`
@@ -208,6 +221,170 @@
       return;
     }
     panel.style.display = "none";
+  }
+
+  function queueBreakdown() {
+    const rows = getQueue();
+    const summary = {
+      total: rows.length,
+      sales: 0,
+      products: 0,
+      customers: 0,
+      inventory: 0,
+      expenses: 0,
+      other: 0,
+    };
+    rows.forEach((entry) => {
+      const path = actionPathFromUrl(entry.action || "");
+      if (path.includes("/checkout/")) summary.sales += 1;
+      else if (path.includes("/add_product") || path.includes("/add-product") || path.includes("/edit-product/") || path.includes("/delete-product/")) summary.products += 1;
+      else if (path.includes("/adjust-stock/")) summary.inventory += 1;
+      else if (path.includes("/add-customer/") || path.includes("/edit-customer/") || path.includes("/delete-customer/")) summary.customers += 1;
+      else if (path.replace(/\/$/, "").endsWith("/expenses")) summary.expenses += 1;
+      else summary.other += 1;
+    });
+    return summary;
+  }
+
+  function localRecordCounts() {
+    return {
+      cart: getCart().items.length,
+      customers: read(CUSTOMERS_KEY, []).length,
+      expenses: read(EXPENSES_KEY, []).length,
+      activities: read(ACTIVITIES_KEY, []).length,
+      products: Object.values(read(PRODUCTS_KEY, {})).filter((item, index, rows) => {
+        if (!item || !item.id) return false;
+        return rows.findIndex((candidate) => candidate && String(candidate.id) === String(item.id)) === index;
+      }).length,
+    };
+  }
+
+  function ensureStatusWidget() {
+    let button = document.getElementById("offlineStatusButton");
+    if (!button) {
+      button = document.createElement("button");
+      button.id = "offlineStatusButton";
+      button.type = "button";
+      button.style.cssText = [
+        "position:fixed",
+        "right:1rem",
+        "bottom:1rem",
+        "z-index:99998",
+        "border:0",
+        "border-radius:999px",
+        "padding:0.75rem 1rem",
+        "background:#111827",
+        "color:#fff",
+        "box-shadow:0 16px 40px rgba(15,23,42,.2)",
+        "font:700 0.85rem system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+        "cursor:pointer",
+      ].join(";");
+      button.addEventListener("click", function () {
+        const drawer = ensureStatusDrawer();
+        drawer.style.display = drawer.style.display === "block" ? "none" : "block";
+        renderOfflineStatus();
+      });
+      document.body.appendChild(button);
+    }
+    return button;
+  }
+
+  function ensureStatusDrawer() {
+    let drawer = document.getElementById("offlineStatusDrawer");
+    if (drawer) return drawer;
+    drawer = document.createElement("section");
+    drawer.id = "offlineStatusDrawer";
+    drawer.style.cssText = [
+      "position:fixed",
+      "right:1rem",
+      "bottom:4.7rem",
+      "z-index:99998",
+      "display:none",
+      "width:min(420px,calc(100vw - 2rem))",
+      "max-height:min(680px,calc(100vh - 6rem))",
+      "overflow:auto",
+      "border:1px solid #e5e7eb",
+      "border-radius:14px",
+      "background:#fff",
+      "box-shadow:0 24px 70px rgba(15,23,42,.24)",
+      "color:#111827",
+      "font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+    ].join(";");
+    drawer.innerHTML = `
+      <div style="padding:1rem;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+        <div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:800;">VilaStore Sync</div>
+          <h3 style="margin:.15rem 0 0;font-size:1.05rem;">Offline Status</h3>
+        </div>
+        <button type="button" data-offline-close style="border:0;background:#f1f5f9;border-radius:8px;padding:.45rem .65rem;cursor:pointer;">Close</button>
+      </div>
+      <div id="offlineStatusBody" style="padding:1rem;display:grid;gap:.75rem;"></div>
+    `;
+    drawer.querySelector("[data-offline-close]").addEventListener("click", function () {
+      drawer.style.display = "none";
+    });
+    document.body.appendChild(drawer);
+    return drawer;
+  }
+
+  function statusCard(label, value, detail) {
+    return `
+      <div style="border:1px solid #e5e7eb;border-radius:12px;padding:.8rem;background:#f8fafc;">
+        <div style="font-size:.75rem;color:#64748b;font-weight:700;">${label}</div>
+        <div style="font-size:1.05rem;font-weight:800;margin-top:.15rem;">${value}</div>
+        ${detail ? `<div style="font-size:.78rem;color:#64748b;margin-top:.25rem;">${detail}</div>` : ""}
+      </div>
+    `;
+  }
+
+  function renderOfflineStatus() {
+    const button = document.getElementById("offlineStatusButton");
+    const drawer = document.getElementById("offlineStatusDrawer");
+    if (!button && !drawer) return;
+
+    const pending = queueBreakdown();
+    const counts = localRecordCounts();
+    const lastSync = read(LAST_SYNC_KEY, "");
+    const lastError = read(LAST_SYNC_ERROR_KEY, "");
+    const online = navigator.onLine;
+    const buttonText = online
+      ? pending.total
+        ? `Sync Pending (${pending.total})`
+        : "Online"
+      : pending.total
+      ? `Offline (${pending.total})`
+      : "Offline";
+    if (button) {
+      button.textContent = buttonText;
+      button.style.background = online ? (pending.total ? "#92400e" : "#166534") : "#991b1b";
+    }
+
+    const body = document.getElementById("offlineStatusBody");
+    if (!body) return;
+    body.innerHTML = `
+      ${statusCard("Connection", online ? "Online" : "Offline", online ? "Pending data can sync now." : "New actions will be saved on this browser.")}
+      ${statusCard("Pending Sync", String(pending.total), "Sales, products, customers, stock and expenses waiting for cloud sync.")}
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;">
+        ${statusCard("Sales", String(pending.sales))}
+        ${statusCard("Products", String(pending.products))}
+        ${statusCard("Customers", String(pending.customers))}
+        ${statusCard("Inventory", String(pending.inventory))}
+        ${statusCard("Expenses", String(pending.expenses))}
+        ${statusCard("Other", String(pending.other))}
+      </div>
+      ${statusCard("Local Records", `${counts.products} products cached`, `${counts.cart} cart items, ${counts.customers} local customers, ${counts.expenses} local expenses, ${counts.activities} recent activities.`)}
+      ${statusCard("Last Successful Sync", formatDateTime(lastSync))}
+      ${lastError ? statusCard("Last Sync Error", lastError) : ""}
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        <button type="button" data-offline-sync-now style="border:0;border-radius:10px;background:#111827;color:#fff;padding:.75rem 1rem;font-weight:800;cursor:pointer;">Sync Now</button>
+        <button type="button" data-offline-refresh-status style="border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111827;padding:.75rem 1rem;font-weight:800;cursor:pointer;">Refresh</button>
+      </div>
+      <div style="font-size:.78rem;color:#64748b;line-height:1.45;">
+        Payment gateway, subscription verification, marketplace updates, cloud backup and multi-device sync still require internet.
+      </div>
+    `;
+    body.querySelector("[data-offline-sync-now]")?.addEventListener("click", flushQueue);
+    body.querySelector("[data-offline-refresh-status]")?.addEventListener("click", renderOfflineStatus);
   }
 
   function formFields(form, submitter) {
@@ -273,6 +450,8 @@
     }
     setQueue(remaining);
     if (synced) {
+      write(LAST_SYNC_KEY, new Date().toISOString());
+      write(LAST_SYNC_ERROR_KEY, "");
       if (!remaining.length) {
         write(CUSTOMERS_KEY, []);
         write(EXPENSES_KEY, []);
@@ -280,6 +459,9 @@
         renderLocalRecords();
       }
       notify(`${synced} offline action${synced === 1 ? "" : "s"} synced successfully.`);
+    }
+    if (remaining.length) {
+      write(LAST_SYNC_ERROR_KEY, remaining[0].last_error || "Some items could not sync yet.");
     }
     updateStatus();
   }
@@ -624,6 +806,7 @@
     }
 
     enqueue({ action, method, fields });
+    renderOfflineStatus();
     return true;
   }
 
@@ -673,6 +856,8 @@
   };
 
   document.addEventListener("DOMContentLoaded", function () {
+    ensureStatusWidget();
+    ensureStatusDrawer();
     rememberOfflineSession();
     cacheProductsFromPage();
     seedCartFromServer();
@@ -680,6 +865,7 @@
     renderLocalRecords();
     bindForms();
     updateStatus();
+    renderOfflineStatus();
     flushQueue();
     warmOfflinePages();
   });
