@@ -590,6 +590,12 @@ def index(request):
         marketplace_orders_qs = marketplace_orders_qs.filter(branch=selected_branch)
     pending_orders = marketplace_orders_qs.exclude(status__in=[MarketplaceOrder.STATUS_DELIVERED, MarketplaceOrder.STATUS_CANCELLED]).count()
     recent_marketplace_orders = marketplace_orders_qs.select_related("assigned_shopboy", "branch").order_by("-created_at")[:5]
+    last_sale = None
+    last_sale_id = request.session.get("last_sale_id")
+    if last_sale_id:
+        last_sale = Sale.objects.filter(user=user, id=last_sale_id).first()
+        if not last_sale:
+            request.session.pop("last_sale_id", None)
 
     context = {
         'today_date': today,
@@ -603,6 +609,7 @@ def index(request):
         'top_products': top_products,
         'pending_orders': pending_orders,
         'recent_marketplace_orders': recent_marketplace_orders,
+        'last_sale': last_sale,
         'migration_warning': _check_migrations(),
         'branches': branches,
         'selected_branch': selected_branch,

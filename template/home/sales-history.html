@@ -216,8 +216,8 @@
               {% endfor %}
             </td>
             <td data-label="Receipt">
-              <a class="btn btn-outline btn-sm" href="{% url 'sale_receipt' sale.id %}" target="_blank" rel="noopener">
-                Print
+              <a class="btn btn-primary btn-sm" href="{% url 'sale_receipt' sale.id %}" target="_blank" rel="noopener">
+                <i data-lucide="receipt"></i> Print Slip
               </a>
             </td>
           </tr>

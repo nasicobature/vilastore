@@ -65,6 +65,33 @@
       </section>
       {% endif %}
 
+      <section class="card" style="padding:1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted-foreground);font-weight:800;">Shop Actions</div>
+          <h2 style="margin:0.15rem 0 0;font-size:1.15rem;">Sell, print slip, and check analysis</h2>
+          <p style="margin:0.25rem 0 0;color:var(--muted-foreground);font-size:0.9rem;">
+            {% if last_sale %}
+            Last online sale: ₦{{ last_sale.total_amount|floatformat:2 }} at {{ last_sale.created_at|date:"M d, H:i" }}.
+            {% else %}
+            Record a sale and VilaStore will show the print slip button here.
+            {% endif %}
+          </p>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          {% if last_sale %}
+          <a class="btn btn-primary" href="{% url 'sale_receipt' last_sale.id %}" target="_blank" rel="noopener">
+            <i data-lucide="receipt"></i> Print Slip
+          </a>
+          {% endif %}
+          <a class="btn btn-outline" href="{% url 'product' %}">
+            <i data-lucide="shopping-cart"></i> Make Sale
+          </a>
+          <a class="btn btn-outline" href="{% url 'ai_insights' %}">
+            <i data-lucide="sparkles"></i> Shop Analysis
+          </a>
+        </div>
+      </section>
+
       <section class="stats-grid">
         <div class="card stat-card">
           <div class="stat-card-header">
