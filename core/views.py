@@ -2926,9 +2926,9 @@ def _username_is_valid(username):
     return bool(re.fullmatch(r"[A-Za-z0-9._-]{3,30}", username or ""))
 
 
-TRIAL_DAYS = 30
-BASE_FEE = 7000
-MONTHLY_SUBSCRIPTION_FEE = 1000
+TRIAL_DAYS = 7
+BASE_FEE = 0
+MONTHLY_SUBSCRIPTION_FEE = 4000
 
 PLAN_CATALOG = {
     "starter": {
@@ -2936,7 +2936,7 @@ PLAN_CATALOG = {
         "tagline": "Start your business",
         "audience": "For small shops and beginners",
         "registration_fee": BASE_FEE,
-        "monthly_fee": Decimal("1000.00"),
+        "monthly_fee": Decimal("4000.00"),
         "product_limit": 1000,
         "staff_limit": 0,
         "branch_limit": 1,
@@ -2974,7 +2974,7 @@ PLAN_CATALOG = {
         "tagline": "Grow your customers",
         "audience": "For growing businesses",
         "registration_fee": BASE_FEE,
-        "monthly_fee": Decimal("5000.00"),
+        "monthly_fee": Decimal("8000.00"),
         "product_limit": 5000,
         "staff_limit": 3,
         "branch_limit": 1,
@@ -3566,7 +3566,7 @@ def signup(request):
             "Signup completed successfully. "
             f"Your free trial runs until {trial_end_display}. "
             f"First payment due after trial is NGN {first_payment_total:,} "
-            f"(NGN {registration_fee:,} registration + NGN {monthly_fee:,} {selected_plan['name']} subscription), "
+            f"(NGN {monthly_fee:,} {selected_plan['name']} subscription), "
             f"then NGN {monthly_fee:,}/month.",
         )
         return redirect(_post_login_redirect_name(signup_user))
@@ -3627,7 +3627,7 @@ def signup(request):
         "verify_description": "Verify your email before adding shop information.",
         "setup_step_label": "Shop Setup",
         "setup_heading": "Set Up Your Shop",
-        "setup_description": "Add your business and marketplace details. Start your 1-month free trial once you finish signup.",
+        "setup_description": "Add your business and marketplace details. Start your 1-week free trial once you finish signup.",
         "business_name_label": "Business Name",
         "business_type_label": "Business Type",
         "shop_category_label": "Marketplace Category",
@@ -3722,7 +3722,7 @@ def housing_signup(request):
             "Housing signup completed successfully. "
             f"Your free trial runs until {trial_end_display}. "
             f"First payment due after trial is NGN {first_payment_total:,} "
-            f"(NGN {registration_fee:,} registration + NGN {monthly_fee:,} {selected_plan['name']} subscription), "
+            f"(NGN {monthly_fee:,} {selected_plan['name']} subscription), "
             f"then NGN {monthly_fee:,}/month.",
         )
         return redirect("housing_management")

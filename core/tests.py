@@ -31,7 +31,7 @@ class SubscriptionPaymentGatewayTests(TestCase):
         session["pending_payment_user_id"] = self.user.id
         session.save()
 
-    def _flutterwave_success_response(self, amount="8000.00", email="payment@example.com"):
+    def _flutterwave_success_response(self, amount="4000.00", email="payment@example.com"):
         response = Mock()
         response.status_code = 200
         response.json.return_value = {
