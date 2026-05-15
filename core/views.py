@@ -394,7 +394,7 @@ def healthz(request):
 
 def service_worker(request):
     script = """
-const CACHE_NAME = "vilastore-web-offline-v3";
+const CACHE_NAME = "vilastore-web-offline-v4";
 const STATIC_ASSETS = [
   "/static/css/styles.css",
   "/static/js/app.js",

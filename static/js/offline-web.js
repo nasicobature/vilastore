@@ -24,6 +24,7 @@
     "/reports",
     "/customer",
     "/settings",
+    "/shopboy/dashboard/",
   ];
 
   function read(key, fallback) {
@@ -141,6 +142,19 @@
 
   function getOfflineSession() {
     return read(OFFLINE_AUTH_KEY, null);
+  }
+
+  function restoreOfflineRouteIfNeeded() {
+    if (navigator.onLine) return;
+    const session = getOfflineSession();
+    const lastPath = session && session.last_path ? session.last_path : "";
+    if (!lastPath || lastPath === window.location.pathname) return;
+    const offlineEntryPaths = new Set(["/", "/home/", "/login/", "/shopboy/login/"]);
+    if (!offlineEntryPaths.has(window.location.pathname)) return;
+    notify("Offline mode: opening your saved VilaStore dashboard...", true);
+    window.setTimeout(() => {
+      window.location.replace(lastPath);
+    }, 250);
   }
 
   function handleOfflineLogin(form, fields) {
@@ -1111,6 +1125,7 @@
     ensureStatusDrawer();
     rememberOfflineSession();
     rememberOfflineControls();
+    restoreOfflineRouteIfNeeded();
     cacheProductsFromPage();
     seedCartFromServer();
     renderCart();

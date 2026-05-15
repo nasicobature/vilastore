@@ -3,6 +3,8 @@
 <html lang="en">
 <head>
   {% include 'partials/branding-head.html' %}
+  <meta name="vilastore-offline-user" content="staff:{{ shopboy.username|escape }}">
+  <meta name="vilastore-offline-email" content="">
   <meta name="vilastore-offline-allow-staff-sales" content="{{ owner.allow_staff_offline_sales|yesno:'true,false' }}">
   <meta name="vilastore-offline-staff-max-sale" content="{{ owner.offline_staff_max_sale_amount|default:'' }}">
   <meta name="vilastore-offline-staff-pin" content="{{ owner.offline_staff_pin|default:''|escape }}">
