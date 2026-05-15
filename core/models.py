@@ -130,6 +130,13 @@ class User(AbstractUser):
     subscription_active_until = models.DateField(null=True, blank=True)
     monthly_fee = models.DecimalField(default=1000, max_digits=10, decimal_places=2)
 
+    # Offline staff sale controls
+    allow_staff_offline_sales = models.BooleanField(default=True)
+    offline_staff_max_sale_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    offline_staff_pin = models.CharField(max_length=12, blank=True, default="")
+    offline_staff_max_pending_sales = models.PositiveIntegerField(default=20)
+    offline_sync_warning_hours = models.PositiveIntegerField(default=24)
+
     def __str__(self):
         return self.username
 

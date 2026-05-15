@@ -12,6 +12,7 @@
   const LAST_SYNC_KEY = "vilastore_web_last_sync_v1";
   const LAST_SYNC_ERROR_KEY = "vilastore_web_last_sync_error_v1";
   const OFFLINE_RECEIPTS_KEY = "vilastore_web_offline_receipts_v1";
+  const OFFLINE_CONTROLS_KEY = "vilastore_web_offline_controls_v1";
   const MAX_ACTIVITY_ROWS = 80;
   const OFFLINE_PAGE_URLS = [
     "/index/",
@@ -69,6 +70,18 @@
   function fieldValue(fields, name, fallback) {
     const found = (fields || []).find(([key]) => key === name);
     return found ? found[1] : fallback;
+  }
+
+  function metaValue(name, fallback) {
+    const marker = document.querySelector(`meta[name="${name}"]`);
+    const value = marker ? marker.getAttribute("content") : "";
+    return value === null || value === "" ? fallback : value;
+  }
+
+  function numberOrNull(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   function cookieValue(name) {
@@ -146,6 +159,73 @@
     window.setTimeout(() => {
       window.location.href = session.last_path || "/index/";
     }, 600);
+    return true;
+  }
+
+  function rememberOfflineControls() {
+    const hasControls = document.querySelector('meta[name="vilastore-offline-allow-staff-sales"]');
+    if (!hasControls) return;
+    write(OFFLINE_CONTROLS_KEY, {
+      allowStaffOfflineSales: metaValue("vilastore-offline-allow-staff-sales", "true") !== "false",
+      staffMaxSaleAmount: numberOrNull(metaValue("vilastore-offline-staff-max-sale", "")),
+      staffPin: metaValue("vilastore-offline-staff-pin", ""),
+      staffMaxPendingSales: Math.max(1, Number(metaValue("vilastore-offline-staff-max-pending", "20")) || 20),
+      warningHours: Math.max(1, Number(metaValue("vilastore-offline-warning-hours", "24")) || 24),
+      savedAt: new Date().toISOString(),
+    });
+  }
+
+  function offlineControls() {
+    return read(OFFLINE_CONTROLS_KEY, {
+      allowStaffOfflineSales: true,
+      staffMaxSaleAmount: null,
+      staffPin: "",
+      staffMaxPendingSales: 20,
+      warningHours: 24,
+    });
+  }
+
+  function isStaffSalePath(actionPath) {
+    return actionPath.includes("/shopboy/cart/checkout/");
+  }
+
+  function pendingStaffSalesCount() {
+    return getQueue().filter((entry) => isStaffSalePath(actionPathFromUrl(entry.action || ""))).length;
+  }
+
+  function oldestPendingAgeHours() {
+    const queue = getQueue();
+    if (!queue.length) return 0;
+    const oldest = queue
+      .map((entry) => new Date(entry.created_at || Date.now()).getTime())
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b)[0];
+    if (!oldest) return 0;
+    return (Date.now() - oldest) / (1000 * 60 * 60);
+  }
+
+  function validateStaffOfflineCheckout(actionPath, saleTotal) {
+    if (!isStaffSalePath(actionPath)) return true;
+    const controls = offlineControls();
+    if (!controls.allowStaffOfflineSales) {
+      notify("Staff offline sales are disabled by the shop owner. Connect to internet or ask the owner to allow it.", true);
+      return false;
+    }
+    if (controls.staffMaxSaleAmount !== null && Number(saleTotal || 0) > Number(controls.staffMaxSaleAmount || 0)) {
+      notify(`This offline sale is above the staff limit of NGN ${money(controls.staffMaxSaleAmount)}. Connect to internet or ask the owner to raise the limit.`, true);
+      return false;
+    }
+    if (pendingStaffSalesCount() >= Number(controls.staffMaxPendingSales || 20)) {
+      notify(`Staff already has ${controls.staffMaxPendingSales} pending offline sale${Number(controls.staffMaxPendingSales) === 1 ? "" : "s"}. Sync before making another sale.`, true);
+      return false;
+    }
+    if (controls.staffPin) {
+      const entered = window.prompt("Enter staff offline PIN to complete this sale.");
+      if (entered !== controls.staffPin) {
+        notify("Incorrect staff offline PIN. Sale was not saved.", true);
+        return false;
+      }
+    }
     return true;
   }
 
@@ -470,6 +550,9 @@
     const receipts = read(OFFLINE_RECEIPTS_KEY, []);
     const lastSync = read(LAST_SYNC_KEY, "");
     const lastError = read(LAST_SYNC_ERROR_KEY, "");
+    const controls = offlineControls();
+    const staleHours = oldestPendingAgeHours();
+    const isStale = pending.total > 0 && staleHours >= Number(controls.warningHours || 24);
     const online = navigator.onLine;
     const buttonText = online
       ? pending.total
@@ -488,6 +571,7 @@
     body.innerHTML = `
       ${statusCard("Connection", online ? "Online" : "Offline", online ? "Pending data can sync now." : "New actions will be saved on this browser.")}
       ${statusCard("Pending Sync", String(pending.total), "Sales, products, customers, stock and expenses waiting for cloud sync.")}
+      ${isStale ? statusCard("Sync Warning", `${Math.floor(staleHours)} hours old`, "Some offline data has stayed too long on this browser. Sync as soon as internet is available.") : ""}
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;">
         ${statusCard("Sales", String(pending.sales))}
         ${statusCard("Products", String(pending.products))}
@@ -497,6 +581,11 @@
         ${statusCard("Other", String(pending.other))}
       </div>
       ${statusCard("Local Records", `${counts.products} products cached`, `${counts.cart} cart items, ${counts.customers} local customers, ${counts.expenses} local expenses, ${counts.activities} recent activities.`)}
+      ${statusCard(
+        "Staff Offline Rules",
+        controls.allowStaffOfflineSales ? "Allowed" : "Blocked",
+        `Limit: ${controls.staffMaxSaleAmount === null ? "No amount limit" : `NGN ${money(controls.staffMaxSaleAmount)}`} - Pending sales max: ${controls.staffMaxPendingSales || 20} - PIN: ${controls.staffPin ? "Required" : "Not required"}`
+      )}
       ${statusCard("Last Successful Sync", formatDateTime(lastSync))}
       ${lastError ? statusCard("Last Sync Error", lastError) : ""}
       ${
@@ -677,6 +766,7 @@
       host.innerHTML = "";
       return;
     }
+    const checkoutPath = window.location.pathname.includes("/shopboy/") ? "/shopboy/cart/checkout/" : "/checkout/";
     host.innerHTML = `
       <div class="card" style="padding:0.75rem 1rem;margin-bottom:0.75rem;border:1px dashed var(--border);">
         <strong>Offline cart</strong>
@@ -687,7 +777,7 @@
             .join("")}
         </ul>
         <strong>Total: NGN ${cart.total}</strong>
-        <form method="POST" action="/checkout/" data-offline-local-checkout="true" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.5rem;">
+        <form method="POST" action="${checkoutPath}" data-offline-local-checkout="true" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.5rem;">
           <select name="payment_status" class="input">
             <option value="paid">Paid</option>
             <option value="loan">Credit</option>
@@ -915,23 +1005,27 @@
       notify("Image upload needs internet. The text fields were saved offline; upload the image after sync.", true);
     }
 
-    if (actionPath.includes("/add-to-cart/")) {
-      const isCode = actionPath.includes("/by-code/");
+    if (actionPath.includes("/add-to-cart/") || actionPath.includes("/cart/add/")) {
+      const isCode = actionPath.includes("/by-code/") || actionPath.includes("/add-by-code/");
       const product = isCode
         ? findProduct(fields.find(([key]) => key === "code")?.[1], true)
-        : findProduct((actionPath.match(/add-to-cart\/(\d+)/) || [])[1], false);
+        : findProduct((actionPath.match(/(?:add-to-cart|cart\/add)\/(\d+)/) || [])[1], false);
       if (!product) {
         notify("This product code is not saved offline yet. Open inventory/products online once, then scan again.");
         return true;
       }
       addToOfflineCart(product, fields.find(([key]) => key === "quantity")?.[1] || 1);
-    } else if (actionPath.includes("/update-cart/")) {
-      const productId = (actionPath.match(/update-cart\/([^/]+)/) || [])[1];
+    } else if (actionPath.includes("/update-cart/") || actionPath.includes("/cart/update/")) {
+      const productId = (actionPath.match(/(?:update-cart|cart\/update)\/([^/]+)/) || [])[1];
       updateOfflineCart(productId, fields.find(([key]) => key === "action")?.[1], fields.find(([key]) => key === "quantity")?.[1]);
-    } else if (actionPath.includes("/remove-from-cart/")) {
-      const productId = (actionPath.match(/remove-from-cart\/([^/]+)/) || [])[1];
+    } else if (actionPath.includes("/remove-from-cart/") || actionPath.includes("/cart/remove/")) {
+      const productId = (actionPath.match(/(?:remove-from-cart|cart\/remove)\/([^/]+)/) || [])[1];
       updateOfflineCart(productId, "remove");
     } else if (actionPath.includes("/checkout/")) {
+      const currentTotal = getCart().total;
+      if (!validateStaffOfflineCheckout(actionPath, currentTotal)) {
+        return true;
+      }
       const receipt = saveOfflineReceipt(fields);
       const saleTotal = receipt.total;
       write(CART_KEY, { items: [], total: "0.00" });
@@ -1016,6 +1110,7 @@
     ensureStatusWidget();
     ensureStatusDrawer();
     rememberOfflineSession();
+    rememberOfflineControls();
     cacheProductsFromPage();
     seedCartFromServer();
     renderCart();

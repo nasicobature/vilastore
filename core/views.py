@@ -2401,6 +2401,58 @@ def update_profile(request):
 
 @login_required
 @require_POST
+def update_offline_controls(request):
+    user = request.user
+    max_amount_raw = (request.POST.get("offline_staff_max_sale_amount") or "").strip()
+    max_pending_raw = (request.POST.get("offline_staff_max_pending_sales") or "").strip()
+    warning_hours_raw = (request.POST.get("offline_sync_warning_hours") or "").strip()
+    pin = (request.POST.get("offline_staff_pin") or "").strip()
+
+    user.allow_staff_offline_sales = request.POST.get("allow_staff_offline_sales") == "on"
+
+    if max_amount_raw:
+        try:
+            max_amount = Decimal(max_amount_raw)
+            if max_amount < 0:
+                raise InvalidOperation
+            user.offline_staff_max_sale_amount = max_amount
+        except Exception:
+            messages.error(request, "Maximum offline sale amount must be a valid non-negative amount.")
+            return redirect("settings")
+    else:
+        user.offline_staff_max_sale_amount = None
+
+    try:
+        max_pending = int(max_pending_raw or user.offline_staff_max_pending_sales or 20)
+        warning_hours = int(warning_hours_raw or user.offline_sync_warning_hours or 24)
+    except ValueError:
+        messages.error(request, "Offline limits must be whole numbers.")
+        return redirect("settings")
+
+    user.offline_staff_max_pending_sales = max(1, min(max_pending, 200))
+    user.offline_sync_warning_hours = max(1, min(warning_hours, 168))
+
+    if request.POST.get("clear_offline_staff_pin") == "on":
+        user.offline_staff_pin = ""
+    elif pin:
+        if not pin.isdigit() or not 4 <= len(pin) <= 8:
+            messages.error(request, "Staff offline PIN must be 4 to 8 digits.")
+            return redirect("settings")
+        user.offline_staff_pin = pin
+
+    user.save(update_fields=[
+        "allow_staff_offline_sales",
+        "offline_staff_max_sale_amount",
+        "offline_staff_pin",
+        "offline_staff_max_pending_sales",
+        "offline_sync_warning_hours",
+    ])
+    messages.success(request, "Staff offline controls updated.")
+    return redirect("settings")
+
+
+@login_required
+@require_POST
 def add_shopboy(request):
     full_name = (request.POST.get("full_name") or "").strip()
     username = (request.POST.get("username") or "").strip()

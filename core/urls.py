@@ -169,6 +169,7 @@ urlpatterns = [
     path('settings/add-branch/', views.add_branch, name='add_branch'),
     path('settings/set-default-branch/<int:pk>/', views.set_default_branch, name='set_default_branch'),
     path('settings/delete-branch/<int:pk>/', views.delete_branch, name='delete_branch'),
+    path('settings/offline-controls/', views.update_offline_controls, name='update_offline_controls'),
     path('settings/add-shopboy/', views.add_shopboy, name='add_shopboy'),
     path('settings/toggle-shopboy/<int:pk>/', views.toggle_shopboy, name='toggle_shopboy'),
     path('settings/delete-shopboy/<int:pk>/', views.delete_shopboy, name='delete_shopboy'),

@@ -1089,6 +1089,60 @@
               </div>
               {% endif %}
             </section>
+
+            <section class="card settings-card">
+              <div class="settings-card-header">
+                <div>
+                  <h3>Staff offline control</h3>
+                  <p>Decide how staff can sell when internet is down, then require syncing before too many sales pile up.</p>
+                </div>
+              </div>
+              <form method="POST" action="{% url 'update_offline_controls' %}" class="settings-form-grid">
+                {% csrf_token %}
+                <div class="settings-switch-row" style="grid-column:1/-1;">
+                  <div>
+                    <strong>Allow staff offline sales</strong>
+                    <small>When off, staff can still browse cached products but cannot complete offline checkout.</small>
+                  </div>
+                  <label class="settings-toggle">
+                    <input type="checkbox" name="allow_staff_offline_sales" {% if request.user.allow_staff_offline_sales %}checked{% endif %}>
+                    <span></span>
+                  </label>
+                </div>
+                <label>
+                  Maximum offline sale amount
+                  <input type="number" name="offline_staff_max_sale_amount" min="0" step="0.01" class="input" value="{{ request.user.offline_staff_max_sale_amount|default_if_none:'' }}" placeholder="No limit">
+                </label>
+                <label>
+                  Max pending staff sales
+                  <input type="number" name="offline_staff_max_pending_sales" min="1" max="200" step="1" class="input" value="{{ request.user.offline_staff_max_pending_sales|default:20 }}">
+                </label>
+                <label>
+                  Staff offline PIN
+                  <input type="password" name="offline_staff_pin" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" class="input" placeholder="{% if request.user.offline_staff_pin %}PIN already set{% else %}4 to 8 digits{% endif %}">
+                </label>
+                <label>
+                  Sync warning after hours
+                  <input type="number" name="offline_sync_warning_hours" min="1" max="168" step="1" class="input" value="{{ request.user.offline_sync_warning_hours|default:24 }}">
+                </label>
+                {% if request.user.offline_staff_pin %}
+                <label class="settings-switch-row" style="grid-column:1/-1;">
+                  <div>
+                    <strong>Clear current staff PIN</strong>
+                    <small>Staff offline checkout will stop asking for a PIN after saving.</small>
+                  </div>
+                  <input type="checkbox" name="clear_offline_staff_pin">
+                </label>
+                {% endif %}
+                <div class="settings-note" style="grid-column:1/-1;">
+                  <i data-lucide="shield-check"></i>
+                  <span>These rules are saved to trusted browsers for offline use. Online checkout and cloud sync still use the normal server records.</span>
+                </div>
+                <div class="settings-section-actions" style="grid-column:1/-1;">
+                  <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Offline Rules</button>
+                </div>
+              </form>
+            </section>
           </div>
 
           <aside class="settings-column">

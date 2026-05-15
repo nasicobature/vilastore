@@ -4,6 +4,11 @@
 {% if request.user.is_authenticated %}
 <meta name="vilastore-offline-user" content="{{ request.user.username|escape }}">
 <meta name="vilastore-offline-email" content="{{ request.user.email|default:''|escape }}">
+<meta name="vilastore-offline-allow-staff-sales" content="{{ request.user.allow_staff_offline_sales|yesno:'true,false' }}">
+<meta name="vilastore-offline-staff-max-sale" content="{{ request.user.offline_staff_max_sale_amount|default:'' }}">
+<meta name="vilastore-offline-staff-pin" content="{{ request.user.offline_staff_pin|default:''|escape }}">
+<meta name="vilastore-offline-staff-max-pending" content="{{ request.user.offline_staff_max_pending_sales|default:20 }}">
+<meta name="vilastore-offline-warning-hours" content="{{ request.user.offline_sync_warning_hours|default:24 }}">
 {% endif %}
 <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32x32.png' %}">
 <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon-16x16.png' %}">
