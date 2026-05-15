@@ -66,7 +66,7 @@ class EduPortalRoutingTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, 'class="wizard-form"')
             self.assertContains(response, "Verification Documents")
-            self.assertContains(response, "Submit for Verification")
+            self.assertContains(response, "Submit & Pay")
 
 
 class EduPortalVerificationRegistrationTests(TestCase):
@@ -113,10 +113,14 @@ class EduPortalVerificationRegistrationTests(TestCase):
 
         response = self.client.post(reverse("edu:secondary_register"), data)
 
-        self.assertRedirects(response, reverse("edu:secondary_login"))
         institution = Institution.objects.get(name="Verified Pending Academy")
+        self.assertRedirects(
+            response,
+            reverse("edu:secondary_registration_payment", kwargs={"school_code": institution.school_code}),
+        )
         profile = Profile.objects.get(institution=institution, role="admin")
         self.assertEqual(institution.verification_status, "pending")
+        self.assertEqual(institution.registration_payment_status, "pending")
         self.assertEqual(profile.user.email, "admin@example.com")
         self.assertFalse(profile.is_approved)
         self.assertTrue(institution.cac_certificate)
@@ -156,9 +160,13 @@ class EduPortalVerificationRegistrationTests(TestCase):
 
         response = self.client.post(reverse("edu:secondary_register"), data)
 
-        self.assertRedirects(response, reverse("edu:secondary_login"))
+        institution = Institution.objects.get(name="API Verified Academy")
+        self.assertRedirects(
+            response,
+            reverse("edu:secondary_registration_payment", kwargs={"school_code": institution.school_code}),
+        )
         document = InstitutionDocumentVerification.objects.get(
-            institution__name="API Verified Academy",
+            institution=institution,
             document_type="cac_certificate",
         )
         self.assertEqual(document.status, "api_verified")
@@ -184,7 +192,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         })
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "School verification is still pending")
+        self.assertContains(response, "Registration payment is required")
         self.assertFalse("_auth_user_id" in self.client.session)
 
         email_response = self.client.post(reverse("edu:secondary_login"), {
@@ -193,7 +201,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
             "password": "StrongPass123!",
         })
         self.assertEqual(email_response.status_code, 200)
-        self.assertContains(email_response, "School verification is still pending")
+        self.assertContains(email_response, "Registration payment is required")
 
         phone_response = self.client.post(reverse("edu:secondary_login"), {
             "school_code": institution.school_code,
@@ -201,7 +209,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
             "password": "StrongPass123!",
         })
         self.assertEqual(phone_response.status_code, 200)
-        self.assertContains(phone_response, "School verification is still pending")
+        self.assertContains(phone_response, "Registration payment is required")
 
     def test_login_repairs_missing_profile_from_staff_record(self):
         institution = Institution.objects.create(

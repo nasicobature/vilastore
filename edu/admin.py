@@ -34,8 +34,8 @@ class InstitutionDocumentVerificationInline(admin.TabularInline):
 
 @admin.register(Institution)
 class InstitutionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'institution_type', 'city', 'country', 'verification_status', 'verified_at')
-    list_filter = ('institution_type', 'verification_status')
+    list_display = ('name', 'institution_type', 'city', 'country', 'verification_status', 'registration_payment_status', 'verified_at')
+    list_filter = ('institution_type', 'verification_status', 'registration_payment_status')
     search_fields = ('name', 'school_code', 'email', 'admin_email')
     readonly_fields = ('created_at', 'verified_at')
     inlines = (InstitutionDocumentVerificationInline,)
@@ -57,6 +57,12 @@ class InstitutionAdmin(admin.ModelAdmin):
                 'has_faculties', 'has_departments', 'grading_system', 'max_grade',
                 'currency', 'payment_provider', 'payment_public_key', 'payment_secret_key',
                 'allow_online_payment',
+            )
+        }),
+        ('Registration Payment', {
+            'fields': (
+                'registration_payment_status', 'registration_payment_amount',
+                'registration_payment_reference', 'registration_payment_paid_at',
             )
         }),
         ('Branding', {
@@ -84,7 +90,7 @@ class InstitutionAdmin(admin.ModelAdmin):
 
         super().save_model(request, obj, form, change)
 
-        if obj.verification_status == 'approved':
+        if obj.verification_status == 'approved' and obj.registration_payment_status == 'paid':
             Profile.objects.filter(
                 institution=obj,
                 created_via='school-register',

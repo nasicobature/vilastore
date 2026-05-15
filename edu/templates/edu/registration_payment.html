@@ -1,0 +1,115 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center px-4 py-10">
+  <div class="w-full max-w-3xl rounded-2xl border border-border bg-card p-6 md:p-8 shadow-sm">
+    <a href="{{ login_url }}" class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-6">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to login
+    </a>
+
+    <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Registration Payment</p>
+        <h1 class="font-display text-3xl font-bold mt-2">Complete Edu Portal onboarding</h1>
+        <p class="text-sm text-muted-foreground mt-3 max-w-xl">
+          Your school registration has been submitted. Pay the one-time onboarding and verification fee now.
+          VilaStore will still review your CAC, license, TIN, NIN, and address documents before portal access is approved.
+        </p>
+      </div>
+      <div class="rounded-xl border border-border bg-background p-4 min-w-[190px]">
+        <p class="text-xs text-muted-foreground">Amount due</p>
+        <p class="text-3xl font-display font-bold mt-1">{{ currency }} {{ amount|floatformat:0 }}</p>
+        <p class="text-xs text-muted-foreground mt-2">{{ institution.name }}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-8">
+      <div class="rounded-xl border border-border bg-background p-4">
+        <i data-lucide="school" class="w-5 h-5 text-primary"></i>
+        <h3 class="font-semibold mt-3">School Code</h3>
+        <p class="text-sm text-muted-foreground mt-1">{{ institution.school_code }}</p>
+      </div>
+      <div class="rounded-xl border border-border bg-background p-4">
+        <i data-lucide="shield-check" class="w-5 h-5 text-primary"></i>
+        <h3 class="font-semibold mt-3">Document Review</h3>
+        <p class="text-sm text-muted-foreground mt-1">{{ institution.get_verification_status_display }}</p>
+      </div>
+      <div class="rounded-xl border border-border bg-background p-4">
+        <i data-lucide="credit-card" class="w-5 h-5 text-primary"></i>
+        <h3 class="font-semibold mt-3">Payment</h3>
+        <p class="text-sm text-muted-foreground mt-1">{{ institution.get_registration_payment_status_display }}</p>
+      </div>
+    </div>
+
+    {% if institution.registration_payment_status == 'paid' %}
+      <div class="mt-8 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm">
+        Payment has been confirmed. VilaStore will review your documents and approve the portal when verification is complete.
+      </div>
+      <a href="{{ login_url }}" class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-5 py-3 text-sm font-semibold hover:bg-primary/90">
+        Open Login
+      </a>
+    {% else %}
+      {% if not flutterwave_public_key %}
+        <div class="mt-8 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
+          Flutterwave public key is not configured yet. Add <strong>FLUTTERWAVE_PUBLIC_KEY</strong> and <strong>FLUTTERWAVE_SECRET_KEY</strong> to enable payment.
+        </div>
+      {% endif %}
+      <form method="post" id="eduRegistrationPaymentForm" class="mt-8">
+        {% csrf_token %}
+        <input type="hidden" id="eduRegistrationPaymentReference" name="payment_reference">
+        <button type="submit" id="startEduRegistrationPayment" class="inline-flex w-full md:w-auto items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-6 py-3 text-sm font-semibold hover:bg-primary/90">
+          <i data-lucide="credit-card" class="w-4 h-4"></i> Pay Now
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  window.EDU_FLUTTERWAVE_PUBLIC_KEY = "{{ flutterwave_public_key|default:''|escapejs }}";
+  window.EDU_REGISTRATION_AMOUNT = {{ amount|default:0 }};
+  window.EDU_REGISTRATION_CURRENCY = "{{ currency|default:'NGN'|escapejs }}";
+  window.EDU_REGISTRATION_EMAIL = "{{ institution.admin_email|default:institution.email|escapejs }}";
+  window.EDU_REGISTRATION_PHONE = "{{ institution.admin_phone|default:institution.phone_number|escapejs }}";
+  window.EDU_REGISTRATION_NAME = "{{ institution.name|escapejs }}";
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const button = document.getElementById("startEduRegistrationPayment");
+    if (!button) return;
+    button.addEventListener("click", function (event) {
+      event.preventDefault();
+      const key = (window.EDU_FLUTTERWAVE_PUBLIC_KEY || "").trim();
+      if (!key) {
+        alert("Flutterwave public key is missing.");
+        return;
+      }
+      if (typeof FlutterwaveCheckout !== "function") {
+        alert("Flutterwave checkout is not loaded.");
+        return;
+      }
+      const txRef = `VILASTORE-EDU-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+      FlutterwaveCheckout({
+        public_key: key,
+        tx_ref: txRef,
+        amount: Number(window.EDU_REGISTRATION_AMOUNT || 0),
+        currency: window.EDU_REGISTRATION_CURRENCY || "NGN",
+        payment_options: "card,banktransfer,ussd",
+        customer: {
+          email: window.EDU_REGISTRATION_EMAIL || "school@vilastore.store",
+          phone_number: window.EDU_REGISTRATION_PHONE || "",
+          name: window.EDU_REGISTRATION_NAME || "School",
+        },
+        customizations: {
+          title: "VilaStore Edu Portal",
+          description: "School onboarding and verification payment",
+          logo: window.VILASTORE_LOGO_URL || "",
+        },
+        callback: function (response) {
+          document.getElementById("eduRegistrationPaymentReference").value = response.transaction_id || response.id || response.tx_ref || txRef;
+          document.getElementById("eduRegistrationPaymentForm").submit();
+        },
+      });
+    });
+  });
+</script>
+{% endblock %}

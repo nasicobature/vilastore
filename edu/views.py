@@ -1,6 +1,8 @@
 from decimal import Decimal
+import os
 
 import requests
+from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, get_user_model
 from django.contrib.auth.decorators import login_required
@@ -11,6 +13,61 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import Institution, Student, Staff, Fee, Payment, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
 from .verification import create_document_verifications
+
+
+def _edu_registration_fee():
+    try:
+        return Decimal(os.getenv('EDU_REGISTRATION_FEE', '25000.00'))
+    except Exception:
+        return Decimal('25000.00')
+
+
+EDU_REGISTRATION_FEE = _edu_registration_fee()
+
+
+def _flutterwave_public_key():
+    return (
+        getattr(django_settings, 'FLUTTERWAVE_PUBLIC_KEY', '')
+        or os.getenv('FLUTTERWAVE_PUBLIC_KEY', '')
+    ).strip()
+
+
+def _flutterwave_secret_key():
+    return (
+        getattr(django_settings, 'FLUTTERWAVE_SECRET_KEY', '')
+        or os.getenv('FLUTTERWAVE_SECRET_KEY', '')
+        or os.getenv('FLUTTERWAVE_CLIENT_SECRET', '')
+    ).strip()
+
+
+def _verify_flutterwave_reference(payment_reference):
+    reference = (payment_reference or '').strip()
+    secret = _flutterwave_secret_key()
+    if not reference:
+        return None, 'Payment reference is missing.'
+    if not secret:
+        return None, 'Flutterwave secret key is not configured.'
+    headers = {'Authorization': f'Bearer {secret}', 'Content-Type': 'application/json'}
+    try:
+        if reference.isdigit():
+            response = requests.get(
+                f'https://api.flutterwave.com/v3/transactions/{reference}/verify',
+                headers=headers,
+                timeout=15,
+            )
+        else:
+            response = requests.get(
+                'https://api.flutterwave.com/v3/transactions/verify_by_reference',
+                headers=headers,
+                params={'tx_ref': reference},
+                timeout=15,
+            )
+        payload = response.json()
+    except Exception:
+        return None, 'Could not verify payment right now. Please try again.'
+    if response.status_code >= 400:
+        return payload, 'Payment verification failed. Please try again.'
+    return payload, ''
 
 SECONDARY_ROLES = [
     {"slug": "admin", "label": "Admin"},
@@ -143,7 +200,10 @@ def _login_for_institution(request, institution_type, template_name):
                     messages.error(request, 'Invalid school code.')
                 elif not profile.is_approved:
                     auth_logout(request)
-                    if profile.institution and profile.institution.verification_status == 'pending':
+                    if profile.institution and profile.institution.registration_payment_status != 'paid':
+                        payment_url = f"/edu/{profile.institution_type}/register/{profile.institution.school_code}/payment/"
+                        messages.error(request, f'Registration payment is required before portal access. Complete payment here: {payment_url}')
+                    elif profile.institution and profile.institution.verification_status == 'pending':
                         messages.error(request, 'School verification is still pending. VilaStore must approve the submitted documents before portal access is granted.')
                     elif profile.institution and profile.institution.verification_status == 'rejected':
                         messages.error(request, 'School verification was rejected. Please contact VilaStore support for review details.')
@@ -615,6 +675,8 @@ def secondary_school_register(request):
                     payment_public_key=request.POST.get('payment_public_key', '').strip(),
                     payment_secret_key=request.POST.get('payment_secret_key', '').strip(),
                     allow_online_payment=bool(request.POST.get('allow_online_payment')),
+                    registration_payment_amount=EDU_REGISTRATION_FEE,
+                    registration_payment_status='pending',
                     admin_email=request.POST.get('admin_email', '').strip(),
                     admin_phone=request.POST.get('admin_phone', '').strip(),
                     theme_color=request.POST.get('theme_color', '').strip(),
@@ -654,8 +716,8 @@ def secondary_school_register(request):
                     department='',
                 )
 
-                messages.success(request, f'School verification submitted. VilaStore will review your documents before portal access is granted. School code: {institution.school_code}. Admin ID: {admin_username}')
-                return redirect('edu:secondary_login')
+                messages.success(request, f'School registration submitted. Complete the onboarding payment now. School code: {institution.school_code}. Admin ID: {admin_username}')
+                return redirect('edu:secondary_registration_payment', school_code=institution.school_code)
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
 
@@ -663,6 +725,84 @@ def secondary_school_register(request):
         'ownership_choices': Institution.OWNERSHIP_CHOICES,
         'grading_choices': Institution.GRADING_CHOICES,
     })
+
+
+def _registration_payment(request, institution_type, school_code, login_route_name, login_url):
+    institution = get_object_or_404(Institution, institution_type=institution_type, school_code__iexact=school_code)
+    payment_route_name = f'edu:{institution_type}_registration_payment'
+    if request.method == 'POST':
+        payment_reference = request.POST.get('payment_reference', '').strip()
+        payload, error = _verify_flutterwave_reference(payment_reference)
+        if error:
+            institution.registration_payment_status = 'failed'
+            institution.registration_payment_reference = payment_reference
+            institution.save(update_fields=['registration_payment_status', 'registration_payment_reference'])
+            messages.error(request, error)
+            return redirect(payment_route_name, school_code=institution.school_code)
+
+        data = (payload or {}).get('data') or {}
+        status = str(data.get('status') or '').lower()
+        try:
+            amount = Decimal(str(data.get('amount') or '0'))
+        except Exception:
+            amount = Decimal('0')
+        currency = str(data.get('currency') or '').upper()
+        expected_amount = Decimal(institution.registration_payment_amount or EDU_REGISTRATION_FEE)
+        expected_currency = (institution.currency or 'NGN').upper()
+        if status != 'successful':
+            messages.error(request, 'Payment was not successful.')
+            return redirect(payment_route_name, school_code=institution.school_code)
+        if currency and currency != expected_currency:
+            messages.error(request, 'Payment currency does not match registration currency.')
+            return redirect(payment_route_name, school_code=institution.school_code)
+        if amount < expected_amount:
+            messages.error(request, 'Paid amount is lower than the required onboarding fee.')
+            return redirect(payment_route_name, school_code=institution.school_code)
+
+        institution.registration_payment_status = 'paid'
+        institution.registration_payment_reference = payment_reference
+        institution.registration_payment_paid_at = timezone.now()
+        institution.save(update_fields=[
+            'registration_payment_status',
+            'registration_payment_reference',
+            'registration_payment_paid_at',
+        ])
+        if institution.verification_status == 'approved':
+            Profile.objects.filter(
+                institution=institution,
+                created_via='school-register',
+                is_approved=False,
+            ).update(is_approved=True, approved_at=timezone.now())
+        messages.success(request, 'Payment confirmed. VilaStore will now review your submitted school documents.')
+        return redirect(login_route_name)
+
+    return render(request, 'edu/registration_payment.html', {
+        'institution': institution,
+        'amount': institution.registration_payment_amount or EDU_REGISTRATION_FEE,
+        'currency': institution.currency or 'NGN',
+        'flutterwave_public_key': _flutterwave_public_key(),
+        'login_url': login_url,
+    })
+
+
+def secondary_registration_payment(request, school_code):
+    return _registration_payment(
+        request,
+        'secondary',
+        school_code,
+        'edu:secondary_login',
+        '/edu/secondary/login/',
+    )
+
+
+def tertiary_registration_payment(request, school_code):
+    return _registration_payment(
+        request,
+        'tertiary',
+        school_code,
+        'edu:tertiary_login',
+        '/edu/tertiary/login/',
+    )
 
 
 @login_required(login_url='/edu/secondary/login/')
@@ -1821,6 +1961,8 @@ def tertiary_school_register(request):
                     payment_public_key=request.POST.get('payment_public_key', '').strip(),
                     payment_secret_key=request.POST.get('payment_secret_key', '').strip(),
                     allow_online_payment=bool(request.POST.get('allow_online_payment')),
+                    registration_payment_amount=EDU_REGISTRATION_FEE,
+                    registration_payment_status='pending',
                     admin_email=request.POST.get('admin_email', '').strip(),
                     admin_phone=request.POST.get('admin_phone', '').strip(),
                     theme_color=request.POST.get('theme_color', '').strip(),
@@ -1860,8 +2002,8 @@ def tertiary_school_register(request):
                     department='',
                 )
 
-                messages.success(request, f'Institution verification submitted. VilaStore will review your documents before portal access is granted. School code: {institution.school_code}. ID: {vc_username}')
-                return redirect('edu:tertiary_login')
+                messages.success(request, f'Institution registration submitted. Complete the onboarding payment now. School code: {institution.school_code}. ID: {vc_username}')
+                return redirect('edu:tertiary_registration_payment', school_code=institution.school_code)
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
 
