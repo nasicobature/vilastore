@@ -1,6 +1,10 @@
 {% load static %}
 <meta name="theme-color" content="#b06e21">
 <meta name="msapplication-TileColor" content="#b06e21">
+{% if request.user.is_authenticated %}
+<meta name="vilastore-offline-user" content="{{ request.user.username|escape }}">
+<meta name="vilastore-offline-email" content="{{ request.user.email|default:''|escape }}">
+{% endif %}
 <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32x32.png' %}">
 <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon-16x16.png' %}">
 <link rel="icon" href="{% static 'img/favicon.ico' %}">

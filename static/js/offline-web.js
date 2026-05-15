@@ -8,6 +8,7 @@
   const CUSTOMERS_KEY = "vilastore_web_customers_v1";
   const EXPENSES_KEY = "vilastore_web_expenses_v1";
   const ACTIVITIES_KEY = "vilastore_web_activities_v1";
+  const OFFLINE_AUTH_KEY = "vilastore_web_offline_auth_v1";
   const MAX_ACTIVITY_ROWS = 80;
   const OFFLINE_PAGE_URLS = [
     "/index/",
@@ -72,7 +73,6 @@
       "/marketplace/",
       "marketplace",
       "/api/marketplace/",
-      "/login/",
       "/logout/",
       "/signup/",
       "/verify",
@@ -83,6 +83,49 @@
       "/agent/login",
       "/agent/signup",
     ].some((path) => actionPath.includes(path));
+  }
+
+  function normalizeIdentity(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function rememberOfflineSession() {
+    const userMarker = document.querySelector('meta[name="vilastore-offline-user"]');
+    const emailMarker = document.querySelector('meta[name="vilastore-offline-email"]');
+    const identities = [
+      userMarker ? userMarker.getAttribute("content") : "",
+      emailMarker ? emailMarker.getAttribute("content") : "",
+    ].filter(Boolean);
+    if (!identities.length) return;
+    write(OFFLINE_AUTH_KEY, {
+      identity: identities[0],
+      identities,
+      saved_at: new Date().toISOString(),
+      last_path: window.location.pathname || "/index/",
+    });
+  }
+
+  function getOfflineSession() {
+    return read(OFFLINE_AUTH_KEY, null);
+  }
+
+  function handleOfflineLogin(form, fields) {
+    const session = getOfflineSession();
+    if (!session || !session.identity) {
+      notify("Offline login is available only after this browser has logged in successfully online once.", true);
+      return true;
+    }
+    const enteredIdentity = normalizeIdentity(fieldValue(fields, "email", ""));
+    const savedIdentities = (session.identities || [session.identity]).map(normalizeIdentity).filter(Boolean);
+    if (enteredIdentity && !savedIdentities.includes(enteredIdentity)) {
+      notify(`Offline login is saved for ${session.identity}. Connect to internet to login with another account.`, true);
+      return true;
+    }
+    notify("Offline login accepted on this trusted browser. Opening your saved dashboard...");
+    window.setTimeout(() => {
+      window.location.href = session.last_path || "/index/";
+    }, 600);
+    return true;
   }
 
   function rememberActivity(entry) {
@@ -527,6 +570,10 @@
       return true;
     }
 
+    if (actionPath.includes("/login/")) {
+      return handleOfflineLogin(form, fields);
+    }
+
     if (hasFile) {
       notify("Image upload needs internet. The text fields were saved offline; upload the image after sync.", true);
     }
@@ -626,6 +673,7 @@
   };
 
   document.addEventListener("DOMContentLoaded", function () {
+    rememberOfflineSession();
     cacheProductsFromPage();
     seedCartFromServer();
     renderCart();
