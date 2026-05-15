@@ -25,6 +25,8 @@ from .models import (
     RentalPayment,
     RentalRecord,
     TenantRecord,
+    AIReceiptScan,
+    AIAssistantMessage,
 )
 
 
@@ -182,6 +184,21 @@ class ExpenseAdmin(admin.ModelAdmin):
     list_display = ("title", "amount", "user", "created_at")
     list_filter = ("user",)
     search_fields = ("title",)
+    readonly_fields = ("created_at",)
+
+
+@admin.register(AIReceiptScan)
+class AIReceiptScanAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "status", "created_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("user__username", "raw_text")
+    readonly_fields = ("created_at",)
+
+
+@admin.register(AIAssistantMessage)
+class AIAssistantMessageAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "created_at")
+    search_fields = ("user__username", "question", "answer")
     readonly_fields = ("created_at",)
 
 # =============================

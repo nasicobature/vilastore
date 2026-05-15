@@ -36,7 +36,10 @@ from .models import (
     RentalPayment,
     RentalRecord,
     TenantRecord,
+    AIReceiptScan,
+    AIAssistantMessage,
 )
+from . import ai as ai_engine
 from .subscription import subscription_is_active
 from .utils.notifications import send_email, send_sms
 import random
@@ -2175,6 +2178,86 @@ def reports(request):
     }
 
     return render(request, "home/reports.html", context)
+
+
+@login_required
+def ai_insights(request):
+    if not request.user.is_shop_account:
+        return redirect("housing_management")
+    context = ai_engine.ai_summary(request.user)
+    context["recent_ai_messages"] = AIAssistantMessage.objects.filter(user=request.user)[:8]
+    context["recent_receipt_scans"] = AIReceiptScan.objects.filter(user=request.user).order_by("-created_at")[:8]
+    return render(request, "home/ai-insights.html", context)
+
+
+@login_required
+def ai_summary_api(request):
+    if not request.user.is_shop_account:
+        return JsonResponse({"success": False, "error": "AI shop insights are available for shop accounts only."}, status=403)
+    return JsonResponse({"success": True, **ai_engine.ai_summary(request.user)})
+
+
+@login_required
+def ai_smart_product_search(request):
+    query = request.GET.get("q", "")
+    return JsonResponse({"success": True, "query": query, "results": ai_engine.smart_product_search(request.user, query)})
+
+
+@login_required
+@require_POST
+def ai_voice_command(request):
+    transcript = (request.POST.get("transcript") or "").strip()
+    parsed = ai_engine.parse_voice_command(request.user, transcript)
+    return JsonResponse({"success": True, "transcript": transcript, "parsed": parsed})
+
+
+@login_required
+@require_POST
+def ai_receipt_scan(request):
+    raw_text = (request.POST.get("receipt_text") or "").strip()
+    image = request.FILES.get("receipt_image")
+    parsed_items = ai_engine.parse_receipt_text(request.user, raw_text)
+    apply_inventory = request.POST.get("apply_inventory") == "on"
+    apply_result = {"updated": [], "skipped": parsed_items}
+    status = AIReceiptScan.STATUS_PARSED if parsed_items else AIReceiptScan.STATUS_NEEDS_REVIEW
+    if apply_inventory and parsed_items:
+        apply_result = ai_engine.apply_receipt_inventory(request.user, parsed_items)
+        status = AIReceiptScan.STATUS_APPLIED if apply_result["updated"] else AIReceiptScan.STATUS_NEEDS_REVIEW
+
+    scan = AIReceiptScan.objects.create(
+        user=request.user,
+        image=image,
+        raw_text=raw_text,
+        parsed_items=parsed_items,
+        status=status,
+        notes="OCR provider not configured. Parsed from typed/pasted receipt text." if not raw_text and image else "",
+    )
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse({
+            "success": True,
+            "scan_id": scan.id,
+            "parsed_items": parsed_items,
+            "inventory": apply_result,
+            "message": "Receipt processed. Review unmatched items before updating inventory.",
+        })
+    if apply_result["updated"]:
+        messages.success(request, f"Receipt processed. {len(apply_result['updated'])} inventory item(s) updated.")
+    elif parsed_items:
+        messages.warning(request, "Receipt parsed, but no matching product was updated. Review product names or codes.")
+    else:
+        messages.warning(request, "No product lines were found. Paste receipt text like: Rice 2 4500.")
+    return redirect("ai_insights")
+
+
+@login_required
+@require_POST
+def ai_chat(request):
+    question = (request.POST.get("question") or "").strip()
+    if not question:
+        return JsonResponse({"success": False, "error": "Ask a question first."}, status=400)
+    answer = ai_engine.assistant_answer(request.user, question)
+    AIAssistantMessage.objects.create(user=request.user, question=question, answer=answer)
+    return JsonResponse({"success": True, "answer": answer})
 
 
 

@@ -42,7 +42,10 @@ from .models import (
     User,
     Customer,
     CustomerScanCart,
+    AIReceiptScan,
+    AIAssistantMessage,
 )
+from . import ai as ai_engine
 
 PLAN_LIMITS = {
     "starter": {"name": "Starter", "product_limit": 1000, "staff_limit": 0, "branch_limit": 1},
@@ -3546,6 +3549,70 @@ def api_owner_reports(request):
         "is_nigeria": (owner.country or "").strip().lower() == "nigeria",
         "entitlements": _feature_entitlements(owner),
     })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_ai_summary(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+    return _json_success({"ai": ai_engine.ai_summary(owner)})
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_ai_product_search(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+    query = request.GET.get("q", "")
+    return _json_success({"query": query, "results": ai_engine.smart_product_search(owner, query)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_ai_voice(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+    data = _get_body_data(request) or {}
+    transcript = (data.get("transcript") or "").strip()
+    return _json_success({"parsed": ai_engine.parse_voice_command(owner, transcript)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_ai_receipt_scan(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+    data = _get_body_data(request) or {}
+    raw_text = (data.get("receipt_text") or "").strip()
+    parsed_items = ai_engine.parse_receipt_text(owner, raw_text)
+    apply_inventory = str(data.get("apply_inventory") or "").lower() in {"1", "true", "yes", "on"}
+    inventory = {"updated": [], "skipped": parsed_items}
+    status = AIReceiptScan.STATUS_PARSED if parsed_items else AIReceiptScan.STATUS_NEEDS_REVIEW
+    if apply_inventory and parsed_items:
+        inventory = ai_engine.apply_receipt_inventory(owner, parsed_items)
+        status = AIReceiptScan.STATUS_APPLIED if inventory["updated"] else AIReceiptScan.STATUS_NEEDS_REVIEW
+    scan = AIReceiptScan.objects.create(user=owner, raw_text=raw_text, parsed_items=parsed_items, status=status)
+    return _json_success({"scan_id": scan.id, "parsed_items": parsed_items, "inventory": inventory})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_ai_chat(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+    data = _get_body_data(request) or {}
+    question = (data.get("question") or "").strip()
+    if not question:
+        return _json_error("Ask a question first.")
+    answer = ai_engine.assistant_answer(owner, question)
+    AIAssistantMessage.objects.create(user=owner, question=question, answer=answer)
+    return _json_success({"answer": answer})
 
 
 def _serialize_customer(customer):

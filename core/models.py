@@ -440,6 +440,42 @@ class Expense(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class AIReceiptScan(models.Model):
+    STATUS_PARSED = "parsed"
+    STATUS_APPLIED = "applied"
+    STATUS_NEEDS_REVIEW = "needs_review"
+    STATUS_CHOICES = [
+        (STATUS_PARSED, "Parsed"),
+        (STATUS_APPLIED, "Applied to inventory"),
+        (STATUS_NEEDS_REVIEW, "Needs review"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="ai_receipt_scans")
+    uploaded_by_shopboy = models.ForeignKey("ShopBoy", on_delete=models.SET_NULL, null=True, blank=True, related_name="ai_receipt_scans")
+    image = models.ImageField(upload_to="ai_receipts/", null=True, blank=True)
+    raw_text = models.TextField(blank=True)
+    parsed_items = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_NEEDS_REVIEW)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"AI receipt scan #{self.id} - {self.user.username}"
+
+
+class AIAssistantMessage(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="ai_assistant_messages")
+    question = models.TextField()
+    answer = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"AI assistant message #{self.id} - {self.user.username}"
     
 class ShopBoy(models.Model):
     ROLE_OWNER = "owner"
