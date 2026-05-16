@@ -261,6 +261,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         profile.institution_type = "secondary"
         profile.role = "admin"
         profile.is_approved = True
+        profile.email_verified = True
         profile.save()
 
         response = self.client.post(reverse("edu:secondary_login"), {

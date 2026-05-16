@@ -237,6 +237,13 @@ class Profile(models.Model):
     created_via = models.CharField(max_length=20, blank=True)  # e.g., admin, registry, self
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_profiles')
     approved_at = models.DateTimeField(null=True, blank=True)
+    email_verified = models.BooleanField(default=False)
+    email_verification_token = models.CharField(max_length=120, blank=True)
+    email_verification_sent_at = models.DateTimeField(null=True, blank=True)
+    email_verification_expires_at = models.DateTimeField(null=True, blank=True)
+    password_reset_token = models.CharField(max_length=120, blank=True)
+    password_reset_sent_at = models.DateTimeField(null=True, blank=True)
+    password_reset_expires_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.username} ({self.get_role_display()})"

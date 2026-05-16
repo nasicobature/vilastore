@@ -1,5 +1,7 @@
 from decimal import Decimal
+from datetime import timedelta
 import os
+import secrets
 
 import requests
 from django.conf import settings as django_settings
@@ -13,6 +15,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
 from .verification import create_document_verifications
+from core.utils.notifications import send_email
 
 
 def _edu_registration_fee():
@@ -23,6 +26,99 @@ def _edu_registration_fee():
 
 
 EDU_REGISTRATION_FEE = _edu_registration_fee()
+
+
+EMAIL_TOKEN_HOURS = 48
+PASSWORD_RESET_HOURS = 2
+
+
+def _edu_abs_url(request, path):
+    return request.build_absolute_uri(path)
+
+
+def _profile_login_url(profile):
+    if profile and profile.institution_type == 'tertiary':
+        return '/edu/tertiary/login/'
+    return '/edu/secondary/login/'
+
+
+def _email_is_available(email, user=None):
+    email = (email or '').strip()
+    if not email:
+        return False
+    qs = get_user_model().objects.filter(email__iexact=email)
+    if user:
+        qs = qs.exclude(pk=user.pk)
+    return not qs.exists()
+
+
+def _send_edu_verification_email(request, profile):
+    user = profile.user
+    if not user.email:
+        return False
+    token = secrets.token_urlsafe(36)
+    profile.email_verification_token = token
+    profile.email_verification_sent_at = timezone.now()
+    profile.email_verification_expires_at = timezone.now() + timedelta(hours=EMAIL_TOKEN_HOURS)
+    profile.save(update_fields=[
+        'email_verification_token',
+        'email_verification_sent_at',
+        'email_verification_expires_at',
+    ])
+    verify_url = _edu_abs_url(request, f"/edu/verify-email/{token}/")
+    subject = "Verify your VilaStore Edu email"
+    message = (
+        f"Hello {user.get_username()},\n\n"
+        "Please verify your email address before accessing the VilaStore Edu Portal.\n\n"
+        f"Verify email: {verify_url}\n\n"
+        f"This link expires in {EMAIL_TOKEN_HOURS} hours."
+    )
+    return send_email(user.email, subject, message, fail_silently=True)
+
+
+def _send_edu_password_reset_email(request, profile):
+    user = profile.user
+    if not user.email:
+        return False
+    token = secrets.token_urlsafe(36)
+    profile.password_reset_token = token
+    profile.password_reset_sent_at = timezone.now()
+    profile.password_reset_expires_at = timezone.now() + timedelta(hours=PASSWORD_RESET_HOURS)
+    profile.save(update_fields=[
+        'password_reset_token',
+        'password_reset_sent_at',
+        'password_reset_expires_at',
+    ])
+    reset_url = _edu_abs_url(request, f"/edu/reset-password/{token}/")
+    subject = "Reset your VilaStore Edu password"
+    message = (
+        f"Hello {user.get_username()},\n\n"
+        "Use the secure link below to reset your VilaStore Edu Portal password.\n\n"
+        f"Reset password: {reset_url}\n\n"
+        f"This link expires in {PASSWORD_RESET_HOURS} hours. If you did not request it, ignore this email."
+    )
+    return send_email(user.email, subject, message, fail_silently=True)
+
+
+def _mark_email_unverified(profile):
+    profile.email_verified = False
+    profile.email_verification_token = ''
+    profile.email_verification_sent_at = None
+    profile.email_verification_expires_at = None
+
+
+def _find_edu_profile_by_identifier(institution_type, school_code, identifier):
+    identifier = (identifier or '').strip()
+    school_code = (school_code or '').strip().upper()
+    if not identifier or not school_code:
+        return None
+    return Profile.objects.select_related('user', 'institution').filter(
+        institution_type=institution_type,
+        institution__school_code__iexact=school_code,
+    ).filter(
+        Q(user__username__iexact=identifier) |
+        Q(user__email__iexact=identifier)
+    ).first()
 
 
 def _flutterwave_public_key():
@@ -243,13 +339,15 @@ def _get_or_repair_edu_profile(user, institution_type, school_code):
         institution__institution_type=institution_type,
     ).first()
     if staff:
-        profile, _ = Profile.objects.get_or_create(user=user)
+        profile, created = Profile.objects.get_or_create(user=user)
         profile.institution = staff.institution
         profile.institution_type = institution_type
         profile.role = staff.role
         profile.created_via = profile.created_via or 'repaired-login'
         profile.is_approved = staff.institution.verification_status == 'approved'
         profile.approved_at = timezone.now() if profile.is_approved and not profile.approved_at else profile.approved_at
+        if created and user.email:
+            profile.email_verified = True
         profile.save()
         return profile
 
@@ -258,13 +356,15 @@ def _get_or_repair_edu_profile(user, institution_type, school_code):
         institution__institution_type=institution_type,
     ).first()
     if student:
-        profile, _ = Profile.objects.get_or_create(user=user)
+        profile, created = Profile.objects.get_or_create(user=user)
         profile.institution = student.institution
         profile.institution_type = institution_type
         profile.role = 'student'
         profile.created_via = profile.created_via or 'repaired-login'
         profile.is_approved = student.institution.verification_status == 'approved'
         profile.approved_at = timezone.now() if profile.is_approved and not profile.approved_at else profile.approved_at
+        if created and user.email:
+            profile.email_verified = True
         profile.save()
         return profile
 
@@ -275,13 +375,15 @@ def _get_or_repair_edu_profile(user, institution_type, school_code):
         Q(admin_email__iexact=user.email) | Q(admin_phone__iexact=user.username)
     ).first()
     if institution:
-        profile, _ = Profile.objects.get_or_create(user=user)
+        profile, created = Profile.objects.get_or_create(user=user)
         profile.institution = institution
         profile.institution_type = institution_type
         profile.role = 'admin' if institution_type == 'secondary' else 'vc'
         profile.created_via = profile.created_via or 'school-register'
         profile.is_approved = institution.verification_status == 'approved'
         profile.approved_at = timezone.now() if profile.is_approved and not profile.approved_at else profile.approved_at
+        if created and user.email:
+            profile.email_verified = True
         profile.save()
         return profile
 
@@ -325,6 +427,13 @@ def _login_for_institution(request, institution_type, template_name):
                         messages.error(request, 'School verification was rejected. Please contact VilaStore support for review details.')
                     else:
                         messages.error(request, 'Account pending approval.')
+                elif not user.email:
+                    auth_logout(request)
+                    messages.error(request, 'This account needs an email address before portal access. Please contact your school admin.')
+                elif not profile.email_verified:
+                    auth_logout(request)
+                    _send_edu_verification_email(request, profile)
+                    messages.error(request, 'Please verify your email address before login. We sent a fresh verification link to your email.')
                 else:
                     if profile.institution_type == 'tertiary':
                         return redirect('edu:tertiary_dashboard', role=profile.role)
@@ -344,6 +453,82 @@ def secondary_login(request):
 
 def tertiary_login(request):
     return _login_for_institution(request, 'tertiary', 'edu/tertiary_login.html')
+
+
+def verify_email(request, token):
+    profile = Profile.objects.select_related('user').filter(email_verification_token=token).first()
+    if not profile or not profile.email_verification_expires_at or profile.email_verification_expires_at < timezone.now():
+        messages.error(request, 'Verification link is invalid or expired. Please request a new link from the login page.')
+        return redirect('edu:index')
+
+    profile.email_verified = True
+    profile.email_verification_token = ''
+    profile.email_verification_sent_at = None
+    profile.email_verification_expires_at = None
+    profile.save(update_fields=[
+        'email_verified',
+        'email_verification_token',
+        'email_verification_sent_at',
+        'email_verification_expires_at',
+    ])
+    messages.success(request, 'Email verified successfully. You can now sign in.')
+    return redirect(_profile_login_url(profile))
+
+
+def forgot_password(request):
+    institution_type = request.POST.get('institution_type') or request.GET.get('institution') or 'secondary'
+    if institution_type not in ['secondary', 'tertiary']:
+        institution_type = 'secondary'
+
+    if request.method == 'POST':
+        profile = _find_edu_profile_by_identifier(
+            institution_type,
+            request.POST.get('school_code', ''),
+            request.POST.get('identifier', ''),
+        )
+        if profile and profile.user.email:
+            _send_edu_password_reset_email(request, profile)
+        messages.success(request, 'If the account exists, a password reset link has been sent to the registered email address.')
+        return redirect(f"/edu/forgot-password/?institution={institution_type}")
+
+    return render(request, 'edu/forgot_password.html', {
+        'institution_type': institution_type,
+        'login_url': '/edu/tertiary/login/' if institution_type == 'tertiary' else '/edu/secondary/login/',
+    })
+
+
+def reset_password(request, token):
+    profile = Profile.objects.select_related('user').filter(password_reset_token=token).first()
+    if not profile or not profile.password_reset_expires_at or profile.password_reset_expires_at < timezone.now():
+        messages.error(request, 'Password reset link is invalid or expired. Please request a new reset link.')
+        return redirect('edu:forgot_password')
+
+    if request.method == 'POST':
+        password = request.POST.get('password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+        if len(password) < 8:
+            messages.error(request, 'Password must be at least 8 characters.')
+        elif password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+        else:
+            profile.user.set_password(password)
+            profile.user.save(update_fields=['password'])
+            profile.email_verified = True
+            profile.password_reset_token = ''
+            profile.password_reset_sent_at = None
+            profile.password_reset_expires_at = None
+            profile.save(update_fields=[
+                'email_verified',
+                'password_reset_token',
+                'password_reset_sent_at',
+                'password_reset_expires_at',
+            ])
+            messages.success(request, 'Password reset successfully. You can now sign in.')
+            return redirect(_profile_login_url(profile))
+
+    return render(request, 'edu/reset_password.html', {
+        'profile': profile,
+    })
 
 
 def _generate_student_id(prefix, institution):
@@ -759,10 +944,13 @@ def secondary_school_register(request):
         school_code = request.POST.get('school_code', '').strip().upper()
         admin_full_name = request.POST.get('admin_full_name', '').strip()
         admin_password = request.POST.get('admin_password', '').strip()
+        admin_email = request.POST.get('admin_email', '').strip()
         missing_verification, verification_uploads = _missing_verification_requirements(request)
 
-        if not all([institution_name, admin_full_name, admin_password]):
-            messages.error(request, 'Please fill all required fields.')
+        if not all([institution_name, admin_full_name, admin_password, admin_email]):
+            messages.error(request, 'Please fill all required fields, including admin email.')
+        elif not _email_is_available(admin_email):
+            messages.error(request, 'That admin email address is already used by another account.')
         elif missing_verification:
             messages.error(request, 'Please complete verification requirements: ' + ', '.join(missing_verification) + '.')
         else:
@@ -795,7 +983,7 @@ def secondary_school_register(request):
                     allow_online_payment=bool(request.POST.get('allow_online_payment')),
                     registration_payment_amount=EDU_REGISTRATION_FEE,
                     registration_payment_status='pending',
-                    admin_email=request.POST.get('admin_email', '').strip(),
+                    admin_email=admin_email,
                     admin_phone=request.POST.get('admin_phone', '').strip(),
                     theme_color=request.POST.get('theme_color', '').strip(),
                     logo=request.FILES.get('logo'),
@@ -824,6 +1012,7 @@ def secondary_school_register(request):
                 profile.approved_by = None
                 profile.approved_at = None
                 profile.save()
+                _send_edu_verification_email(request, profile)
 
                 Staff.objects.create(
                     institution=institution,
@@ -951,12 +1140,17 @@ def secondary_create_user(request):
 
     if request.method == 'POST':
         password = request.POST.get('password', '').strip()
+        email = request.POST.get('email', '').strip()
         full_name = request.POST.get('full_name', '').strip()
         role = request.POST.get('role', 'student')
         class_id = request.POST.get('academic_class')
 
-        if not all([password, full_name]):
-            messages.error(request, 'Please fill all required fields.')
+        if not all([password, full_name, email]):
+            messages.error(request, 'Please fill all required fields, including email address.')
+            return redirect('edu:secondary_dashboard', role=creator_profile.role)
+
+        if not _email_is_available(email):
+            messages.error(request, 'That email address is already used by another account.')
             return redirect('edu:secondary_dashboard', role=creator_profile.role)
 
         if role not in [r['slug'] for r in SECONDARY_ROLES]:
@@ -965,7 +1159,7 @@ def secondary_create_user(request):
         try:
             User = get_user_model()
             username = _generate_user_id(creator_profile.institution)
-            user = User.objects.create_user(username=username, password=password)
+            user = User.objects.create_user(username=username, email=email, password=password)
             user.is_active = True
             user.save()
 
@@ -979,6 +1173,7 @@ def secondary_create_user(request):
             profile.approved_by = request.user
             profile.approved_at = timezone.now()
             profile.save()
+            _send_edu_verification_email(request, profile)
 
             if role == 'student':
                 academic_class = AcademicClass.objects.filter(id=class_id).first()
@@ -1000,7 +1195,7 @@ def secondary_create_user(request):
                     department='',
                 )
 
-            messages.success(request, f'Account created successfully. ID: {username}')
+            messages.success(request, f'Account created successfully. ID: {username}. Verification email sent.')
         except IntegrityError:
             messages.error(request, 'Username already exists.')
 
@@ -1699,17 +1894,27 @@ def secondary_student_profile_update(request):
         if email and get_user_model().objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists():
             messages.error(request, 'That email address is already used by another account.')
             return redirect('edu:secondary_page', role=profile.role, page='profile')
+        email_changed = email and email.lower() != (request.user.email or '').lower()
         if email:
             request.user.email = email
         request.user.phone = request.POST.get('phone', '').strip()
         request.user.address = request.POST.get('home_address', '').strip()
         request.user.save(update_fields=['email', 'phone', 'address'])
+        if email_changed:
+            _mark_email_unverified(profile)
+            profile.save(update_fields=[
+                'email_verified',
+                'email_verification_token',
+                'email_verification_sent_at',
+                'email_verification_expires_at',
+            ])
+            _send_edu_verification_email(request, profile)
 
         student.next_of_kin_name = request.POST.get('next_of_kin_name', '').strip()
         student.next_of_kin_phone = request.POST.get('next_of_kin_phone', '').strip()
         student.next_of_kin_relationship = request.POST.get('next_of_kin_relationship', '').strip()
         student.save(update_fields=['next_of_kin_name', 'next_of_kin_phone', 'next_of_kin_relationship'])
-        messages.success(request, 'Profile updated.')
+        messages.success(request, 'Profile updated. Please verify your new email address before your next login.' if email_changed else 'Profile updated.')
 
     return redirect('edu:secondary_page', role=profile.role, page='profile')
 
@@ -1871,21 +2076,26 @@ def secondary_add_student(request):
     if request.method == 'POST':
         full_name = request.POST.get('full_name', '').strip()
         password = request.POST.get('password', '').strip()
+        email = request.POST.get('email', '').strip()
         class_id = request.POST.get('academic_class')
         teacher_id = request.POST.get('teacher')
         kin_name = request.POST.get('next_of_kin_name', '').strip()
         kin_phone = request.POST.get('next_of_kin_phone', '').strip()
         kin_relationship = request.POST.get('next_of_kin_relationship', '').strip()
         photo = request.FILES.get('photo')
-        if not full_name or not password:
-            messages.error(request, 'Full name and password are required.')
+        if not full_name or not password or not email:
+            messages.error(request, 'Full name, email, and password are required.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='register')
+
+        if not _email_is_available(email):
+            messages.error(request, 'That email address is already used by another account.')
             return redirect('edu:secondary_page', role=creator_profile.role, page='register')
 
         academic_class = AcademicClass.objects.filter(id=class_id, institution=creator_profile.institution).first()
         try:
             User = get_user_model()
             username = _generate_user_id(creator_profile.institution)
-            user = User.objects.create_user(username=username, password=password)
+            user = User.objects.create_user(username=username, email=email, password=password)
             user.is_active = True
             user.save()
 
@@ -1899,6 +2109,7 @@ def secondary_add_student(request):
             profile.approved_by = request.user
             profile.approved_at = timezone.now()
             profile.save()
+            _send_edu_verification_email(request, profile)
 
             Student.objects.create(
                 institution=creator_profile.institution,
@@ -1922,7 +2133,7 @@ def secondary_add_student(request):
                         academic_class=academic_class,
                     )
 
-            messages.success(request, f'Student registered. ID: {username}')
+            messages.success(request, f'Student registered. ID: {username}. Verification email sent.')
         except IntegrityError:
             messages.error(request, 'Could not create student.')
 
@@ -2059,15 +2270,20 @@ def secondary_add_teacher(request):
     if request.method == 'POST':
         full_name = request.POST.get('full_name', '').strip()
         password = request.POST.get('password', '').strip()
+        email = request.POST.get('email', '').strip()
         photo = request.FILES.get('photo')
-        if not full_name or not password:
-            messages.error(request, 'Full name and password are required.')
+        if not full_name or not password or not email:
+            messages.error(request, 'Full name, email, and password are required.')
+            return redirect('edu:secondary_page', role=creator_profile.role, page='users')
+
+        if not _email_is_available(email):
+            messages.error(request, 'That email address is already used by another account.')
             return redirect('edu:secondary_page', role=creator_profile.role, page='users')
 
         try:
             User = get_user_model()
             username = _generate_user_id(creator_profile.institution)
-            user = User.objects.create_user(username=username, password=password)
+            user = User.objects.create_user(username=username, email=email, password=password)
             user.is_active = True
             user.save()
 
@@ -2081,6 +2297,7 @@ def secondary_add_teacher(request):
             profile.approved_by = request.user
             profile.approved_at = timezone.now()
             profile.save()
+            _send_edu_verification_email(request, profile)
 
             Staff.objects.create(
                 institution=creator_profile.institution,
@@ -2092,7 +2309,7 @@ def secondary_add_teacher(request):
                 photo=photo,
             )
 
-            messages.success(request, f'Teacher created. ID: {username}')
+            messages.success(request, f'Teacher created. ID: {username}. Verification email sent.')
         except IntegrityError:
             messages.error(request, 'Could not create teacher.')
 
@@ -2108,13 +2325,18 @@ def tertiary_create_user(request):
 
     if request.method == 'POST':
         password = request.POST.get('password', '').strip()
+        email = request.POST.get('email', '').strip()
         full_name = request.POST.get('full_name', '').strip()
         role = request.POST.get('role', 'student')
         faculty_id = request.POST.get('faculty')
         department_id = request.POST.get('department')
 
-        if not all([password, full_name]):
-            messages.error(request, 'Please fill all required fields.')
+        if not all([password, full_name, email]):
+            messages.error(request, 'Please fill all required fields, including email address.')
+            return redirect('edu:tertiary_dashboard', role=creator_profile.role)
+
+        if not _email_is_available(email):
+            messages.error(request, 'That email address is already used by another account.')
             return redirect('edu:tertiary_dashboard', role=creator_profile.role)
 
         if role not in [r['slug'] for r in TERTIARY_ROLES]:
@@ -2123,7 +2345,7 @@ def tertiary_create_user(request):
         try:
             User = get_user_model()
             username = _generate_user_id(creator_profile.institution)
-            user = User.objects.create_user(username=username, password=password)
+            user = User.objects.create_user(username=username, email=email, password=password)
             user.is_active = True
             user.save()
 
@@ -2139,6 +2361,7 @@ def tertiary_create_user(request):
             profile.faculty = Faculty.objects.filter(id=faculty_id).first() if faculty_id else None
             profile.department = Department.objects.filter(id=department_id).first() if department_id else None
             profile.save()
+            _send_edu_verification_email(request, profile)
 
             if role == 'student':
                 Student.objects.create(
@@ -2158,7 +2381,7 @@ def tertiary_create_user(request):
                     department=profile.department.name if profile.department else '',
                 )
 
-            messages.success(request, f'Account created successfully. ID: {username}')
+            messages.success(request, f'Account created successfully. ID: {username}. Verification email sent.')
         except IntegrityError:
             messages.error(request, 'Username already exists.')
 
@@ -2171,11 +2394,14 @@ def tertiary_school_register(request):
         school_code = request.POST.get('school_code', '').strip().upper()
         vc_full_name = request.POST.get('vc_full_name', '').strip()
         vc_password = request.POST.get('vc_password', '').strip()
+        admin_email = request.POST.get('admin_email', '').strip()
         vc_role = request.POST.get('vc_role', 'vc')
         missing_verification, verification_uploads = _missing_verification_requirements(request)
 
-        if not all([institution_name, vc_full_name, vc_password]):
-            messages.error(request, 'Please fill all required fields.')
+        if not all([institution_name, vc_full_name, vc_password, admin_email]):
+            messages.error(request, 'Please fill all required fields, including admin email.')
+        elif not _email_is_available(admin_email):
+            messages.error(request, 'That admin email address is already used by another account.')
         elif missing_verification:
             messages.error(request, 'Please complete verification requirements: ' + ', '.join(missing_verification) + '.')
         else:
@@ -2210,7 +2436,7 @@ def tertiary_school_register(request):
                     allow_online_payment=bool(request.POST.get('allow_online_payment')),
                     registration_payment_amount=EDU_REGISTRATION_FEE,
                     registration_payment_status='pending',
-                    admin_email=request.POST.get('admin_email', '').strip(),
+                    admin_email=admin_email,
                     admin_phone=request.POST.get('admin_phone', '').strip(),
                     theme_color=request.POST.get('theme_color', '').strip(),
                     logo=request.FILES.get('logo'),
