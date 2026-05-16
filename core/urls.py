@@ -67,6 +67,7 @@ urlpatterns = [
     path('api/mobile/owner/ai/summary/', api.api_owner_ai_summary, name='api_owner_ai_summary'),
     path('api/mobile/owner/ai/search-products/', api.api_owner_ai_product_search, name='api_owner_ai_product_search'),
     path('api/mobile/owner/ai/voice/', api.api_owner_ai_voice, name='api_owner_ai_voice'),
+    path('api/mobile/owner/ai/barcode-prefill/', api.api_owner_ai_barcode_prefill, name='api_owner_ai_barcode_prefill'),
     path('api/mobile/owner/ai/receipt-scan/', api.api_owner_ai_receipt_scan, name='api_owner_ai_receipt_scan'),
     path('api/mobile/owner/ai/chat/', api.api_owner_ai_chat, name='api_owner_ai_chat'),
     path('api/mobile/owner/customers/', api.api_owner_customers, name='api_owner_customers'),

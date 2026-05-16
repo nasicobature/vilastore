@@ -607,6 +607,36 @@ class OwnerInventoryApiTests(TestCase):
         self.assertEqual(analysis["out_of_stock_count"], 0)
         self.assertEqual(analysis["low_stock_products"][0]["name"], "Old Rice")
 
+    def test_ai_barcode_prefill_returns_known_product_details(self):
+        response = self.client.post(
+            reverse("api_owner_ai_barcode_prefill"),
+            data={"barcode": "5449000000996"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        prefill = response.json()["prefill"]
+        self.assertTrue(prefill["found"])
+        self.assertEqual(prefill["name"], "Coca-Cola 50cl")
+        self.assertEqual(prefill["category"], "Drinks")
+        self.assertEqual(prefill["code"], "5449000000996")
+
+    def test_ai_voice_returns_product_form_from_local_phrase(self):
+        response = self.client.post(
+            reverse("api_owner_ai_voice"),
+            data={"transcript": "Add Indomie small carton 15 pieces 12000 naira"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        product_form = response.json()["parsed"]["product_form"]
+        self.assertIn("Indomie", product_form["name"])
+        self.assertEqual(product_form["category"], "Food")
+        self.assertEqual(product_form["stock"], "15")
+        self.assertEqual(product_form["selling_price"], "12000.00")
+
 
 class WebInventoryUpdateTests(TestCase):
     def setUp(self):

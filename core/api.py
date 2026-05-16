@@ -3578,7 +3578,20 @@ def api_owner_ai_voice(request):
         return _json_error("Unauthorized.", status=401)
     data = _get_body_data(request) or {}
     transcript = (data.get("transcript") or "").strip()
-    return _json_success({"parsed": ai_engine.parse_voice_command(owner, transcript)})
+    parsed = ai_engine.parse_voice_command(owner, transcript)
+    parsed["product_form"] = ai_engine.parse_product_voice_form(transcript)
+    return _json_success({"parsed": parsed})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_ai_barcode_prefill(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+    data = _get_body_data(request) or {}
+    barcode = data.get("barcode") or data.get("code") or ""
+    return _json_success({"prefill": ai_engine.product_prefill_from_barcode(owner, barcode)})
 
 
 @csrf_exempt

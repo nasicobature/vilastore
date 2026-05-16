@@ -11,6 +11,42 @@ from .models import BranchInventory, Customer, Expense, Product, Sale, SaleItem
 
 SOFT_DRINK_WORDS = {"coke", "coka", "cola", "soft drink", "softdrink", "soda", "minerals"}
 
+BARCODE_PRODUCT_HINTS = {
+    "5449000000996": {
+        "name": "Coca-Cola 50cl",
+        "category": "Drinks",
+        "brand": "Coca-Cola",
+        "suggested_price": "500.00",
+        "image_url": "https://placehold.co/640x640/f40009/ffffff?text=Coca-Cola",
+    },
+    "5449000131805": {
+        "name": "Fanta Orange 50cl",
+        "category": "Drinks",
+        "brand": "Fanta",
+        "suggested_price": "500.00",
+        "image_url": "https://placehold.co/640x640/f47b20/ffffff?text=Fanta",
+    },
+    "6156000128083": {
+        "name": "Indomie Instant Noodles",
+        "category": "Food",
+        "brand": "Indomie",
+        "suggested_price": "350.00",
+        "image_url": "https://placehold.co/640x640/f7b500/111111?text=Indomie",
+    },
+}
+
+PRODUCT_KEYWORDS = [
+    ("coca-cola", "Coca-Cola", "Drinks", "Coca-Cola", "500.00"),
+    ("coke", "Coca-Cola", "Drinks", "Coca-Cola", "500.00"),
+    ("fanta", "Fanta Orange", "Drinks", "Fanta", "500.00"),
+    ("sprite", "Sprite", "Drinks", "Sprite", "500.00"),
+    ("pepsi", "Pepsi", "Drinks", "Pepsi", "500.00"),
+    ("indomie", "Indomie Instant Noodles", "Food", "Indomie", "350.00"),
+    ("rice", "Rice", "Food", "Generic", "0.00"),
+    ("sugar", "Sugar", "Food", "Generic", "0.00"),
+    ("milk", "Peak Milk", "Food", "Peak", "0.00"),
+]
+
 
 def money(value):
     try:
@@ -248,6 +284,104 @@ def smart_product_search(owner, query, limit=12):
                 "score": round(score, 3),
             })
     return sorted(results, key=lambda item: item["score"], reverse=True)[:limit]
+
+
+def product_prefill_from_barcode(owner, barcode):
+    code = (barcode or "").strip()
+    if not code:
+        return {"found": False, "message": "Barcode is empty."}
+
+    existing = Product.objects.filter(user=owner, code__iexact=code).select_related("category").first()
+    if existing:
+        return {
+            "found": True,
+            "source": "inventory",
+            "code": code,
+            "name": existing.name,
+            "category": existing.category.name if existing.category else "",
+            "category_id": existing.category_id,
+            "brand": "",
+            "suggested_price": serialize_money(existing.selling_price),
+            "cost_price": serialize_money(existing.cost_price),
+            "stock": serialize_money(existing.stock),
+            "image_url": "",
+            "message": "Product already exists in your inventory.",
+        }
+
+    hint = BARCODE_PRODUCT_HINTS.get(code)
+    if hint:
+        return {
+            "found": True,
+            "source": "barcode_catalog",
+            "code": code,
+            "name": hint["name"],
+            "category": hint["category"],
+            "brand": hint["brand"],
+            "suggested_price": hint["suggested_price"],
+            "cost_price": "0.00",
+            "stock": "1",
+            "image_url": hint["image_url"],
+            "message": "AI filled product details from the barcode catalog.",
+        }
+
+    return {
+        "found": False,
+        "source": "fallback",
+        "code": code,
+        "name": "",
+        "category": "",
+        "brand": "",
+        "suggested_price": "0.00",
+        "cost_price": "0.00",
+        "stock": "1",
+        "image_url": "",
+        "message": "Barcode is new. Enter the product name once, then VilaStore will remember it in your inventory.",
+    }
+
+
+def parse_product_voice_form(transcript):
+    text = (transcript or "").strip()
+    lowered = text.lower()
+    cleaned = re.sub(r"\b(add|saka|kara|karo|product|kaya|naira|ngn|n)\b", " ", lowered)
+    quantity_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:pieces|piece|pcs|pc|carton|ctn|kwali|kwali-kwali)?", cleaned)
+    price_matches = re.findall(r"(\d+(?:\.\d+)?)", cleaned)
+    price = price_matches[-1] if price_matches else "0"
+    quantity = quantity_match.group(1) if quantity_match else "1"
+
+    words = re.findall(r"[a-zA-Z-]+", cleaned)
+    stop_words = {
+        "small", "big", "large", "pieces", "piece", "pcs", "pc", "carton", "ctn",
+        "price", "for", "with", "qty", "quantity", "and", "na", "ne",
+    }
+    name_words = [word for word in words if word not in stop_words]
+    product_name = " ".join(name_words).strip().title()
+    category = ""
+    brand = ""
+    suggested_price = price
+    for keyword, name, cat, brand_name, default_price in PRODUCT_KEYWORDS:
+        if keyword in lowered:
+            if not product_name or len(product_name) < 4:
+                product_name = name
+            category = cat
+            brand = brand_name
+            if price in {"0", "1"} and default_price != "0.00":
+                suggested_price = default_price
+            break
+
+    if "carton" in lowered or "ctn" in lowered:
+        product_name = f"{product_name} Carton".strip()
+    elif "small" in lowered and product_name:
+        product_name = f"{product_name} Small"
+
+    return {
+        "name": product_name,
+        "category": category,
+        "brand": brand,
+        "stock": quantity,
+        "cost_price": "0.00",
+        "selling_price": serialize_money(suggested_price),
+        "message": "Voice command parsed. Review product name, quantity, and price before saving.",
+    }
 
 
 def parse_receipt_text(owner, text):
