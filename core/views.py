@@ -6004,7 +6004,7 @@ def marketplace(request):
     if location:
         profiles = profiles.filter(location__icontains=location)
     if verified:
-        profiles = profiles.filter(is_verified=True)
+        profiles = profiles.filter(Q(is_verified=True) | Q(user__is_email_verified=True))
 
     profiles = profiles.annotate(
         sales_count=Sum(
@@ -6021,13 +6021,13 @@ def marketplace(request):
         profiles = profiles.order_by("-rating", "-created_at")
 
     categories = (
-        MarketplaceShopProfile.objects.exclude(category="")
+        MarketplaceShopProfile.objects.filter(user__is_active=True, user__account_type=User.ACCOUNT_TYPE_SHOP).exclude(category="")
         .values_list("category", flat=True)
         .distinct()
         .order_by("category")
     )
     locations = (
-        MarketplaceShopProfile.objects.exclude(location="")
+        MarketplaceShopProfile.objects.filter(user__is_active=True, user__account_type=User.ACCOUNT_TYPE_SHOP).exclude(location="")
         .values_list("location", flat=True)
         .distinct()
         .order_by("location")

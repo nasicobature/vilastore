@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 import dj_database_url
 from django.core.management.utils import get_random_secret_key
 
@@ -48,6 +49,7 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY") or os.getenv("SECRET_KEY") or get_ra
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool("DEBUG", default=False)
+IS_TESTING = "test" in sys.argv
 
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",") if host.strip()]
 default_hosts = [
@@ -205,12 +207,23 @@ if render_hostname:
     if render_origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(render_origin)
 
+# Production transport security. Render terminates TLS at the proxy and forwards
+# the original scheme, so Django needs the proxy header before SSL redirects.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+PRODUCTION_SECURITY_DEFAULT = not DEBUG and not IS_TESTING
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=PRODUCTION_SECURITY_DEFAULT)
+SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", default=PRODUCTION_SECURITY_DEFAULT)
+CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", default=PRODUCTION_SECURITY_DEFAULT)
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000" if PRODUCTION_SECURITY_DEFAULT else "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=PRODUCTION_SECURITY_DEFAULT)
+SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", default=PRODUCTION_SECURITY_DEFAULT)
+
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "")
 PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY") or "pk_test_66cf9af7a9821d093c1d2c8d6f65e8f8f238b994"
-
 FLUTTERWAVE_PUBLIC_KEY = os.getenv("FLUTTERWAVE_PUBLIC_KEY", "")
 FLUTTERWAVE_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY") or os.getenv("FLUTTERWAVE_CLIENT_SECRET", "")
 FLUTTERWAVE_ENCRYPTION_KEY = os.getenv("FLUTTERWAVE_ENCRYPTION_KEY", "")
+
 # Email (SMTP)
 EMAIL_HOST = os.getenv("EMAIL_HOST") or "smtp.gmail.com"
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))

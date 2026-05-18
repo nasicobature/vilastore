@@ -1,4 +1,6 @@
 import json
+import random
+import re
 import secrets
 from datetime import timedelta, datetime
 from decimal import Decimal
@@ -91,6 +93,9 @@ from .views import (
     VAT_RATE,
     _send_marketplace_reset_code,
     _send_marketplace_verification_code,
+    _send_signup_code,
+    _plan_for_slug,
+    TRIAL_DAYS,
     _refresh_house_availability,
     _sync_rental_payment_state,
 )
@@ -423,6 +428,23 @@ def _serialize_sale_item(item):
     }
 
 
+def _scanner_order_reference(sale):
+    return f"VS-{sale.id:06d}"
+
+
+def _serialize_scanner_pending_sale(sale):
+    return {
+        "id": sale.id,
+        "reference": _scanner_order_reference(sale),
+        "customer_name": sale.display_customer_name or "Scanner Customer",
+        "total_amount": _money(sale.total_amount),
+        "payment_status": sale.payment_status,
+        "created_at": sale.created_at.isoformat(),
+        "branch": _serialize_branch(sale.branch) if getattr(sale, "branch_id", None) else None,
+        "items": [_serialize_sale_item(item) for item in sale.items.all()],
+    }
+
+
 def _cart_quantity_value(value):
     try:
         return Decimal(str(value))
@@ -665,7 +687,7 @@ def _serialize_shop_profile(request, profile):
         "description": profile.description or "",
         "category": profile.category,
         "location": profile.location,
-        "is_verified": profile.is_verified,
+        "is_verified": bool(profile.is_verified or user.is_email_verified),
         "rating": float(profile.rating) if profile.rating is not None else 0,
         "sales_count": float(sales_count or 0),
         "logo_url": logo_url,
@@ -1145,7 +1167,7 @@ def api_marketplace_shops(request):
     profiles = (
         _defer_user_bank_fields(MarketplaceShopProfile.objects.select_related("user"), "user__")
         .prefetch_related("user__product_set")
-        .filter(user__is_active=True)
+        .filter(user__is_active=True, user__account_type=User.ACCOUNT_TYPE_SHOP)
         .distinct()
     )
 
@@ -1162,7 +1184,7 @@ def api_marketplace_shops(request):
     if location:
         profiles = profiles.filter(location__icontains=location)
     if verified:
-        profiles = profiles.filter(is_verified=True)
+        profiles = profiles.filter(Q(is_verified=True) | Q(user__is_email_verified=True))
 
     profiles = profiles.annotate(
         sales_count=Sum(
@@ -1179,13 +1201,13 @@ def api_marketplace_shops(request):
         profiles = profiles.order_by("-rating", "-created_at")
 
     categories = (
-        MarketplaceShopProfile.objects.exclude(category="")
+        MarketplaceShopProfile.objects.filter(user__is_active=True, user__account_type=User.ACCOUNT_TYPE_SHOP).exclude(category="")
         .values_list("category", flat=True)
         .distinct()
         .order_by("category")
     )
     locations = (
-        MarketplaceShopProfile.objects.exclude(location="")
+        MarketplaceShopProfile.objects.filter(user__is_active=True, user__account_type=User.ACCOUNT_TYPE_SHOP).exclude(location="")
         .values_list("location", flat=True)
         .distinct()
         .order_by("location")
@@ -1630,6 +1652,222 @@ def api_marketplace_house_inquiry_message(request, public_id):
 # =============================
 # Mobile Unified Auth + Owner APIs
 # =============================
+
+SHOP_SIGNUP_ALLOWED_PLANS = {"starter", "growth", "business", "pro"}
+
+
+def _mobile_username_is_valid(username):
+    return bool(re.fullmatch(r"[A-Za-z0-9._-]{3,30}", username or ""))
+
+
+def _mobile_signup_owner_by_email(email):
+    return User.objects.filter(
+        email__iexact=email,
+        account_type=User.ACCOUNT_TYPE_SHOP,
+    ).order_by("-date_joined").first()
+
+
+def _mobile_shop_signup_profile(user):
+    return {
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "business_name": user.business_name,
+        "is_email_verified": user.is_email_verified,
+    }
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_mobile_shop_signup(request):
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    first_name = (data.get("first_name") or "").strip()
+    last_name = (data.get("last_name") or "").strip()
+    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    phone = (data.get("phone") or "").strip()
+    password = data.get("password") or ""
+    confirm_password = data.get("confirm_password") or ""
+    business_name = (data.get("business_name") or "").strip()
+    business_type = (data.get("business_type") or "retail").strip()
+    country = (data.get("country") or "Nigeria").strip()
+    state = (data.get("state") or "").strip()
+    address = (data.get("address") or "").strip()
+    plan_slug = (data.get("plan") or "starter").strip().lower()
+
+    if plan_slug not in SHOP_SIGNUP_ALLOWED_PLANS:
+        return _json_error("Choose a valid plan.")
+    if not all([first_name, last_name, username, email, phone, password, confirm_password, business_name, state, address]):
+        return _json_error("Fill all required shop registration fields.")
+    if not _mobile_username_is_valid(username):
+        return _json_error("Username must be 3-30 characters and use only letters, numbers, dot, dash, or underscore.")
+    if password != confirm_password:
+        return _json_error("Passwords do not match.")
+    if not _password_meets_rules(password):
+        return _json_error("Password must include uppercase, number, and special character.")
+
+    existing_email = User.objects.filter(
+        email__iexact=email,
+        account_type=User.ACCOUNT_TYPE_SHOP,
+        is_email_verified=True,
+    ).first()
+    if existing_email:
+        return _json_error("Email already registered. Please sign in.", status=409)
+
+    existing_username_qs = User.objects.filter(username__iexact=username)
+    pending = _mobile_signup_owner_by_email(email)
+    if pending:
+        existing_username_qs = existing_username_qs.exclude(id=pending.id)
+    if existing_username_qs.exists():
+        return _json_error("Username already taken. Choose another username.", status=409)
+
+    existing_phone_qs = User.objects.filter(
+        phone=phone,
+        account_type=User.ACCOUNT_TYPE_SHOP,
+        is_email_verified=True,
+    )
+    if pending:
+        existing_phone_qs = existing_phone_qs.exclude(id=pending.id)
+    if existing_phone_qs.exists():
+        return _json_error("Phone number already registered. Please sign in.", status=409)
+
+    plan = _plan_for_slug(plan_slug)
+    monthly_fee = plan["monthly_fee"] or Decimal("0.00")
+
+    with transaction.atomic():
+        if pending and not pending.is_email_verified:
+            user = pending
+            user.first_name = first_name
+            user.last_name = last_name
+            user.username = username
+            user.email = email
+            user.phone = phone
+            user.set_password(password)
+        else:
+            user = User(
+                first_name=first_name,
+                last_name=last_name,
+                username=username,
+                email=email,
+                phone=phone,
+            )
+            user.set_password(password)
+
+        user.business_name = business_name
+        user.business_type = business_type or "retail"
+        user.account_type = User.ACCOUNT_TYPE_SHOP
+        user.country = country or "Nigeria"
+        user.state = state
+        user.address = address
+        user.plan = plan_slug
+        user.monthly_fee = monthly_fee
+        user.is_paid = False
+        user.is_active = False
+        user.is_email_verified = False
+        user.subscription_active_until = None
+        user.email_verification_code = ""
+        user.email_code_sent_at = None
+        user.save()
+
+        MarketplaceShopProfile.objects.get_or_create(user=user)
+
+    try:
+        _send_signup_code(user)
+    except Exception:
+        return _json_error("Account was created, but the verification email could not be sent. Please try resend code.", status=502)
+
+    return _json_success({
+        "message": f"Verification code sent to {user.email}.",
+        "email": user.email,
+        "profile": _mobile_shop_signup_profile(user),
+    }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_mobile_shop_signup_resend(request):
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    email = (data.get("email") or "").strip().lower()
+    user = _mobile_signup_owner_by_email(email)
+    if not user:
+        return _json_error("No pending shop registration found.", status=404)
+    if user.is_email_verified:
+        return _json_success({"message": "Email is already verified.", "email": user.email})
+
+    try:
+        _send_signup_code(user)
+    except Exception:
+        return _json_error("Verification email could not be sent. Please try again.", status=502)
+    return _json_success({"message": f"Verification code sent to {user.email}.", "email": user.email})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_mobile_shop_signup_verify(request):
+    data = _get_body_data(request)
+    if data is None:
+        return _json_error("Invalid JSON payload.")
+
+    email = (data.get("email") or "").strip().lower()
+    code = (data.get("code") or "").strip()
+    if not email or not code:
+        return _json_error("Email and verification code are required.")
+
+    user = _mobile_signup_owner_by_email(email)
+    if not user:
+        return _json_error("No shop registration found.", status=404)
+    if user.is_email_verified and user.is_active:
+        token_obj = _issue_auth_token(AuthToken.ROLE_OWNER, owner=user)
+        return _json_success({
+            "token": token_obj.token,
+            "role": token_obj.role,
+            "profile": _serialize_owner(user),
+            "expires_at": token_obj.expires_at.isoformat() if token_obj.expires_at else None,
+        })
+
+    sent_at = user.email_code_sent_at
+    if not user.email_verification_code or not sent_at:
+        return _json_error("No active verification code. Please resend code.")
+    if sent_at < timezone.now() - timedelta(minutes=OTP_EXPIRY_MINUTES):
+        return _json_error("Verification code has expired. Please resend code.")
+    if code != user.email_verification_code:
+        return _json_error("Invalid verification code.")
+
+    user.is_email_verified = True
+    user.is_active = True
+    user.email_verification_code = ""
+    user.email_code_sent_at = None
+    user.subscription_active_until = timezone.localdate() + timedelta(days=TRIAL_DAYS)
+    user.is_paid = False
+    plan = _plan_for_slug(user.plan)
+    user.monthly_fee = plan["monthly_fee"] or Decimal("0.00")
+    user.save(update_fields=[
+        "is_email_verified",
+        "is_active",
+        "email_verification_code",
+        "email_code_sent_at",
+        "subscription_active_until",
+        "is_paid",
+        "monthly_fee",
+    ])
+    _ensure_shop_code(user)
+    _ensure_marketplace_profiles()
+
+    token_obj = _issue_auth_token(AuthToken.ROLE_OWNER, owner=user)
+    return _json_success({
+        "message": "Shop registration completed. Your 1-week free trial has started.",
+        "token": token_obj.token,
+        "role": token_obj.role,
+        "profile": _serialize_owner(user),
+        "trial_days": TRIAL_DAYS,
+        "expires_at": token_obj.expires_at.isoformat() if token_obj.expires_at else None,
+    })
 
 
 @csrf_exempt
@@ -4376,11 +4614,75 @@ def api_customer_scan_cart_checkout(request):
     return _json_success({
         "sale": {
             "id": sale.id,
+            "reference": _scanner_order_reference(sale),
             "status": "awaiting_payment_confirmation",
             "total_amount": _money(sale.total_amount),
         },
+        "cart": _serialize_customer_scan_cart(request, cart),
         "bank": _shop_bank_payload(cart.shop_owner),
     })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_owner_scanner_sales(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    sales = Sale.objects.filter(
+        user=owner,
+        sales_channel=Sale.CHANNEL_CUSTOMER_SCAN,
+        payment_status__in=[Sale.PAYMENT_LOAN, Sale.PAYMENT_PARTIAL],
+    ).select_related("branch").prefetch_related("items__product").order_by("-created_at")
+    return _json_success({
+        "pending_sales": [_serialize_scanner_pending_sale(sale) for sale in sales],
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_scanner_sale_confirm(request, sale_id):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    with transaction.atomic():
+        sale = get_object_or_404(
+            Sale.objects.select_for_update().prefetch_related("items__product"),
+            id=sale_id,
+            user=owner,
+            sales_channel=Sale.CHANNEL_CUSTOMER_SCAN,
+        )
+        if sale.payment_status == Sale.PAYMENT_PAID:
+            return _json_success({"sale": _serialize_sale(sale), "message": "Sale was already paid."})
+
+        branch = sale.branch
+        inventory_map = {}
+        products = [item.product for item in sale.items.all()]
+        if branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.select_for_update().filter(branch=branch, product__in=products)
+            }
+        for item in sale.items.all():
+            inventory = inventory_map.get(item.product_id) if branch else None
+            if inventory and inventory.track_separately:
+                if inventory.stock < item.quantity:
+                    return _json_error(f"Not enough stock for {item.product.name}.", status=409)
+                inventory.stock = max(Decimal("0.00"), inventory.stock - item.quantity)
+                inventory.save(update_fields=["stock", "updated_at"])
+            else:
+                if item.product.stock < item.quantity:
+                    return _json_error(f"Not enough stock for {item.product.name}.", status=409)
+                item.product.stock -= item.quantity
+                item.product.save(update_fields=["stock"])
+
+        sale.amount_paid = sale.total_amount
+        sale.payment_status = Sale.PAYMENT_PAID
+        sale.save(update_fields=["amount_paid", "payment_status"])
+
+    return _json_success({"sale": _serialize_sale(sale), "message": "Payment verified. Sale completed."})
 
 
 @csrf_exempt
@@ -4738,12 +5040,7 @@ def api_shopboy_scanner_sales(request):
     return _json_success({
         "pending_sales": [
             {
-                "id": sale.id,
-                "customer_name": sale.display_customer_name or "Scanner Customer",
-                "total_amount": _money(sale.total_amount),
-                "payment_status": sale.payment_status,
-                "created_at": sale.created_at.isoformat(),
-                "items": [_serialize_sale_item(item) for item in sale.items.all()],
+                **_serialize_scanner_pending_sale(sale),
             }
             for sale in sales
         ]
