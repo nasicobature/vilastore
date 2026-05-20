@@ -16,3 +16,5 @@ venv/
 env/
 .idea/
 .vscode/
+.vila-agent/
+CODEX_SESSION_INSTRUCTION.txt
