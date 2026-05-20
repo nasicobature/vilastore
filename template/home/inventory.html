@@ -11,6 +11,58 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="{% static 'js/app.js' %}" defer></script>
   <script src="{% static 'js/offline-web.js' %}" defer></script>
+  <style>
+    .ai-assistant-panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      background: color-mix(in srgb, var(--muted) 42%, transparent);
+      display: grid;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .ai-assistant-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      color: var(--foreground);
+    }
+    .ai-preview-card {
+      display: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      padding: 12px;
+      color: var(--foreground);
+    }
+    .ai-preview-card.active {
+      display: block;
+    }
+    .ai-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .ai-preview-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      background: var(--background);
+      min-height: 58px;
+    }
+    .ai-preview-item small {
+      display: block;
+      color: var(--muted-foreground);
+      margin-bottom: 4px;
+    }
+    .ai-warning {
+      color: #b45309;
+      font-size: 0.9rem;
+      margin-top: 8px;
+    }
+  </style>
 </head>
 
 <body>
@@ -268,7 +320,24 @@
     <form method="POST" action="{% url 'add_product' %}" enctype="multipart/form-data">
       {% csrf_token %}
 
-      <input type="text" name="name" placeholder="Product Name" class="input" required>
+      <div class="ai-assistant-panel">
+        <div class="ai-assistant-title">
+          <i data-lucide="sparkles"></i>
+          <span>AI Assistant</span>
+        </div>
+        <textarea id="productAiCommand" class="input" rows="3" placeholder="Type or speak: Add product for me. Product name is iPhone 13, price is 450000, quantity is 5, category is phones."></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline" onclick="startAiSpeech('productAiCommand')">
+            <i data-lucide="mic"></i>
+            Voice
+          </button>
+          <button type="button" class="btn btn-outline" id="productAiPreviewBtn" onclick="previewProductAi()">Preview Details</button>
+          <button type="button" class="btn btn-primary" id="productAiApplyBtn" onclick="applyProductAi()" disabled>Apply to Form</button>
+        </div>
+        <div id="productAiPreview" class="ai-preview-card"></div>
+      </div>
+
+      <input type="text" name="name" id="newProductName" placeholder="Product Name" class="input" required>
       {% if entitlements.barcode.allowed %}
       <div style="display:flex;gap:0.5rem;align-items:center;">
         <input type="text" name="code" id="newProductCode" placeholder="Product Code (Barcode/SKU)" class="input" style="flex:1;">
@@ -280,12 +349,13 @@
       </div>
       {% endif %}
 
-      <select name="category" class="input">
+      <select name="category" id="newProductCategory" class="input">
         <option value="">No category</option>
         {% for category in categories %}
           <option value="{{ category.id }}">{{ category.name }}</option>
         {% endfor %}
       </select>
+      <input type="hidden" name="new_category_name" id="newProductNewCategory" value="">
       {% if entitlements.multi_branch.allowed %}
       <select name="branch_id" class="input">
         <option value="">Apply to overall store</option>
@@ -296,8 +366,8 @@
       <small style="color:var(--muted-foreground);">Choose a branch if this stock should belong to one location only.</small>
       {% endif %}
 
-      <input type="number" name="cost_price" placeholder="Cost Price" class="input" required>
-      <input type="number" name="selling_price" placeholder="Selling Price" class="input" required>
+      <input type="number" name="cost_price" id="newProductCostPrice" placeholder="Cost Price" class="input" required>
+      <input type="number" name="selling_price" id="newProductSellingPrice" placeholder="Selling Price" class="input" required>
       {% if entitlements.tax_tools.allowed %}
       <select name="vat_status" class="input">
         <option value="standard">VAT: Standard (7.5%)</option>
@@ -308,8 +378,8 @@
       {% else %}
       <input type="hidden" name="vat_status" value="standard">
       {% endif %}
-      <input type="number" name="stock" min="0" step="0.01" placeholder="Stock" class="input" required>
-      <input type="number" name="low_stock_threshold" value="5" class="input">
+      <input type="number" name="stock" id="newProductStock" min="0" step="0.01" placeholder="Stock" class="input" required>
+      <input type="number" name="low_stock_threshold" id="newProductLowStockThreshold" value="5" class="input">
 
       <input type="file" name="image" class="input">
 
@@ -416,7 +486,24 @@
 
     <form method="POST" action="{% url 'add_category' %}">
       {% csrf_token %}
-      <input type="text" name="name" placeholder="Category Name" class="input" required>
+      <div class="ai-assistant-panel">
+        <div class="ai-assistant-title">
+          <i data-lucide="sparkles"></i>
+          <span>AI Assistant</span>
+        </div>
+        <textarea id="categoryAiCommand" class="input" rows="3" placeholder="Type or speak: Create category for me, the name is iPhone."></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline" onclick="startAiSpeech('categoryAiCommand')">
+            <i data-lucide="mic"></i>
+            Voice
+          </button>
+          <button type="button" class="btn btn-outline" id="categoryAiPreviewBtn" onclick="previewCategoryAi()">Preview Category</button>
+          <button type="button" class="btn btn-primary" id="categoryAiApplyBtn" onclick="applyCategoryAi()" disabled>Use This Name</button>
+        </div>
+        <div id="categoryAiPreview" class="ai-preview-card"></div>
+      </div>
+
+      <input type="text" name="name" id="categoryNameInput" placeholder="Category Name" class="input" required>
 
       <div style="margin-top:15px;">
         <button type="button" class="btn btn-outline" onclick="closeCategoryModal()">Cancel</button>
@@ -431,6 +518,188 @@
      MODAL SCRIPT
 ========================= -->
 <script>
+let productAiParsed = null;
+let categoryAiParsed = null;
+
+function getCsrfToken() {
+    const tokenInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return tokenInput ? tokenInput.value : '';
+}
+
+function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, function (char) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        }[char];
+    });
+}
+
+async function requestInventoryAi(mode, command) {
+    const formData = new FormData();
+    formData.append('mode', mode);
+    formData.append('command', command);
+    const response = await fetch("{% url 'ai_inventory_assistant' %}", {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || 'AI assistant could not process that command.');
+    }
+    return data;
+}
+
+function startAiSpeech(targetId) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert('Voice input is not supported in this browser. You can type the command instead.');
+        return;
+    }
+    const input = document.getElementById(targetId);
+    if (!input) {
+        return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-NG';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = function (event) {
+        const transcript = event.results[0][0].transcript || '';
+        input.value = input.value ? `${input.value} ${transcript}` : transcript;
+    };
+    recognition.onerror = function () {
+        alert('Voice input failed. Please try again or type the command.');
+    };
+    recognition.start();
+}
+
+function renderAiPreview(containerId, parsed, fields, missing) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        return;
+    }
+    const items = fields.map(field => `
+        <div class="ai-preview-item">
+          <small>${escapeHtml(field.label)}</small>
+          <strong>${escapeHtml(parsed[field.key] || field.empty || '-')}</strong>
+        </div>
+    `).join('');
+    const missingHtml = missing && missing.length
+        ? `<div class="ai-warning">Missing: ${escapeHtml(missing.join(', '))}</div>`
+        : '';
+    const imageHtml = parsed.image_url
+        ? `<div class="ai-warning">Image suggestion found. Please upload the product image manually before saving.</div>`
+        : '';
+    container.innerHTML = `<div>${escapeHtml(parsed.message || 'Review the extracted details before applying.')}</div><div class="ai-preview-grid">${items}</div>${missingHtml}${imageHtml}`;
+    container.classList.add('active');
+}
+
+async function previewCategoryAi() {
+    const commandInput = document.getElementById('categoryAiCommand');
+    const button = document.getElementById('categoryAiPreviewBtn');
+    const applyButton = document.getElementById('categoryAiApplyBtn');
+    const command = commandInput ? commandInput.value.trim() : '';
+    if (!command) {
+        alert('Type the category command first.');
+        return;
+    }
+    try {
+        button.disabled = true;
+        button.textContent = 'Checking...';
+        const data = await requestInventoryAi('category', command);
+        categoryAiParsed = data.parsed;
+        renderAiPreview('categoryAiPreview', categoryAiParsed, [{ key: 'name', label: 'Category name' }], data.missing);
+        applyButton.disabled = !data.can_save;
+    } catch (err) {
+        alert(err.message || 'Unable to preview category.');
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Preview Category';
+    }
+}
+
+function applyCategoryAi() {
+    if (!categoryAiParsed || !categoryAiParsed.name) {
+        return;
+    }
+    document.getElementById('categoryNameInput').value = categoryAiParsed.name;
+}
+
+async function previewProductAi() {
+    const commandInput = document.getElementById('productAiCommand');
+    const button = document.getElementById('productAiPreviewBtn');
+    const applyButton = document.getElementById('productAiApplyBtn');
+    const command = commandInput ? commandInput.value.trim() : '';
+    if (!command) {
+        alert('Type the product command first.');
+        return;
+    }
+    try {
+        button.disabled = true;
+        button.textContent = 'Checking...';
+        const data = await requestInventoryAi('product', command);
+        productAiParsed = data.parsed;
+        renderAiPreview('productAiPreview', productAiParsed, [
+            { key: 'name', label: 'Product name' },
+            { key: 'category', label: 'Category' },
+            { key: 'stock', label: 'Quantity' },
+            { key: 'cost_price', label: 'Cost price' },
+            { key: 'selling_price', label: 'Selling price' },
+            { key: 'barcode', label: 'Barcode' },
+            { key: 'description', label: 'Description' }
+        ], data.missing);
+        applyButton.disabled = !data.can_save;
+    } catch (err) {
+        alert(err.message || 'Unable to preview product.');
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Preview Details';
+    }
+}
+
+function applyProductAi() {
+    if (!productAiParsed) {
+        return;
+    }
+    const setValue = (id, value) => {
+        const input = document.getElementById(id);
+        if (input && value !== undefined && value !== null && String(value).trim() !== '') {
+            input.value = value;
+        }
+    };
+    setValue('newProductName', productAiParsed.name);
+    setValue('newProductStock', productAiParsed.stock);
+    setValue('newProductCostPrice', productAiParsed.cost_price);
+    setValue('newProductSellingPrice', productAiParsed.selling_price);
+    setValue('newProductCode', productAiParsed.barcode);
+
+    const categorySelect = document.getElementById('newProductCategory');
+    const newCategoryInput = document.getElementById('newProductNewCategory');
+    if (categorySelect && newCategoryInput && productAiParsed.category) {
+        const wanted = productAiParsed.category.trim().toLowerCase();
+        const match = Array.from(categorySelect.options).find(option => option.textContent.trim().toLowerCase() === wanted);
+        if (match) {
+            categorySelect.value = match.value;
+            newCategoryInput.value = '';
+        } else {
+            categorySelect.value = '';
+            newCategoryInput.value = productAiParsed.category;
+            const preview = document.getElementById('productAiPreview');
+            if (preview) {
+                preview.insertAdjacentHTML('beforeend', `<div class="ai-warning">New category "${escapeHtml(productAiParsed.category)}" will be created when you save this product.</div>`);
+            }
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     lucide.createIcons();
     setupTablePagination('inventoryTable');

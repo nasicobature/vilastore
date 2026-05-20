@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import AuthToken, BranchInventory, Customer, CustomerScanCart, Product, Sale, SaleItem, ShopBranch, ShopBoy, User
+from .models import AuthToken, BranchInventory, Category, Customer, CustomerScanCart, Product, Sale, SaleItem, ShopBranch, ShopBoy, User
 
 
 @override_settings(FLUTTERWAVE_SECRET_KEY="FLWSECK_TEST-demo", FLUTTERWAVE_PUBLIC_KEY="FLWPUBK_TEST-demo")
@@ -388,6 +388,41 @@ class SubscriptionEntitlementTests(TestCase):
         self.assertEqual(Customer.objects.filter(user=self.owner).count(), 0)
         self.assertContains(response, "Full customer management")
 
+    def test_starter_cannot_use_mobile_ai_business_analysis(self):
+        AuthToken.objects.create(
+            token="starter-ai-token",
+            role=AuthToken.ROLE_OWNER,
+            owner=self.owner,
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+
+        response = self.client.get(
+            reverse("api_owner_ai_summary"),
+            HTTP_AUTHORIZATION="Bearer starter-ai-token",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(response.json()["upgrade_required"])
+        self.assertEqual(response.json()["feature"], "ai_business_analysis")
+
+    def test_business_can_use_mobile_ai_business_analysis(self):
+        self.owner.plan = "business"
+        self.owner.save(update_fields=["plan"])
+        AuthToken.objects.create(
+            token="business-ai-token",
+            role=AuthToken.ROLE_OWNER,
+            owner=self.owner,
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+
+        response = self.client.get(
+            reverse("api_owner_ai_summary"),
+            HTTP_AUTHORIZATION="Bearer business-ai-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ai", response.json())
+
 
 class OwnerInventoryApiTests(TestCase):
     def setUp(self):
@@ -607,6 +642,24 @@ class OwnerInventoryApiTests(TestCase):
         self.assertEqual(analysis["out_of_stock_count"], 0)
         self.assertEqual(analysis["low_stock_products"][0]["name"], "Old Rice")
 
+    def test_mobile_reports_returns_web_business_analysis_fields(self):
+        response = self.client.get(
+            reverse("api_owner_reports"),
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        analysis = response.json()["business_analysis"]
+        self.assertTrue(analysis["available"])
+        self.assertIn("health_score", analysis)
+        self.assertIn("action_recommendations", analysis)
+        self.assertIn("business_insights", analysis)
+        self.assertIn("top_product_rows", analysis)
+        self.assertIn("restock_recommendations", analysis)
+        self.assertIn("expense_rows", analysis)
+        self.assertIn("customer_count", analysis)
+        self.assertIn("stock_value", analysis)
+
     def test_ai_barcode_prefill_returns_known_product_details(self):
         response = self.client.post(
             reverse("api_owner_ai_barcode_prefill"),
@@ -636,6 +689,114 @@ class OwnerInventoryApiTests(TestCase):
         self.assertEqual(product_form["category"], "Food")
         self.assertEqual(product_form["stock"], "15")
         self.assertEqual(product_form["selling_price"], "12000.00")
+
+    def test_inventory_ai_assistant_parses_english_product(self):
+        response = self.client.post(
+            reverse("api_owner_ai_inventory_assistant"),
+            data={
+                "mode": "product",
+                "command": "Add product for me. Product name is iPhone 13, price is 450000, quantity is 5, category is phones.",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["can_save"])
+        parsed = data["parsed"]
+        self.assertEqual(parsed["action"], "create_product")
+        self.assertEqual(parsed["product_name"], "iPhone 13")
+        self.assertEqual(parsed["price"], "450000.00")
+        self.assertEqual(parsed["quantity"], "5")
+        self.assertEqual(parsed["name"], "iPhone 13")
+        self.assertEqual(parsed["selling_price"], "450000.00")
+        self.assertEqual(parsed["stock"], "5")
+        self.assertEqual(parsed["category"], "Phones")
+
+    def test_inventory_ai_assistant_parses_hausa_category(self):
+        response = self.client.post(
+            reverse("api_owner_ai_inventory_assistant"),
+            data={
+                "mode": "category",
+                "command": "Ka ƙirƙira min category, sunan shi iPhone.",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["can_save"])
+        self.assertEqual(data["parsed"]["action"], "create_category")
+        self.assertEqual(data["parsed"]["category_name"], "iPhone")
+        self.assertEqual(data["parsed"]["name"], "iPhone")
+
+    def test_inventory_ai_assistant_parses_hausa_product_with_cost_and_description(self):
+        response = self.client.post(
+            reverse("api_owner_ai_inventory_assistant"),
+            data={
+                "mode": "product",
+                "command": "Sunan kaya sugar 1kg, farashin saye 900, farashin saidawa 1100, adadi 20, rukuni food, bayani imported sugar.",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        parsed = response.json()["parsed"]
+        self.assertEqual(parsed["action"], "create_product")
+        self.assertEqual(parsed["product_name"], "Sugar 1kg")
+        self.assertEqual(parsed["cost_price"], "900.00")
+        self.assertEqual(parsed["selling_price"], "1100.00")
+        self.assertEqual(parsed["quantity"], "20")
+        self.assertEqual(parsed["category"], "Food")
+        self.assertEqual(parsed["description"], "imported sugar")
+
+    def test_inventory_ai_assistant_returns_missing_fields_message(self):
+        response = self.client.post(
+            reverse("api_owner_ai_inventory_assistant"),
+            data={"mode": "product", "command": "Add product name Rice"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["can_save"])
+        self.assertIn("selling price", data["missing"])
+        self.assertIn("quantity", data["missing"])
+
+    @patch.dict("os.environ", {"AI_INVENTORY_PROVIDER": "openai", "OPENAI_API_KEY": "test-key", "OPENAI_INVENTORY_MODEL": "gpt-5.2"})
+    @patch("core.ai.requests.post")
+    def test_inventory_ai_assistant_can_use_openai_provider(self, mock_post):
+        api_response = Mock()
+        api_response.raise_for_status.return_value = None
+        api_response.json.return_value = {
+            "output_text": (
+                '{"action":"create_product","category_name":"","product_name":"Milo 500g",'
+                '"price":3500,"quantity":4,"category":"Beverages","cost_price":3000,'
+                '"selling_price":3500,"barcode":"MIL500","description":"tin pack",'
+                '"missing":[],"message":"Product details extracted. Review before saving."}'
+            )
+        }
+        mock_post.return_value = api_response
+
+        response = self.client.post(
+            reverse("api_owner_ai_inventory_assistant"),
+            data={"mode": "product", "command": "Add Milo tin 500g price 3500 quantity 4"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        parsed = response.json()["parsed"]
+        self.assertEqual(parsed["ai_provider"], "openai")
+        self.assertEqual(parsed["product_name"], "Milo 500g")
+        self.assertEqual(parsed["selling_price"], "3500.00")
+        self.assertEqual(parsed["quantity"], "4")
+        self.assertEqual(parsed["category"], "Beverages")
+        mock_post.assert_called_once()
 
 
 class WebInventoryUpdateTests(TestCase):
@@ -760,6 +921,45 @@ class WebInventoryUpdateTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.code, "WEB001")
         self.assertEqual(self.product.stock, Decimal("2.00"))
+
+    def test_web_inventory_ai_assistant_parses_product_command(self):
+        response = self.client.post(
+            reverse("ai_inventory_assistant"),
+            data={
+                "mode": "product",
+                "command": "Add product for me. Product name is iPhone 13, price is 450000, quantity is 5, category is phones.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["can_save"])
+        self.assertEqual(data["parsed"]["action"], "create_product")
+        self.assertEqual(data["parsed"]["product_name"], "iPhone 13")
+        self.assertEqual(data["parsed"]["price"], "450000.00")
+        self.assertEqual(data["parsed"]["name"], "iPhone 13")
+        self.assertEqual(data["parsed"]["selling_price"], "450000.00")
+        self.assertEqual(data["parsed"]["category"], "Phones")
+
+    def test_web_add_product_can_create_ai_suggested_category(self):
+        response = self.client.post(
+            reverse("add_product"),
+            data={
+                "name": "AI Phone",
+                "category": "",
+                "new_category_name": "Phones",
+                "stock": "5",
+                "low_stock_threshold": "2",
+                "cost_price": "300000.00",
+                "selling_price": "450000.00",
+                "vat_status": Product.VAT_STANDARD,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        category = Category.objects.get(user=self.owner, name="Phones")
+        product = Product.objects.get(user=self.owner, name="AI Phone")
+        self.assertEqual(product.category, category)
 
 
 class WebDashboardTests(TestCase):

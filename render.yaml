@@ -20,6 +20,12 @@ services:
         value: vilastore.onrender.com,vilastore.store,www.vilastore.store
       - key: MEDIA_ROOT
         value: /var/data/media
+      - key: AI_INVENTORY_PROVIDER
+        value: openai
+      - key: OPENAI_INVENTORY_MODEL
+        value: gpt-5.2
+      - key: OPENAI_API_KEY
+        sync: false
     disk:
       name: vilastore-media
       mountPath: /var/data

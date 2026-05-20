@@ -1,12 +1,16 @@
 from datetime import timedelta
 from decimal import Decimal, ROUND_CEILING
 from difflib import SequenceMatcher
+import json
+import os
 import re
 
+import requests
 from django.db.models import Count, Sum
 from django.utils import timezone
 
 from .models import BranchInventory, Customer, Expense, Product, Sale, SaleItem
+from .ai_inventory_training import CATEGORY_ACTION_WORDS, CREATE_WORDS, INVENTORY_COMMAND_EXAMPLES, PRODUCT_ACTION_WORDS
 
 
 SOFT_DRINK_WORDS = {"coke", "coka", "cola", "soft drink", "softdrink", "soda", "minerals"}
@@ -382,6 +386,555 @@ def parse_product_voice_form(transcript):
         "selling_price": serialize_money(suggested_price),
         "message": "Voice command parsed. Review product name, quantity, and price before saving.",
     }
+
+
+def _clean_phrase(value):
+    value = re.sub(r"[\"'`]+", "", value or "")
+    value = re.sub(r"\s+", " ", value)
+    return value.strip(" .,:;-")
+
+
+def _extract_labeled_text(text, labels, stop_labels=None):
+    stop_labels = stop_labels or []
+    label_pattern = "|".join(re.escape(label) for label in labels)
+    stop_pattern = "|".join(re.escape(label) for label in stop_labels)
+    if stop_pattern:
+        pattern = rf"(?:{label_pattern})\s*(?:is|shi|ta|ne|=|:)?\s*(.+?)(?=(?:\b(?:{stop_pattern})\b)|[,.;]|\n|$)"
+    else:
+        pattern = rf"(?:{label_pattern})\s*(?:is|shi|ta|ne|=|:)?\s*(.+?)(?:[,.;]|\n|$)"
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    return _clean_phrase(match.group(1)) if match else ""
+
+
+def _extract_labeled_number(text, labels):
+    label_pattern = "|".join(re.escape(label) for label in labels)
+    match = re.search(rf"(?:{label_pattern})\s*(?:is|shi|ta|ne|=|:)?\s*(?:ngn|n|₦)?\s*([0-9][0-9,]*(?:\.\d+)?)", text, flags=re.IGNORECASE)
+    if not match:
+        return ""
+    return match.group(1).replace(",", "")
+
+
+def parse_category_command(transcript):
+    text = (transcript or "").strip()
+    lowered = text.lower()
+    labels = [
+        "category name",
+        "name",
+        "sunan category",
+        "sunan shi",
+        "sunan ta",
+        "sunan sa",
+        "suna",
+    ]
+    name = _extract_labeled_text(text, labels)
+    if not name:
+        match = re.search(r"(?:category|rukuni)\s+(?:for|na|mai suna)?\s*([a-zA-Z0-9& -]+)", text, flags=re.IGNORECASE)
+        if match:
+            name = _clean_phrase(match.group(1))
+    if not name and any(word in lowered for word in ["category", "rukuni"]):
+        words = re.findall(r"[A-Za-z0-9&-]+", text)
+        stop = {
+            "create", "category", "for", "me", "the", "name", "is", "ka", "kirkiro", "kirkira",
+            "min", "sunan", "shi", "ta", "sa", "rukuni",
+        }
+        candidates = [word for word in words if word.lower() not in stop]
+        name = " ".join(candidates[-3:])
+    missing = []
+    if not name:
+        missing.append("category name")
+    return {
+        "name": name.strip().title() if name else "",
+        "missing": missing,
+        "message": "Category details extracted. Review before saving." if not missing else "Please provide the category name.",
+    }
+
+
+def parse_inventory_product_command(transcript):
+    text = (transcript or "").strip()
+    lowered = text.lower()
+    stop_labels = [
+        "price", "farashi", "selling price", "cost price", "cost", "quantity", "qty", "stock",
+        "category", "barcode", "code", "description", "bayani", "image", "photo",
+    ]
+    name = _extract_labeled_text(text, [
+        "product name",
+        "name",
+        "sunan kaya",
+        "sunan product",
+        "kaya",
+    ], stop_labels)
+    category = _extract_labeled_text(text, ["category", "rukuni"], stop_labels)
+    description = _extract_labeled_text(text, ["description", "bayani"], stop_labels)
+    code = _extract_labeled_text(text, ["barcode", "bar code", "code"], stop_labels)
+    image_url = _extract_labeled_text(text, ["image", "photo", "picture"], stop_labels)
+    quantity = _extract_labeled_number(text, ["quantity", "qty", "stock", "adadi", "pieces"])
+    selling_price = _extract_labeled_number(text, ["selling price", "price", "farashi"])
+    cost_price = _extract_labeled_number(text, ["cost price", "cost", "buying price", "sayan", "sayen"])
+
+    fallback = parse_product_voice_form(text)
+    if not name:
+        name = fallback.get("name", "")
+    if not category:
+        category = fallback.get("category", "")
+    if not quantity:
+        quantity = fallback.get("stock", "1")
+    if not selling_price or selling_price == "0":
+        selling_price = fallback.get("selling_price", "0.00")
+    if not cost_price:
+        cost_price = fallback.get("cost_price", "0.00")
+
+    missing = []
+    if not name:
+        missing.append("product name")
+    if not selling_price or money(selling_price) <= 0:
+        missing.append("selling price")
+    if not quantity:
+        missing.append("quantity")
+
+    return {
+        "name": name,
+        "category": category,
+        "stock": quantity or "1",
+        "cost_price": serialize_money(cost_price),
+        "selling_price": serialize_money(selling_price),
+        "suggested_price": serialize_money(selling_price),
+        "code": code,
+        "description": description,
+        "image_url": image_url,
+        "missing": missing,
+        "message": "Product details extracted. Review before saving." if not missing else "Some required product details are missing.",
+    }
+
+
+HAUSA_TRANSLATION_TABLE = str.maketrans({
+    "ƙ": "k", "Ƙ": "K", "ḳ": "k",
+    "ɗ": "d", "Ɗ": "D",
+    "ɓ": "b", "Ɓ": "B",
+    "₦": "n",
+})
+
+INVENTORY_STOP_LABELS = [
+    "product name", "name", "sunan kaya", "sunan product", "sunan category", "sunan shi", "sunan ta",
+    "category", "rukuni", "price", "selling price", "farashi", "farashin saidawa", "cost price",
+    "buying price", "farashin saye", "cost", "quantity", "qty", "stock", "adadi", "guda", "pieces",
+    "barcode", "bar code", "code", "description", "bayani", "image", "photo", "picture",
+]
+
+PRODUCT_NAME_STOP_WORDS = {
+    "add", "create", "make", "new", "register", "product", "products", "for", "me", "the", "name",
+    "is", "ka", "min", "saka", "kara", "karo", "kirkira", "kirkiro", "sabon", "sunan", "shi", "ta",
+    "ne", "kaya", "guda", "quantity", "qty", "stock", "adadi", "category", "rukuni", "farashi",
+    "price", "naira", "ngn", "n",
+}
+
+
+def _normalize_inventory_text(value):
+    value = (value or "").translate(HAUSA_TRANSLATION_TABLE)
+    value = re.sub(r"\bnaira\b", " n ", value, flags=re.IGNORECASE)
+    value = re.sub(r"\s+", " ", value)
+    return value.strip()
+
+
+def _title_shop_phrase(value):
+    value = _clean_phrase(value)
+    if not value:
+        return ""
+    small_words = {"and", "or", "of", "for", "da", "na"}
+    parts = []
+    for word in value.split():
+        if word.isupper() or any(char.isdigit() for char in word) or any(char.isupper() for char in word[1:]):
+            parts.append(word)
+        elif word.lower() in small_words:
+            parts.append(word.lower())
+        else:
+            parts.append(word[:1].upper() + word[1:])
+    return " ".join(parts)
+
+
+def _label_regex(labels):
+    return "|".join(sorted((re.escape(label) for label in labels), key=len, reverse=True))
+
+
+def _extract_labeled_text(text, labels, stop_labels=None):
+    stop_labels = stop_labels or INVENTORY_STOP_LABELS
+    label_pattern = _label_regex(labels)
+    stop_pattern = _label_regex(stop_labels)
+    bridge = r"(?:\s+(?:is|are|as|called|mai suna|suna|shi|ita|ta|ne|na|=)|\s*[:=])?"
+    pattern = rf"(?:^|[\s,.;])(?:{label_pattern}){bridge}\s+(.+?)(?=(?:[\s,.;]\s*(?:{stop_pattern})\b)|[,;\n]|$)"
+    for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+        value = _clean_phrase(match.group(1))
+        if value and value.lower() not in {"is", "shi", "ta", "ne", "na"}:
+            return value
+    return ""
+
+
+def _parse_inventory_number(value):
+    value = (value or "").strip().lower().replace(",", "")
+    match = re.match(r"([0-9]+(?:\.[0-9]+)?)(k)?", value)
+    if not match:
+        return ""
+    number = Decimal(match.group(1))
+    if match.group(2):
+        number *= Decimal("1000")
+    if number == number.to_integral_value():
+        return str(number.quantize(Decimal("1")))
+    return format(number.normalize(), "f")
+
+
+def _extract_labeled_number(text, labels):
+    label_pattern = _label_regex(labels)
+    bridge = r"(?:\s+(?:is|are|as|shi|ta|ne|na|=)|\s*[:=])?"
+    number = r"(?:ngn|n|#)?\s*([0-9][0-9,]*(?:\.\d+)?k?)"
+    pattern = rf"(?:^|[\s,.;])(?:{label_pattern}){bridge}\s*{number}"
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    return _parse_inventory_number(match.group(1)) if match else ""
+
+
+def _extract_quantity(text):
+    quantity = _extract_labeled_number(text, ["quantity", "qty", "stock", "adadi", "guda", "pieces", "piece", "pcs"])
+    if quantity:
+        return quantity
+    match = re.search(r"\b(?:guda|pieces|piece|pcs)\s*([0-9][0-9,]*(?:\.\d+)?)\b", text, flags=re.IGNORECASE)
+    if match:
+        return _parse_inventory_number(match.group(1))
+    match = re.search(r"\b([0-9][0-9,]*(?:\.\d+)?)\s*(?:guda|pieces|piece|pcs|carton|ctn)\b", text, flags=re.IGNORECASE)
+    return _parse_inventory_number(match.group(1)) if match else ""
+
+
+def _extract_category_name_from_phrase(text):
+    name = _extract_labeled_text(text, [
+        "category name", "sunan category", "sunan rukuni", "sunan shi", "sunan ta", "name", "suna",
+    ], ["price", "farashi", "quantity", "qty", "stock", "category", "rukuni", "product", "kaya"])
+    if name:
+        return name
+    patterns = [
+        r"\b(?:category|rukuni)\s+(?:called|mai suna|suna|name|na)?\s*([A-Za-z0-9& /\-]+)",
+        r"\b(?:add|create|make|saka|kirkira|kirkiro)\s+(?:new|sabon)?\s*(?:category|rukuni)\s+([A-Za-z0-9& /\-]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return _clean_phrase(match.group(1))
+    return ""
+
+
+def _extract_product_name_by_fallback(text):
+    working = re.sub(r"\b(?:ngn|naira|n)\s*[0-9][0-9,]*(?:\.\d+)?k?\b", " ", text, flags=re.IGNORECASE)
+    working = re.sub(r"\b[0-9][0-9,]*(?:\.\d+)?k?\s*(?:naira|ngn|guda|pieces|piece|pcs|carton|ctn)\b", " ", working, flags=re.IGNORECASE)
+    for label in INVENTORY_STOP_LABELS:
+        working = re.sub(rf"\b{re.escape(label)}\b\s*(?:is|shi|ta|ne|na|=|:)?\s*[^,.;]*", " ", working, flags=re.IGNORECASE)
+    words = re.findall(r"[A-Za-z0-9&/\-]+", working)
+    candidates = [word for word in words if word.lower() not in PRODUCT_NAME_STOP_WORDS]
+    return " ".join(candidates[:5])
+
+
+def _detect_inventory_intent(text, preferred=None):
+    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
+    if preferred == "category":
+        return "create_category"
+    if preferred == "product":
+        return "create_product"
+    if tokens & CATEGORY_ACTION_WORDS and not (tokens & PRODUCT_ACTION_WORDS):
+        return "create_category"
+    if tokens & PRODUCT_ACTION_WORDS:
+        return "create_product"
+    if tokens & CREATE_WORDS and tokens & CATEGORY_ACTION_WORDS:
+        return "create_category"
+    return "create_product"
+
+
+def _inventory_examples_for_intent(intent, limit=8):
+    return [example["text"] for example in INVENTORY_COMMAND_EXAMPLES if example["intent"] == intent][:limit]
+
+
+def parse_category_command(transcript):
+    text = _normalize_inventory_text(transcript)
+    name = _extract_category_name_from_phrase(text)
+    missing = []
+    if not name:
+        missing.append("category name")
+    category_name = _title_shop_phrase(name)
+    return {
+        "action": "create_category",
+        "intent": "create_category",
+        "category_name": category_name,
+        "name": category_name,
+        "missing": missing,
+        "examples": _inventory_examples_for_intent("create_category"),
+        "message": (
+            "Category details extracted. Review before saving."
+            if not missing
+            else "Please provide the category name. Example: Create category for me, the name is Drinks."
+        ),
+    }
+
+
+def parse_inventory_product_command(transcript):
+    text = _normalize_inventory_text(transcript)
+    name = _extract_labeled_text(text, [
+        "product name", "sunan kaya", "sunan product", "item name", "name",
+    ])
+    if not name:
+        name = _extract_product_name_by_fallback(text)
+
+    category = _extract_labeled_text(text, ["category", "rukuni", "group", "section"])
+    description = _extract_labeled_text(text, ["description", "bayani", "details", "note"])
+    barcode = _extract_labeled_text(text, ["barcode", "bar code", "code", "sku"])
+    image_url = _extract_labeled_text(text, ["image", "photo", "picture", "image url"])
+    quantity = _extract_quantity(text)
+    selling_price = _extract_labeled_number(text, ["selling price", "sale price", "price", "farashin saidawa", "farashi"])
+    cost_price = _extract_labeled_number(text, ["cost price", "buying price", "purchase price", "cost", "farashin saye", "sayan", "sayen"])
+
+    fallback = parse_product_voice_form(text)
+    if not name:
+        name = fallback.get("name", "")
+    if not category:
+        category = fallback.get("category", "")
+    has_any_number = bool(re.search(r"\d", text))
+    if not quantity and has_any_number:
+        quantity = fallback.get("stock", "")
+    if (not selling_price or selling_price == "0") and has_any_number:
+        selling_price = fallback.get("selling_price", "0.00")
+    if not cost_price:
+        cost_price = fallback.get("cost_price", "0.00")
+
+    product_name = _title_shop_phrase(name)
+    category_name = _title_shop_phrase(category)
+    missing = []
+    if not product_name:
+        missing.append("product name")
+    if not selling_price or money(selling_price) <= 0:
+        missing.append("selling price")
+    if not quantity or money(quantity) <= 0:
+        missing.append("quantity")
+
+    return {
+        "action": "create_product",
+        "intent": "create_product",
+        "product_name": product_name,
+        "price": serialize_money(selling_price),
+        "quantity": quantity or "",
+        "category": category_name,
+        "cost_price": serialize_money(cost_price),
+        "selling_price": serialize_money(selling_price),
+        "suggested_price": serialize_money(selling_price),
+        "barcode": barcode,
+        "code": barcode,
+        "description": _clean_phrase(description),
+        "image_url": image_url,
+        "name": product_name,
+        "stock": quantity or "",
+        "missing": missing,
+        "examples": _inventory_examples_for_intent("create_product"),
+        "message": (
+            "Product details extracted. Review before saving."
+            if not missing
+            else "Please provide: " + ", ".join(missing) + "."
+        ),
+    }
+
+
+def _parse_inventory_command_rule_based(transcript, mode=None):
+    text = _normalize_inventory_text(transcript)
+    intent = _detect_inventory_intent(text, preferred=mode)
+    if intent == "create_category":
+        return parse_category_command(text)
+    return parse_inventory_product_command(text)
+
+
+def _inventory_model_schema():
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "action": {"type": "string", "enum": ["create_category", "create_product"]},
+            "category_name": {"type": "string"},
+            "product_name": {"type": "string"},
+            "price": {"type": "number"},
+            "quantity": {"type": "number"},
+            "category": {"type": "string"},
+            "cost_price": {"type": "number"},
+            "selling_price": {"type": "number"},
+            "barcode": {"type": "string"},
+            "description": {"type": "string"},
+            "missing": {"type": "array", "items": {"type": "string"}},
+            "message": {"type": "string"},
+        },
+        "required": [
+            "action", "category_name", "product_name", "price", "quantity", "category",
+            "cost_price", "selling_price", "barcode", "description", "missing", "message",
+        ],
+    }
+
+
+def _inventory_model_system_prompt(mode=None):
+    examples = json.dumps(INVENTORY_COMMAND_EXAMPLES, ensure_ascii=False)
+    mode_note = f"The UI requested mode '{mode}'." if mode in {"category", "product"} else "Detect whether this is a category or product command."
+    return (
+        "You are VilaStore Inventory AI. Convert Hausa, Hausa-English, or English shop-owner commands "
+        "into one JSON object for inventory form filling only. Do not save anything. "
+        "Use action=create_category for category requests and action=create_product for product requests. "
+        "For product requests, product_name, price/selling_price, and quantity are required. "
+        "For category requests, category_name is required. If required details are missing, put their human names "
+        "in missing and write a short message asking the shop owner for them. Use 0 for unavailable numeric fields. "
+        "Keep product and category names exactly as spoken when possible, preserving brands like iPhone and Coca-Cola. "
+        f"{mode_note}\nTraining examples:\n{examples}"
+    )
+
+
+def _extract_openai_response_text(payload):
+    if payload.get("output_text"):
+        return payload["output_text"]
+    for item in payload.get("output", []):
+        for content in item.get("content", []):
+            if content.get("type") in {"output_text", "text"} and content.get("text"):
+                return content["text"]
+    return ""
+
+
+def _model_number(value):
+    if value in (None, ""):
+        return "0"
+    try:
+        number = Decimal(str(value))
+    except Exception:
+        return "0"
+    if number == number.to_integral_value():
+        return str(number.quantize(Decimal("1")))
+    return format(number.normalize(), "f")
+
+
+def _normalize_inventory_model_result(raw, mode=None):
+    action = raw.get("action") or _detect_inventory_intent("", preferred=mode)
+    if action not in {"create_category", "create_product"}:
+        action = "create_product"
+
+    category_name = _title_shop_phrase(raw.get("category_name") or raw.get("category") or "")
+    product_name = _title_shop_phrase(raw.get("product_name") or raw.get("name") or "")
+    category = _title_shop_phrase(raw.get("category") or "")
+    price = _model_number(raw.get("price") or raw.get("selling_price"))
+    selling_price = _model_number(raw.get("selling_price") or raw.get("price"))
+    cost_price = _model_number(raw.get("cost_price"))
+    quantity = _model_number(raw.get("quantity") or raw.get("stock"))
+    barcode = _clean_phrase(raw.get("barcode") or raw.get("code") or "")
+    description = _clean_phrase(raw.get("description") or "")
+
+    missing = list(raw.get("missing") or [])
+    if action == "create_category":
+        if not category_name and "category name" not in missing:
+            missing.append("category name")
+        message = raw.get("message") or (
+            "Category details extracted. Review before saving."
+            if not missing
+            else "Please provide the category name."
+        )
+        return {
+            "action": "create_category",
+            "intent": "create_category",
+            "category_name": category_name,
+            "name": category_name,
+            "missing": missing,
+            "examples": _inventory_examples_for_intent("create_category"),
+            "message": message,
+            "ai_provider": "openai",
+        }
+
+    if not product_name and "product name" not in missing:
+        missing.append("product name")
+    if money(selling_price) <= 0 and "selling price" not in missing:
+        missing.append("selling price")
+    if money(quantity) <= 0 and "quantity" not in missing:
+        missing.append("quantity")
+
+    return {
+        "action": "create_product",
+        "intent": "create_product",
+        "product_name": product_name,
+        "price": serialize_money(selling_price),
+        "quantity": quantity if money(quantity) > 0 else "",
+        "category": category,
+        "cost_price": serialize_money(cost_price),
+        "selling_price": serialize_money(selling_price),
+        "suggested_price": serialize_money(selling_price),
+        "barcode": barcode,
+        "code": barcode,
+        "description": description,
+        "image_url": _clean_phrase(raw.get("image_url") or ""),
+        "name": product_name,
+        "stock": quantity if money(quantity) > 0 else "",
+        "missing": missing,
+        "examples": _inventory_examples_for_intent("create_product"),
+        "message": raw.get("message") or (
+            "Product details extracted. Review before saving."
+            if not missing
+            else "Please provide: " + ", ".join(missing) + "."
+        ),
+        "ai_provider": "openai",
+    }
+
+
+def _parse_inventory_command_with_openai(transcript, mode=None):
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return None, "OPENAI_API_KEY is not configured."
+
+    model = os.getenv("OPENAI_INVENTORY_MODEL", "gpt-5.2").strip() or "gpt-5.2"
+    timeout = int(os.getenv("OPENAI_INVENTORY_TIMEOUT", "20"))
+    response = requests.post(
+        "https://api.openai.com/v1/responses",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "input": [
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": _inventory_model_system_prompt(mode)}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": transcript or ""}],
+                },
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "vilastore_inventory_command",
+                    "strict": True,
+                    "schema": _inventory_model_schema(),
+                }
+            },
+            "max_output_tokens": 800,
+        },
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    output_text = _extract_openai_response_text(payload)
+    if not output_text:
+        return None, "OpenAI returned an empty inventory parser response."
+    return _normalize_inventory_model_result(json.loads(output_text), mode=mode), ""
+
+
+def parse_inventory_command(transcript, mode=None):
+    provider = os.getenv("AI_INVENTORY_PROVIDER", "rules").strip().lower()
+    if provider == "openai":
+        try:
+            parsed, error = _parse_inventory_command_with_openai(transcript, mode=mode)
+            if parsed:
+                return parsed
+        except Exception as exc:
+            error = str(exc)
+        fallback = _parse_inventory_command_rule_based(transcript, mode=mode)
+        fallback["ai_provider"] = "rules_fallback"
+        fallback["ai_error"] = error
+        return fallback
+
+    parsed = _parse_inventory_command_rule_based(transcript, mode=mode)
+    parsed["ai_provider"] = "rules"
+    return parsed
 
 
 def parse_receipt_text(owner, text):

@@ -3628,6 +3628,109 @@ def api_owner_reports(request):
     if total_revenue:
         profit_margin = (total_profit / total_revenue * Decimal("100")).quantize(Decimal("0.01"))
 
+    total_cost = total_revenue - total_profit
+    net_margin_percent = ((net_profit / total_revenue) * Decimal("100")).quantize(Decimal("0.01")) if total_revenue else Decimal("0.00")
+    expense_ratio_percent = ((total_expenses / total_revenue) * Decimal("100")).quantize(Decimal("0.01")) if total_revenue else Decimal("0.00")
+
+    sold_product_ids = set(
+        SaleItem.objects.filter(sale__in=sales)
+        .values_list("product_id", flat=True)
+        .distinct()
+    )
+    products_qs = Product.objects.filter(user=owner)
+    if selected_branch:
+        branch_inventory = BranchInventory.objects.filter(branch=selected_branch, product__user=owner)
+        product_stock_rows = [
+            {
+                "product": row.product,
+                "stock": row.stock if row.track_separately else row.product.stock,
+                "selling_price": row.selling_price if row.selling_price is not None else row.product.selling_price,
+                "cost_price": row.product.cost_price,
+            }
+            for row in branch_inventory.select_related("product")
+        ]
+    else:
+        product_stock_rows = [
+            {
+                "product": product,
+                "stock": product.stock,
+                "selling_price": product.selling_price,
+                "cost_price": product.cost_price,
+            }
+            for product in products_qs
+        ]
+
+    stock_value = Decimal("0.00")
+    stock_cost = Decimal("0.00")
+    stock_by_product = {}
+    low_stock_products = []
+    out_of_stock_count = 0
+    slow_moving_products = []
+    for row in product_stock_rows:
+        product = row["product"]
+        stock = row["stock"] or Decimal("0.00")
+        selling_price = row["selling_price"] or Decimal("0.00")
+        cost_price = row["cost_price"] or Decimal("0.00")
+        stock_by_product[product.id] = stock
+        stock_value += selling_price * stock
+        stock_cost += cost_price * stock
+        if stock <= 0:
+            out_of_stock_count += 1
+        elif stock <= product.low_stock_threshold:
+            low_stock_products.append({"name": product.name, "stock": stock})
+        if stock > 0 and product.id not in sold_product_ids:
+            slow_moving_products.append({"name": product.name, "stock": stock})
+
+    inventory_profit_potential = stock_value - stock_cost
+
+    top_product_rows = []
+    top_product_data = (
+        SaleItem.objects.filter(sale__in=sales)
+        .values("product_id", "product__name")
+        .annotate(quantity=Sum("quantity"), profit=Sum("profit"))
+        .order_by("-quantity")[:5]
+    )
+    for row in top_product_data:
+        product_items = SaleItem.objects.filter(sale__in=sales, product_id=row["product_id"])
+        revenue = Decimal("0.00")
+        for item in product_items:
+            revenue += (item.price or Decimal("0.00")) * item.quantity
+        top_product_rows.append({
+            "product_id": row["product_id"],
+            "name": row["product__name"] or "Product",
+            "quantity": row["quantity"] or Decimal("0.00"),
+            "revenue": revenue,
+            "profit": row["profit"] or Decimal("0.00"),
+        })
+
+    best_profit_products = sorted(top_product_rows, key=lambda item: item["profit"], reverse=True)[:5]
+    low_margin_products = []
+    for row in top_product_rows:
+        margin = ((row["profit"] / row["revenue"]) * Decimal("100")).quantize(Decimal("0.01")) if row["revenue"] else Decimal("0.00")
+        if row["revenue"] and margin < Decimal("15.00"):
+            low_margin_products.append({**row, "margin": margin})
+    low_margin_products = sorted(low_margin_products, key=lambda item: item["margin"])[:5]
+
+    restock_recommendations = []
+    for row in top_product_rows:
+        current_stock = stock_by_product.get(row["product_id"], Decimal("0.00"))
+        sold_qty = row["quantity"] or Decimal("0.00")
+        if sold_qty > 0 and current_stock <= max(Decimal("3.00"), sold_qty * Decimal("0.35")):
+            restock_recommendations.append({
+                "name": row["name"],
+                "sold": sold_qty,
+                "stock": current_stock,
+                "suggested": max(Decimal("5.00"), sold_qty - current_stock),
+            })
+    if not restock_recommendations:
+        for product in low_stock_products[:5]:
+            restock_recommendations.append({
+                "name": product["name"],
+                "sold": Decimal("0.00"),
+                "stock": product["stock"],
+                "suggested": Decimal("5.00"),
+            })
+
     top_products = (
         SaleItem.objects.filter(sale__in=sales)
         .values("product__name")
@@ -3640,12 +3743,186 @@ def api_owner_reports(request):
         .annotate(total=Sum("amount"))
         .order_by("-total")
     )
+    expense_rows = []
+    for row in expense_breakdown[:5]:
+        amount = row["total"] or Decimal("0.00")
+        expense_rows.append({
+            "category": row["category"] or "Other",
+            "amount": amount,
+            "percent": ((amount / total_expenses) * Decimal("100")).quantize(Decimal("0.01")) if total_expenses else Decimal("0.00"),
+        })
+    highest_expense = expense_breakdown[0] if expense_breakdown else None
     branch_breakdown = (
         Sale.objects.filter(user=owner)
         .values("branch__id", "branch__name")
         .annotate(total=Sum("total_amount"), transactions=Count("id"))
         .order_by("-total")
     )
+    branch_rows = list(branch_breakdown)
+
+    branch_comparison = []
+    if not selected_branch:
+        branches = ShopBranch.objects.filter(user=owner, is_active=True).order_by("name")
+        for branch in branches:
+            branch_sales = sales.filter(branch=branch)
+            branch_expenses = expenses.filter(branch=branch)
+            branch_revenue = branch_sales.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+            branch_profit = branch_sales.aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
+            branch_expense_total = branch_expenses.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+            branch_comparison.append({
+                "name": branch.name,
+                "sales": branch_revenue,
+                "profit": branch_profit,
+                "expenses": branch_expense_total,
+                "net": branch_profit - branch_expense_total,
+                "transactions": branch_sales.count(),
+            })
+        branch_comparison = sorted(branch_comparison, key=lambda row: row["net"], reverse=True)
+
+    credit_sales = sales.filter(payment_status__in=[Sale.PAYMENT_LOAN, Sale.PAYMENT_PARTIAL])
+    credit_total = Decimal("0.00")
+    credit_customers = {}
+    for sale in credit_sales:
+        balance = sale.remaining_balance
+        credit_total += balance
+        name = sale.display_customer_name or "Walk-in customer"
+        credit_customers[name] = credit_customers.get(name, Decimal("0.00")) + balance
+    top_credit_customers = [
+        {"name": name, "balance": balance}
+        for name, balance in sorted(credit_customers.items(), key=lambda item: item[1], reverse=True)[:5]
+        if balance > 0
+    ]
+
+    customer_sales = {}
+    for sale in sales:
+        name = sale.display_customer_name or "Walk-in customer"
+        if name == "Walk-in customer":
+            continue
+        row = customer_sales.setdefault(name, {"name": name, "sales": Decimal("0.00"), "visits": 0})
+        row["sales"] += sale.total_amount or Decimal("0.00")
+        row["visits"] += 1
+    top_customers = sorted(customer_sales.values(), key=lambda item: item["sales"], reverse=True)[:5]
+    repeat_customer_count = len([row for row in customer_sales.values() if row["visits"] > 1])
+    customer_count = Customer.objects.filter(user=owner).count()
+
+    expense_warnings = []
+    if expense_rows and expense_rows[0]["percent"] > Decimal("45.00"):
+        expense_warnings.append({
+            "title": f"{expense_rows[0]['category']} is dominating expenses",
+            "message": f"{expense_rows[0]['category']} takes {expense_rows[0]['percent']}% of expenses in this period.",
+        })
+
+    health_score = Decimal("50.00")
+    if total_transactions:
+        health_score += Decimal("10.00")
+    if total_revenue and profit_margin >= Decimal("25.00"):
+        health_score += Decimal("15.00")
+    elif total_revenue and profit_margin < Decimal("15.00"):
+        health_score -= Decimal("10.00")
+    if net_profit > 0:
+        health_score += Decimal("15.00")
+    else:
+        health_score -= Decimal("15.00")
+    if total_revenue and expense_ratio_percent <= Decimal("30.00"):
+        health_score += Decimal("10.00")
+    elif total_revenue and expense_ratio_percent > Decimal("50.00"):
+        health_score -= Decimal("10.00")
+    low_stock_count = len(low_stock_products)
+    if low_stock_count:
+        health_score -= min(Decimal("10.00"), Decimal(low_stock_count * 2))
+    if credit_total > 0 and total_revenue and credit_total > total_revenue * Decimal("0.25"):
+        health_score -= Decimal("10.00")
+    health_score = max(Decimal("0.00"), min(Decimal("100.00"), health_score)).quantize(Decimal("1"))
+
+    analysis_allowed = _plan_has_feature(owner, "advanced_reports")
+    business_recommendations = []
+    business_warnings = []
+    if analysis_allowed:
+        if total_transactions == 0:
+            business_recommendations.append("No sales were recorded in this period. Start by recording every sale so VilaStore can calculate useful trends.")
+        elif profit_margin < Decimal("10.00"):
+            business_warnings.append("Profit margin is low for this period.")
+            business_recommendations.append("Review selling prices, supplier cost, discounts, and slow-moving stock.")
+        else:
+            business_recommendations.append("Profit margin looks healthy for this period. Keep tracking expenses so the net profit stays accurate.")
+
+        if total_expenses > total_profit and total_expenses > 0:
+            business_warnings.append("Expenses are higher than profit in this period.")
+            business_recommendations.append("Reduce non-essential expenses or increase high-margin product sales.")
+
+        if highest_expense:
+            business_recommendations.append(
+                f"Your biggest expense category is {highest_expense['category'] or 'Uncategorized'} at NGN {_money(highest_expense['total'] or Decimal('0.00'))}."
+            )
+
+        if branch_rows and branch_rows[0]["branch__id"]:
+            business_recommendations.append(f"{branch_rows[0]['branch__name']} is your strongest branch in this view.")
+
+    action_recommendations = []
+    if restock_recommendations:
+        action_recommendations.append(f"Restock {restock_recommendations[0]['name']} first; it is selling faster than current stock.")
+    if low_margin_products:
+        action_recommendations.append(f"Review pricing or supplier cost for {low_margin_products[0]['name']} because its margin is low.")
+    if expense_warnings:
+        action_recommendations.append("Check your largest expense category and reduce non-essential spending this week.")
+    if top_credit_customers:
+        action_recommendations.append(f"Follow up with {top_credit_customers[0]['name']} about outstanding credit.")
+    if slow_moving_products:
+        action_recommendations.append(f"Promote or discount {slow_moving_products[0]['name']} because it has stock but no sales in this period.")
+    if branch_comparison:
+        action_recommendations.append(f"Use {branch_comparison[0]['name']} as the branch benchmark because it currently has the best net result.")
+    if not action_recommendations:
+        action_recommendations.append("Keep recording sales, expenses, and customers daily so VilaStore can keep improving recommendations.")
+
+    business_insights = []
+    if total_transactions == 0:
+        business_insights.append({
+            "tone": "warning",
+            "title": "No sales in this period",
+            "message": "Record sales consistently so VilaStore can show useful trends and product performance.",
+        })
+    if total_revenue and profit_margin < Decimal("20.00"):
+        business_insights.append({
+            "tone": "warning",
+            "title": "Profit margin is low",
+            "message": "Review selling prices, supplier costs, and discounts. A stronger margin gives the business more breathing room.",
+        })
+    if net_profit < 0:
+        business_insights.append({
+            "tone": "danger",
+            "title": "Expenses are eating profit",
+            "message": "Your net profit is negative for this period. Check the biggest expenses and reduce non-essential spending.",
+        })
+    elif total_revenue and expense_ratio_percent > Decimal("40.00"):
+        business_insights.append({
+            "tone": "warning",
+            "title": "Expense ratio is high",
+            "message": "Expenses are taking a large share of revenue. Compare rent, salaries, transport, and supplies.",
+        })
+    if top_product_rows:
+        business_insights.append({
+            "tone": "success",
+            "title": "Best-selling product found",
+            "message": f"{top_product_rows[0]['name']} sold the most in this period. Keep it in stock and consider promoting related items.",
+        })
+    if low_stock_products:
+        business_insights.append({
+            "tone": "warning",
+            "title": "Low stock needs attention",
+            "message": f"{len(low_stock_products)} product(s) are close to running out. Restock fast-moving items before sales are lost.",
+        })
+    if slow_moving_products:
+        business_insights.append({
+            "tone": "neutral",
+            "title": "Some stock is not moving",
+            "message": "Products with stock but no sales in this period may need discounts, better display, or supplier review.",
+        })
+    if not business_insights:
+        business_insights.append({
+            "tone": "success",
+            "title": "Business looks healthy",
+            "message": "Sales, profit, and expenses look balanced for this period. Keep tracking daily to spot changes early.",
+        })
 
     try:
         cit_year = int(request.GET.get("cit_year", now.year))
@@ -3735,7 +4012,7 @@ def api_owner_reports(request):
             "avg_transaction": _money(avg_transaction),
             "items_sold": str(items_sold),
             "avg_profit_per_sale": _money(avg_profit_per_sale),
-            "total_cost": _money(total_revenue),
+            "total_cost": _money(total_cost),
             "profit_margin": str(profit_margin),
         },
         "top_products": [
@@ -3749,12 +4026,114 @@ def api_owner_reports(request):
                 "total_revenue": _money(row["total"] or Decimal("0.00")),
                 "transactions": row["transactions"] or 0,
             }
-            for row in branch_breakdown
+            for row in branch_rows
         ],
         "expense_breakdown": [
             { "category": row["category"], "total": _money(row["total"]) }
             for row in expense_breakdown
         ],
+        "business_analysis": {
+            "available": analysis_allowed,
+            "upgrade_message": "" if analysis_allowed else _feature_upgrade_message("advanced_reports"),
+            "summary": (
+                "Advanced business analysis is ready for this period."
+                if analysis_allowed else
+                "Upgrade to unlock mobile business analysis, warnings, and recommendations."
+            ),
+            "recommendations": business_recommendations if analysis_allowed else [],
+            "warnings": business_warnings if analysis_allowed else [],
+            "profit_margin": str(profit_margin),
+            "net_profit": _money(net_profit),
+            "expense_ratio": str((total_expenses / total_profit * Decimal("100")).quantize(Decimal("0.01")) if total_profit else Decimal("0.00")),
+            "health_score": str(health_score),
+            "gross_margin_percent": str(profit_margin),
+            "net_margin_percent": str(net_margin_percent),
+            "expense_ratio_percent": str(expense_ratio_percent),
+            "customer_count": customer_count,
+            "credit_total": _money(credit_total),
+            "credit_sales_count": credit_sales.count(),
+            "stock_value": _money(stock_value),
+            "stock_cost": _money(stock_cost),
+            "inventory_profit_potential": _money(inventory_profit_potential),
+            "low_stock_count": low_stock_count,
+            "out_of_stock_count": out_of_stock_count,
+            "repeat_customer_count": repeat_customer_count,
+            "action_recommendations": action_recommendations if analysis_allowed else [],
+            "business_insights": business_insights if analysis_allowed else [],
+            "top_product_rows": [
+                {
+                    "product_id": row["product_id"],
+                    "name": row["name"],
+                    "quantity": str(row["quantity"]),
+                    "revenue": _money(row["revenue"]),
+                    "profit": _money(row["profit"]),
+                }
+                for row in top_product_rows
+            ] if analysis_allowed else [],
+            "best_profit_products": [
+                {
+                    "product_id": row["product_id"],
+                    "name": row["name"],
+                    "quantity": str(row["quantity"]),
+                    "profit": _money(row["profit"]),
+                }
+                for row in best_profit_products
+            ] if analysis_allowed else [],
+            "low_margin_products": [
+                {
+                    "product_id": row["product_id"],
+                    "name": row["name"],
+                    "margin": str(row["margin"]),
+                    "profit": _money(row["profit"]),
+                }
+                for row in low_margin_products
+            ] if analysis_allowed else [],
+            "restock_recommendations": [
+                {
+                    "name": row["name"],
+                    "sold": str(row["sold"]),
+                    "stock": str(row["stock"]),
+                    "suggested": str(row["suggested"]),
+                }
+                for row in restock_recommendations
+            ] if analysis_allowed else [],
+            "expense_rows": [
+                {
+                    "category": row["category"],
+                    "amount": _money(row["amount"]),
+                    "percent": str(row["percent"]),
+                }
+                for row in expense_rows
+            ] if analysis_allowed else [],
+            "expense_warnings": expense_warnings if analysis_allowed else [],
+            "low_stock_products": [
+                {"name": row["name"], "stock": str(row["stock"])}
+                for row in low_stock_products[:5]
+            ] if analysis_allowed else [],
+            "slow_moving_products": [
+                {"name": row["name"], "stock": str(row["stock"])}
+                for row in slow_moving_products[:5]
+            ] if analysis_allowed else [],
+            "top_customers": [
+                {"name": row["name"], "sales": _money(row["sales"]), "visits": row["visits"]}
+                for row in top_customers
+            ] if analysis_allowed else [],
+            "top_credit_customers": [
+                {"name": row["name"], "balance": _money(row["balance"])}
+                for row in top_credit_customers
+            ] if analysis_allowed else [],
+            "branch_comparison": [
+                {
+                    "name": row["name"],
+                    "sales": _money(row["sales"]),
+                    "profit": _money(row["profit"]),
+                    "expenses": _money(row["expenses"]),
+                    "net": _money(row["net"]),
+                    "transactions": row["transactions"],
+                }
+                for row in branch_comparison
+            ] if analysis_allowed else [],
+        },
         "cit": {
             "available": _plan_has_feature(owner, "tax_tools"),
             "upgrade_message": "" if _plan_has_feature(owner, "tax_tools") else _feature_upgrade_message("tax_tools"),
@@ -3795,6 +4174,9 @@ def api_owner_ai_summary(request):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "ai_business_analysis")
+    if feature_error:
+        return feature_error
     return _json_success({"ai": ai_engine.ai_summary(owner)})
 
 
@@ -3804,6 +4186,9 @@ def api_owner_ai_product_search(request):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "ai_business_analysis")
+    if feature_error:
+        return feature_error
     query = request.GET.get("q", "")
     return _json_success({"query": query, "results": ai_engine.smart_product_search(owner, query)})
 
@@ -3814,6 +4199,9 @@ def api_owner_ai_voice(request):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "ai_business_analysis")
+    if feature_error:
+        return feature_error
     data = _get_body_data(request) or {}
     transcript = (data.get("transcript") or "").strip()
     parsed = ai_engine.parse_voice_command(owner, transcript)
@@ -3823,10 +4211,37 @@ def api_owner_ai_voice(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def api_owner_ai_inventory_assistant(request):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    data = _get_body_data(request) or {}
+    command = (data.get("command") or data.get("transcript") or "").strip()
+    mode = (data.get("mode") or "product").strip().lower()
+    if not command:
+        return _json_error("Type or speak a command first.")
+
+    parsed = ai_engine.parse_inventory_command(command, mode=mode)
+    resolved_mode = "category" if parsed.get("action") == "create_category" else "product"
+    return _json_success({
+        "mode": resolved_mode,
+        "parsed": parsed,
+        "missing": parsed.get("missing", []),
+        "can_save": not parsed.get("missing"),
+        "message": parsed.get("message"),
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def api_owner_ai_barcode_prefill(request):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "ai_business_analysis")
+    if feature_error:
+        return feature_error
     data = _get_body_data(request) or {}
     barcode = data.get("barcode") or data.get("code") or ""
     return _json_success({"prefill": ai_engine.product_prefill_from_barcode(owner, barcode)})
@@ -3838,6 +4253,9 @@ def api_owner_ai_receipt_scan(request):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "ai_business_analysis")
+    if feature_error:
+        return feature_error
     data = _get_body_data(request) or {}
     raw_text = (data.get("receipt_text") or "").strip()
     parsed_items = ai_engine.parse_receipt_text(owner, raw_text)
@@ -3857,6 +4275,9 @@ def api_owner_ai_chat(request):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+    feature_error = _json_feature_required(owner, "ai_business_analysis")
+    if feature_error:
+        return feature_error
     data = _get_body_data(request) or {}
     question = (data.get("question") or "").strip()
     if not question:

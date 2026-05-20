@@ -1107,6 +1107,7 @@ def inventory(request):
 def add_product(request):
     name = (request.POST.get('name') or '').strip()
     category_id = request.POST.get('category') or None
+    new_category_name = (request.POST.get("new_category_name") or "").strip()
     branch_id = (request.POST.get("branch_id") or "").strip()
     code = (request.POST.get("code") or "").strip()
     vat_status = (request.POST.get("vat_status") or Product.VAT_STANDARD).strip()
@@ -1153,6 +1154,13 @@ def add_product(request):
         if not category_exists:
             messages.error(request, "Selected category is invalid.")
             return redirect('inventory')
+    elif new_category_name:
+        category, _ = Category.objects.get_or_create(
+            user=request.user,
+            name__iexact=new_category_name,
+            defaults={"name": new_category_name},
+        )
+        category_id = category.id
 
     branch = None
     if branch_id:
@@ -2220,6 +2228,28 @@ def ai_voice_command(request):
 
 @login_required
 @require_POST
+def ai_inventory_assistant(request):
+    mode = (request.POST.get("mode") or "product").strip().lower()
+    command = (request.POST.get("command") or "").strip()
+    if not command:
+        return JsonResponse({"success": False, "error": "Type or speak what you want to add first."}, status=400)
+
+    parsed = ai_engine.parse_inventory_command(command, mode=mode)
+    mode = "category" if parsed.get("action") == "create_category" else "product"
+
+    missing = parsed.get("missing", [])
+    return JsonResponse({
+        "success": True,
+        "mode": mode,
+        "parsed": parsed,
+        "missing": missing,
+        "can_save": not missing,
+        "message": parsed.get("message", ""),
+    })
+
+
+@login_required
+@require_POST
 def ai_receipt_scan(request):
     raw_text = (request.POST.get("receipt_text") or "").strip()
     image = request.FILES.get("receipt_image")
@@ -3211,6 +3241,7 @@ PLAN_FEATURE_RULES = {
     "tax_tools": {"minimum_plan": "business", "label": "Tax tools"},
     "advanced_tax_tools": {"minimum_plan": "pro", "label": "Advanced tax tools"},
     "advanced_reports": {"minimum_plan": "business", "label": "Advanced reports and analytics"},
+    "ai_business_analysis": {"minimum_plan": "business", "label": "AI business analysis"},
 }
 PLAN_ORDER = ["starter", "growth", "business", "pro"]
 
