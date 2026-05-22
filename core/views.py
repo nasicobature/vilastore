@@ -38,6 +38,7 @@ from .models import (
     TenantRecord,
     AIReceiptScan,
     AIAssistantMessage,
+    AuthToken,
 )
 from . import ai as ai_engine
 from .subscription import subscription_is_active
@@ -198,12 +199,12 @@ def _selected_branch_for_request(request, *, session_key="owner_selected_branch_
         request.session[session_key] = branch_id
         return branches, branch_map[branch_id], previous_branch_id != branch_id
 
-    if default_to_all and not branch_id:
-        return branches, None, False
-
     stored_branch_id = str(request.session.get(session_key) or "")
     if stored_branch_id in branch_map:
         return branches, branch_map[stored_branch_id], False
+
+    if default_to_all and not branch_id:
+        return branches, None, False
 
     default_branch = next((branch for branch in branches if branch.is_default), None)
     if default_branch:
@@ -2306,7 +2307,10 @@ def ai_chat(request):
 @login_required
 def customer(request):
     q = (request.GET.get("q") or "").strip()
+    branches, selected_branch, _ = _selected_branch_for_request(request, default_to_all=True)
     customers = Customer.objects.filter(user=request.user)
+    if selected_branch:
+        customers = customers.filter(Q(branch=selected_branch) | Q(sale__branch=selected_branch)).distinct()
 
     if q:
         customers = customers.filter(
@@ -2322,6 +2326,8 @@ def customer(request):
     return render(request, 'home/customer.html', {
         "customers": customers,
         "q": q,
+        "branches": branches,
+        "selected_branch": selected_branch,
         "entitlements": _feature_entitlements(request.user),
     })
 
@@ -2351,9 +2357,11 @@ def add_customer(request):
     valid_religions = {choice[0] for choice in Customer.RELIGION_CHOICES}
     if religion not in valid_religions:
         religion = ""
+    _, selected_branch, _ = _selected_branch_for_request(request, default_to_all=True)
 
     Customer.objects.create(
         user=request.user,
+        branch=selected_branch,
         first_name=first_name,
         last_name=last_name,
         phone=phone,
@@ -2419,7 +2427,7 @@ def delete_customer(request, pk):
 
 @login_required
 def settings(request):
-    branches = list(ShopBranch.objects.filter(user=request.user).order_by("name", "id"))
+    branches, selected_branch, _ = _selected_branch_for_request(request, default_to_all=True)
     if request.user.is_shop_account and not branches:
         branches = [
             ShopBranch.objects.create(
@@ -2433,13 +2441,16 @@ def settings(request):
             )
         ]
     shopboys = ShopBoy.objects.filter(user=request.user).select_related("branch").order_by("-id")
+    if selected_branch:
+        shopboys = shopboys.filter(branch=selected_branch)
     marketplace_settings = _get_marketplace_settings(request.user)
     marketplace_profile, _ = MarketplaceShopProfile.objects.get_or_create(user=request.user)
     _ensure_shop_code(request.user)
     staff_limit = _plan_limit(request.user, "staff_limit")
     branch_summaries = []
     total_branch_revenue = Decimal("0.00")
-    for branch in branches:
+    summary_branches = [selected_branch] if selected_branch else branches
+    for branch in summary_branches:
         sales_count = Sale.objects.filter(user=request.user, branch=branch).count()
         branch_revenue = Sale.objects.filter(user=request.user, branch=branch).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
         branch_summaries.append({
@@ -2454,6 +2465,7 @@ def settings(request):
     return render(request, 'home/settings.html', {
         "shopboys": shopboys,
         "branches": branches,
+        "selected_branch": selected_branch,
         "branch_summaries": branch_summaries,
         "branch_count": len(branches),
         "total_branch_revenue": total_branch_revenue,
@@ -2493,6 +2505,38 @@ def start_subscription_upgrade(request):
     request.session["subscription_upgrade_plan"] = target_plan_slug
     request.session["subscription_upgrade_user_id"] = request.user.id
     messages.info(request, f"Complete payment to upgrade to {target_plan['name']}.")
+    return redirect("subscription_payment")
+
+
+def mobile_subscription_upgrade_checkout(request):
+    token_value = (request.GET.get("token") or "").strip()
+    target_plan_slug = (request.GET.get("plan") or "").strip().lower()
+    token_obj = AuthToken.objects.select_related("owner").filter(
+        token=token_value,
+        role=AuthToken.ROLE_OWNER,
+        is_revoked=False,
+    ).first()
+
+    if not token_obj or not token_obj.owner:
+        messages.error(request, "Mobile session expired. Please sign in again from the app.")
+        return redirect("login")
+
+    if token_obj.expires_at and token_obj.expires_at < timezone.now():
+        token_obj.is_revoked = True
+        token_obj.save(update_fields=["is_revoked"])
+        messages.error(request, "Mobile session expired. Please sign in again from the app.")
+        return redirect("login")
+
+    owner = token_obj.owner
+    if target_plan_slug not in PLAN_CATALOG or _plan_rank(target_plan_slug) <= _plan_rank(owner.plan):
+        messages.error(request, "Choose a valid higher plan before making an upgrade payment.")
+        return redirect("settings")
+
+    request.session["subscription_upgrade_plan"] = target_plan_slug
+    request.session["subscription_upgrade_user_id"] = owner.id
+    token_obj.last_used_at = timezone.now()
+    token_obj.save(update_fields=["last_used_at"])
+    login(request, owner, backend="django.contrib.auth.backends.ModelBackend")
     return redirect("subscription_payment")
 
 

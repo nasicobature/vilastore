@@ -713,6 +713,21 @@
         </section>
         {% endif %}
 
+        <section class="card settings-card" style="padding:1rem;">
+          <form method="GET" action="{% url 'settings' %}" class="settings-section-actions">
+            <label style="display:grid;gap:0.35rem;flex:1;min-width:220px;">
+              <span style="font-weight:700;">Current branch view</span>
+              <select name="branch" class="input" onchange="this.form.submit()">
+                <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+                {% for branch in branches %}
+                  <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}{% if branch.is_default %} (Default){% endif %}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <button type="submit" class="btn btn-outline"><i data-lucide="refresh-cw"></i> Apply</button>
+          </form>
+        </section>
+
         <section class="settings-grid">
           <div class="settings-column">
             <section class="card settings-card">

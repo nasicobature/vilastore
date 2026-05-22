@@ -4,12 +4,14 @@ import re
 import secrets
 from datetime import timedelta, datetime
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.db import transaction
 from django.db.models import Q, Sum, F, Count
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.csrf import csrf_exempt
@@ -89,6 +91,7 @@ from .views import (
     _plan_has_feature,
     _feature_upgrade_message,
     _feature_entitlements,
+    _subscription_upgrade_options,
     _marketplace_house_queryset,
     VAT_RATE,
     _send_marketplace_reset_code,
@@ -3441,6 +3444,7 @@ def api_owner_loan_update(request, sale_id):
 def _serialize_expense(expense):
     return {
         "id": expense.id,
+        "branch": _serialize_branch(expense.branch) if getattr(expense, "branch_id", None) else None,
         "category": expense.category,
         "title": expense.title,
         "amount": _money(expense.amount),
@@ -3458,7 +3462,17 @@ def api_owner_expenses(request):
 
     if request.method == "GET":
         q = (request.GET.get("q") or "").strip()
+        branch_id = (request.GET.get("branch_id") or "").strip()
         expenses = Expense.objects.filter(user=owner).order_by("-date", "-created_at")
+        selected_branch = None
+        if branch_id:
+            feature_error = _json_feature_required(owner, "multi_branch")
+            if feature_error:
+                return feature_error
+            selected_branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+            if not selected_branch:
+                return _json_error("Branch not found.", status=404)
+            expenses = expenses.filter(branch=selected_branch)
         if q:
             expenses = expenses.filter(
                 Q(title__icontains=q) |
@@ -3468,6 +3482,8 @@ def api_owner_expenses(request):
         total_amount = expenses.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
         return _json_success({
             "total_amount": _money(total_amount),
+            "branch": _serialize_branch(selected_branch) if selected_branch else None,
+            "branches": [_serialize_branch(branch) for branch in _owner_branch_queryset(owner)],
             "expenses": [_serialize_expense(exp) for exp in expenses],
             "categories": [choice[0] for choice in Expense.CATEGORY_CHOICES],
         })
@@ -3480,6 +3496,7 @@ def api_owner_expenses(request):
     title = (data.get("title") or "").strip()
     amount_raw = data.get("amount")
     date_raw = (data.get("date") or "").strip()
+    branch_id = (data.get("branch_id") or "").strip()
 
     valid_categories = {choice[0] for choice in Expense.CATEGORY_CHOICES}
     if category not in valid_categories:
@@ -3499,8 +3516,18 @@ def api_owner_expenses(request):
     if not date:
         return _json_error("Date is required.")
 
+    branch = None
+    if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
+
     expense = Expense.objects.create(
         user=owner,
+        branch=branch,
         category=category,
         title=title,
         amount=amount,
@@ -3999,6 +4026,7 @@ def api_owner_reports(request):
     return _json_success({
         "period": period,
         "branch": _serialize_branch(selected_branch) if selected_branch else None,
+        "branches": [_serialize_branch(branch) for branch in _owner_branch_queryset(owner)],
         "start_date": start_date.isoformat() if start_date else "",
         "end_date": end_date.isoformat() if end_date else "",
         "totals": {
@@ -4290,6 +4318,7 @@ def api_owner_ai_chat(request):
 def _serialize_customer(customer):
     return {
         "id": customer.id,
+        "branch": _serialize_branch(customer.branch) if getattr(customer, "branch_id", None) else None,
         "first_name": customer.first_name,
         "last_name": customer.last_name,
         "phone": customer.phone,
@@ -4311,7 +4340,17 @@ def api_owner_customers(request):
 
     if request.method == "GET":
         q = (request.GET.get("q") or "").strip()
+        branch_id = (request.GET.get("branch_id") or "").strip()
         customers = Customer.objects.filter(user=owner)
+        selected_branch = None
+        if branch_id:
+            feature_error = _json_feature_required(owner, "multi_branch")
+            if feature_error:
+                return feature_error
+            selected_branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+            if not selected_branch:
+                return _json_error("Branch not found.", status=404)
+            customers = customers.filter(Q(branch=selected_branch) | Q(sale__branch=selected_branch)).distinct()
         if q:
             customers = customers.filter(
                 Q(first_name__icontains=q) |
@@ -4324,6 +4363,8 @@ def api_owner_customers(request):
         customers = customers.order_by("first_name", "last_name")
         return _json_success({
             "customers": [_serialize_customer(c) for c in customers],
+            "branch": _serialize_branch(selected_branch) if selected_branch else None,
+            "branches": [_serialize_branch(branch) for branch in _owner_branch_queryset(owner)],
             "religions": [choice[0] for choice in Customer.RELIGION_CHOICES],
             "entitlements": _feature_entitlements(owner),
         })
@@ -4340,6 +4381,7 @@ def api_owner_customers(request):
     religion = (data.get("religion") or "").strip()
     tribe = (data.get("tribe") or "").strip()
     notes = (data.get("notes") or "").strip()
+    branch_id = (data.get("branch_id") or "").strip()
 
     if not first_name or not last_name or not phone:
         return _json_error("First name, last name, and phone are required.")
@@ -4353,9 +4395,18 @@ def api_owner_customers(request):
     valid_religions = {choice[0] for choice in Customer.RELIGION_CHOICES}
     if religion not in valid_religions:
         religion = ""
+    branch = None
+    if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
 
     customer = Customer.objects.create(
         user=owner,
+        branch=branch,
         first_name=first_name,
         last_name=last_name,
         phone=phone,
@@ -4562,6 +4613,40 @@ def api_owner_settings(request):
         },
         "entitlements": _feature_entitlements(owner),
         "plan": PLAN_LIMITS.get(getattr(owner, "plan", "starter")) or PLAN_LIMITS["starter"],
+        "subscription": {
+            "plan_slug": getattr(owner, "plan", "starter") or "starter",
+            "is_paid": bool(owner.is_paid),
+            "active_until": owner.subscription_active_until.isoformat() if owner.subscription_active_until else "",
+        },
+        "upgrade_options": _subscription_upgrade_options(owner),
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_owner_subscription_upgrade_start(request):
+    token_obj, _ = _get_auth_from_request(request)
+    if not token_obj or token_obj.role != AuthToken.ROLE_OWNER or not token_obj.owner:
+        return _json_error("Unauthorized.", status=401)
+
+    owner = token_obj.owner
+    data = _get_body_data(request) or {}
+    target_plan_slug = (data.get("plan") or "").strip().lower()
+    available_plan_slugs = {option["slug"] for option in _subscription_upgrade_options(owner)}
+    if target_plan_slug not in available_plan_slugs:
+        return _json_error("Choose a valid higher plan to upgrade.", status=400)
+
+    query = urlencode({"token": token_obj.token, "plan": target_plan_slug})
+    checkout_url = request.build_absolute_uri(f"{reverse('mobile_subscription_upgrade_checkout')}?{query}")
+    target_plan = _plan_for_slug(target_plan_slug)
+    return _json_success({
+        "checkout_url": checkout_url,
+        "plan": {
+            "slug": target_plan_slug,
+            "name": target_plan["name"],
+            "monthly_fee": _money(target_plan["monthly_fee"]),
+        },
+        "message": f"Complete payment to upgrade to {target_plan['name']}.",
     })
 
 

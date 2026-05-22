@@ -276,6 +276,7 @@ class BranchInventory(models.Model):
 
 class Customer(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    branch = models.ForeignKey(ShopBranch, on_delete=models.SET_NULL, null=True, blank=True, related_name="customers")
 
     RELIGION_NOT_SPECIFIED = ""
     RELIGION_MUSLIM = "muslim"

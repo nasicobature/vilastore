@@ -53,9 +53,15 @@
 
       <section class="card">
         <div class="filters-section" style="margin-bottom:1rem;">
-          <form method="GET" action="{% url 'customer' %}" class="search-box" style="display:flex;gap:0.5rem;width:100%;">
+          <form method="GET" action="{% url 'customer' %}" class="search-box" style="display:flex;gap:0.5rem;width:100%;flex-wrap:wrap;">
+            <select name="branch" class="input" onchange="this.form.submit()" style="max-width:220px;">
+              <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+              {% for branch in branches %}
+                <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+              {% endfor %}
+            </select>
             <i data-lucide="search"></i>
-            <input type="text" class="input" placeholder="Search customers..." name="q" value="{{ q }}">
+            <input type="text" class="input" placeholder="Search customers..." name="q" value="{{ q }}" style="flex:1;min-width:220px;">
             <button type="submit" class="btn btn-outline">Search</button>
           </form>
         </div>

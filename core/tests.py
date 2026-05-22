@@ -120,6 +120,73 @@ class SubscriptionPaymentGatewayTests(TestCase):
         self.assertNotIn("subscription_upgrade_plan", self.client.session)
 
 
+class BranchSelectionScopeTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="branch-owner",
+            email="branch@example.com",
+            password="TestPass123!",
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Branch Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000002000",
+            address="20 Branch Road",
+            country="Nigeria",
+            plan="business",
+            is_paid=True,
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        self.branch_a = ShopBranch.objects.create(user=self.user, name="Main Branch", address="A", is_default=True)
+        self.branch_b = ShopBranch.objects.create(user=self.user, name="Second Branch", address="B")
+        self.sale_a = Sale.objects.create(
+            user=self.user,
+            branch=self.branch_a,
+            total_amount=Decimal("1000.00"),
+            total_profit=Decimal("200.00"),
+        )
+        self.sale_b = Sale.objects.create(
+            user=self.user,
+            branch=self.branch_b,
+            total_amount=Decimal("2500.00"),
+            total_profit=Decimal("500.00"),
+        )
+        self.customer_a = Customer.objects.create(
+            user=self.user,
+            branch=self.branch_a,
+            first_name="Main",
+            last_name="Customer",
+            phone="08000002001",
+        )
+        self.customer_b = Customer.objects.create(
+            user=self.user,
+            branch=self.branch_b,
+            first_name="Second",
+            last_name="Customer",
+            phone="08000002002",
+        )
+        self.client.force_login(self.user)
+
+    def test_selected_branch_persists_to_sales_history(self):
+        self.client.get(reverse("index"), data={"branch": str(self.branch_b.id)})
+
+        response = self.client.get(reverse("sales-history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_branch"], self.branch_b)
+        self.assertEqual(list(response.context["sales"]), [self.sale_b])
+
+    def test_selected_branch_filters_customer_records(self):
+        self.client.get(reverse("customer"), data={"branch": str(self.branch_b.id)})
+
+        response = self.client.get(reverse("customer"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_branch"], self.branch_b)
+        self.assertContains(response, "Second Customer")
+        self.assertNotContains(response, "Main Customer")
+
+
 class MobileOwnerLoginTests(TestCase):
     def setUp(self):
         self.password = "TestPass123!"
