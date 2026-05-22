@@ -435,7 +435,7 @@
           th{background:#f8fafc;color:#475569;font-size:.78rem;text-transform:uppercase}.total{display:flex;justify-content:flex-end;margin-top:1rem;font-size:1.2rem;font-weight:800}
           .badge{display:inline-block;border-radius:999px;background:#fef3c7;color:#92400e;padding:.25rem .55rem;font-size:.75rem;font-weight:800}
           .actions{margin-top:1rem;display:flex;gap:.5rem;justify-content:flex-end}button{border:0;border-radius:10px;background:#111827;color:#fff;padding:.75rem 1rem;font-weight:800;cursor:pointer}
-          @media print{body{background:#fff;padding:0}.actions{display:none}main{border:0;border-radius:0;max-width:none}}
+          @media print{@page{size:80mm auto;margin:4mm}body{background:#fff;padding:0;width:80mm}.actions{display:none}main{border:0;border-radius:0;max-width:80mm;padding:0}th,td{font-size:.75rem;padding:.45rem .2rem}.muted{font-size:.75rem}}
         </style>
       </head>
       <body>
@@ -454,10 +454,37 @@
           <div class="total">Total: NGN ${escapeHtml(receipt.total)}</div>
           <div class="actions"><button onclick="window.print()">Print Receipt</button></div>
         </main>
-        ${printReady ? "<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},300)})</script>" : ""}
+        ${printReady ? "<script>window.addEventListener('load',function(){setTimeout(function(){window.focus();window.print()},300)})</script>" : ""}
       </body>
       </html>
     `;
+  }
+
+  function printReceiptInFrame(receipt) {
+    let frame = document.getElementById("offlineReceiptPrintFrame");
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.id = "offlineReceiptPrintFrame";
+      frame.title = "Offline receipt print";
+      frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(frame);
+    }
+    const doc = frame.contentWindow?.document;
+    if (!doc) {
+      notify("Unable to open printer. Use Offline Status > Receipts > Print.", true);
+      return;
+    }
+    doc.open();
+    doc.write(receiptHtml(receipt, false));
+    doc.close();
+    window.setTimeout(() => {
+      try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+      } catch (err) {
+        notify("Unable to open printer. Use Offline Status > Receipts > Print.", true);
+      }
+    }, 350);
   }
 
   function openOfflineReceipt(receiptId, printReady) {
@@ -468,7 +495,11 @@
     }
     const popup = window.open("", "_blank", "noopener,noreferrer,width=780,height=900");
     if (!popup) {
-      notify("Allow popups to view or print this offline receipt.", true);
+      if (printReady) {
+        printReceiptInFrame(receipt);
+        return;
+      }
+      notify("Allow popups to view this offline receipt, or use the receipt Print button.", true);
       return;
     }
     popup.document.open();
@@ -1045,8 +1076,8 @@
       write(CART_KEY, { items: [], total: "0.00" });
       renderCart();
       rememberActivity({ kind: "Sale", label: `${receipt.receipt_no} - NGN ${saleTotal}`, detail: "Offline receipt generated and waiting to sync." });
-      notify(`Offline receipt ${receipt.receipt_no} generated. It will sync when internet returns.`, true);
-      openOfflineReceipt(receipt.id, false);
+      notify(`Offline receipt ${receipt.receipt_no} generated. Printing now. It will sync when internet returns.`, true);
+      openOfflineReceipt(receipt.id, true);
     } else if (actionPath.includes("/add_product") || actionPath.includes("/add-product") || actionPath.includes("/edit-product/")) {
       upsertLocalProduct(fields, actionPath);
       notify("Product saved offline. It will sync when internet returns.");
