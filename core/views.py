@@ -2450,6 +2450,7 @@ def settings(request):
         })
         total_branch_revenue += branch_revenue
     best_branch = max(branch_summaries, key=lambda item: item["revenue"], default=None)
+    current_plan = _plan_for_slug(request.user.plan)
     return render(request, 'home/settings.html', {
         "shopboys": shopboys,
         "branches": branches,
@@ -2462,10 +2463,37 @@ def settings(request):
         "active_shopboy_count": shopboys.filter(is_active=True).count(),
         "marketplace_ready_shopboy_count": shopboys.filter(is_active=True, can_use_marketplace=True).count(),
         "entitlements": _feature_entitlements(request.user),
-        "current_plan": _plan_for_slug(request.user.plan),
+        "current_plan": current_plan,
+        "current_plan_slug": request.user.plan or "starter",
+        "upgrade_options": _subscription_upgrade_options(request.user),
         "staff_limit": staff_limit,
         "can_add_shopboy": staff_limit is None or shopboys.count() < staff_limit,
     })
+
+
+@login_required
+@require_POST
+def start_subscription_upgrade(request):
+    current_plan_slug = (request.user.plan or "starter").lower()
+    target_plan_slug = (request.POST.get("plan") or "").strip().lower()
+
+    if target_plan_slug not in PLAN_CATALOG:
+        messages.error(request, "Choose a valid subscription plan.")
+        return redirect("settings")
+
+    if _plan_rank(target_plan_slug) <= _plan_rank(current_plan_slug):
+        messages.info(request, "Please choose a higher plan to upgrade your subscription.")
+        return redirect("settings")
+
+    target_plan = _plan_for_slug(target_plan_slug)
+    if target_plan.get("is_custom") or target_plan.get("monthly_fee") is None:
+        messages.info(request, "Contact VilaStore support to activate this plan.")
+        return redirect("settings")
+
+    request.session["subscription_upgrade_plan"] = target_plan_slug
+    request.session["subscription_upgrade_user_id"] = request.user.id
+    messages.info(request, f"Complete payment to upgrade to {target_plan['name']}.")
+    return redirect("subscription_payment")
 
 
 @login_required
@@ -3251,6 +3279,28 @@ def _plan_rank(slug):
         return PLAN_ORDER.index((slug or "starter").lower())
     except ValueError:
         return 0
+
+
+def _subscription_upgrade_options(user):
+    current_rank = _plan_rank(getattr(user, "plan", "starter"))
+    options = []
+    for slug in PLAN_ORDER:
+        if _plan_rank(slug) <= current_rank:
+            continue
+        plan = _plan_for_slug(slug)
+        options.append({
+            "slug": slug,
+            "name": plan["name"],
+            "tagline": plan["tagline"],
+            "monthly_fee": plan["monthly_fee"],
+            "product_limit": plan["product_limit"],
+            "staff_limit": plan["staff_limit"],
+            "branch_limit": plan["branch_limit"],
+            "features": plan["features"][:4],
+            "limits": plan["limits"],
+            "is_custom": plan.get("is_custom", False),
+        })
+    return options
 
 
 def _plan_has_feature(user, feature):
@@ -4557,8 +4607,17 @@ def subscription_payment(request):
         messages.error(request, "Please log in to continue.")
         return redirect("login")
     today = timezone.localdate()
+    upgrade_plan_slug = (request.session.get("subscription_upgrade_plan") or "").strip().lower()
+    upgrade_user_id = request.session.get("subscription_upgrade_user_id")
+    is_upgrade = bool(
+        request.user.is_authenticated
+        and upgrade_plan_slug
+        and upgrade_user_id == user.id
+        and upgrade_plan_slug in PLAN_CATALOG
+        and _plan_rank(upgrade_plan_slug) > _plan_rank(user.plan)
+    )
 
-    if subscription_is_active(user):
+    if subscription_is_active(user) and not is_upgrade:
         request.session.pop("pending_payment_user_id", None)
         if request.user.is_authenticated:
             messages.success(request, "Your subscription is already active.")
@@ -4566,10 +4625,17 @@ def subscription_payment(request):
         messages.success(request, "Your subscription is already active. Please log in.")
         return redirect("login")
 
-    plan = _plan_for_slug(user.plan)
+    if upgrade_plan_slug and not is_upgrade:
+        request.session.pop("subscription_upgrade_plan", None)
+        request.session.pop("subscription_upgrade_user_id", None)
+        messages.error(request, "Please choose a valid higher plan before making an upgrade payment.")
+        return redirect("settings" if request.user.is_authenticated else "login")
+
+    plan_slug_for_payment = upgrade_plan_slug if is_upgrade else user.plan
+    plan = _plan_for_slug(plan_slug_for_payment)
     monthly_fee = plan["monthly_fee"] or (user.monthly_fee or Decimal(MONTHLY_SUBSCRIPTION_FEE))
     registration_fee = _plan_registration_fee(user.plan)
-    registration_due = not user.is_paid
+    registration_due = (not user.is_paid) and not is_upgrade
     amount_due = registration_fee + monthly_fee if registration_due else monthly_fee
 
     if request.method == "POST":
@@ -4618,15 +4684,25 @@ def subscription_payment(request):
             start_date = user.subscription_active_until
 
         user.is_paid = True
+        if is_upgrade:
+            user.plan = upgrade_plan_slug
         user.monthly_fee = monthly_fee
         user.subscription_active_until = start_date + timedelta(days=30)
-        user.save(update_fields=["is_paid", "monthly_fee", "subscription_active_until"])
+        update_fields = ["is_paid", "monthly_fee", "subscription_active_until"]
+        if is_upgrade:
+            update_fields.append("plan")
+        user.save(update_fields=update_fields)
 
         if not request.user.is_authenticated:
             login(request, user, backend="django.contrib.auth.backends.ModelBackend")
         request.session.pop("pending_payment_user_id", None)
+        request.session.pop("subscription_upgrade_plan", None)
+        request.session.pop("subscription_upgrade_user_id", None)
 
         active_until_display = user.subscription_active_until.strftime("%b %d, %Y")
+        if is_upgrade:
+            messages.success(request, f"Plan upgraded to {plan['name']}. New features are now unlocked until {active_until_display}.")
+            return redirect("settings")
         messages.success(request, f"Payment confirmed. Subscription active until {active_until_display}.")
         return redirect("index")
 
@@ -4634,6 +4710,8 @@ def subscription_payment(request):
         "FLUTTERWAVE_PUBLIC_KEY": _flutterwave_public_key(),
         "amount_due": amount_due,
         "registration_due": registration_due,
+        "is_upgrade": is_upgrade,
+        "current_plan": _plan_for_slug(user.plan),
         "base_fee": registration_fee,
         "monthly_fee": monthly_fee,
         "first_payment_total": registration_fee + monthly_fee,

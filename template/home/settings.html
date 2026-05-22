@@ -1149,6 +1149,59 @@
             <section class="card settings-card">
               <div class="settings-card-header">
                 <div>
+                  <h3>Subscription plan</h3>
+                  <p>Upgrade from Settings and unlock the new tools immediately after payment.</p>
+                </div>
+                <span class="badge badge-primary">{{ current_plan.name }}</span>
+              </div>
+              <div class="settings-section-list">
+                <div class="settings-list-item">
+                  <div>
+                    <strong>Current plan</strong>
+                    <p>{{ current_plan.tagline }}. {% if request.user.subscription_active_until %}Active until {{ request.user.subscription_active_until|date:"M d, Y" }}.{% else %}Payment is required to activate access.{% endif %}</p>
+                  </div>
+                  <div class="settings-value">&#8358;{{ current_plan.monthly_fee|default:"0.00" }}/mo</div>
+                </div>
+                {% if upgrade_options %}
+                  {% for option in upgrade_options %}
+                  <div class="settings-list-item" style="align-items:stretch;">
+                    <div style="display:grid;gap:0.55rem;">
+                      <div>
+                        <strong>{{ option.name }}</strong>
+                        <p>{{ option.tagline }} - &#8358;{{ option.monthly_fee }}/month</p>
+                      </div>
+                      <div class="settings-chip-row">
+                        {% for limit in option.limits %}
+                        <span class="settings-chip">{{ limit.0 }}: {{ limit.1 }}</span>
+                        {% endfor %}
+                      </div>
+                      <small style="color:var(--muted-foreground);">
+                        {% for feature in option.features %}{{ feature }}{% if not forloop.last %} &bull; {% endif %}{% endfor %}
+                      </small>
+                    </div>
+                    <div class="settings-value">
+                      <form method="POST" action="{% url 'start_subscription_upgrade' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="plan" value="{{ option.slug }}">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                          <i data-lucide="arrow-up-circle"></i> Upgrade
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                  {% endfor %}
+                {% else %}
+                <div class="settings-empty">
+                  <i data-lucide="badge-check"></i>
+                  <p>You are already on the highest VilaStore plan.</p>
+                </div>
+                {% endif %}
+              </div>
+            </section>
+
+            <section class="card settings-card">
+              <div class="settings-card-header">
+                <div>
                   <h3>Structured account settings</h3>
                   <p>Extra areas that usually matter most in a modern store setup.</p>
                 </div>

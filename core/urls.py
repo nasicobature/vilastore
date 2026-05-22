@@ -112,6 +112,7 @@ urlpatterns = [
     path('delete-product/<int:pk>/', views.delete_product, name='delete_product'),
     path('login/', views.login_view, name='login'),
     path('subscription/payment/', views.subscription_payment, name='subscription_payment'),
+    path('subscription/upgrade/', views.start_subscription_upgrade, name='start_subscription_upgrade'),
     path('forgot-password/', views.forgot_password, name='forgot_password'),
     path('forgot-password/send-code/', views.forgot_password_send_code, name='forgot_password_send_code'),
     path('forgot-password/verify/', views.forgot_password_verify_code, name='forgot_password_verify_code'),

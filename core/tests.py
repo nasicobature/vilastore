@@ -77,6 +77,48 @@ class SubscriptionPaymentGatewayTests(TestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.is_paid)
 
+    def test_subscription_upgrade_rejects_same_or_lower_plan(self):
+        self.user.plan = "growth"
+        self.user.is_paid = True
+        self.user.subscription_active_until = timezone.localdate() + timedelta(days=14)
+        self.user.save(update_fields=["plan", "is_paid", "subscription_active_until"])
+        self.client.force_login(self.user)
+
+        response = self.client.post(reverse("start_subscription_upgrade"), data={"plan": "starter"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("settings"))
+        self.assertNotIn("subscription_upgrade_plan", self.client.session)
+        self.assertEqual(self.client.get(reverse("settings")).status_code, 200)
+
+    @patch("core.views.requests.get")
+    def test_subscription_upgrade_payment_updates_plan_and_unlocks_features(self, mock_get):
+        self.user.is_paid = True
+        self.user.subscription_active_until = timezone.localdate() + timedelta(days=14)
+        self.user.save(update_fields=["is_paid", "subscription_active_until"])
+        self.client.force_login(self.user)
+
+        start_response = self.client.post(reverse("start_subscription_upgrade"), data={"plan": "business"})
+        self.assertEqual(start_response.status_code, 302)
+        self.assertEqual(start_response.url, reverse("subscription_payment"))
+        self.assertEqual(self.client.session["subscription_upgrade_plan"], "business")
+        payment_page = self.client.get(reverse("subscription_payment"))
+        self.assertContains(payment_page, "Upgrade Subscription")
+
+        mock_get.return_value = self._flutterwave_success_response(amount="15000.00")
+        response = self.client.post(
+            reverse("subscription_payment"),
+            data={"payment_reference": "VILASTORE-UPGRADE-REF"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("settings"))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.plan, "business")
+        self.assertEqual(self.user.monthly_fee, Decimal("15000.00"))
+        self.assertTrue(self.user.is_paid)
+        self.assertNotIn("subscription_upgrade_plan", self.client.session)
+
 
 class MobileOwnerLoginTests(TestCase):
     def setUp(self):
