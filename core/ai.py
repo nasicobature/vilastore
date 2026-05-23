@@ -347,15 +347,22 @@ def parse_product_voice_form(transcript):
     text = (transcript or "").strip()
     lowered = text.lower()
     cleaned = re.sub(r"\b(add|saka|kara|karo|product|kaya|naira|ngn|n)\b", " ", lowered)
-    quantity_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:pieces|piece|pcs|pc|carton|ctn|kwali|kwali-kwali)?", cleaned)
+    quantity_match = (
+        re.search(r"(\d+(?:\.\d+)?)\s*(?:pieces|piece|pcs|pc|guda|bags|bag|cartons|carton|ctn|kwali|kwali-kwali)\b", cleaned)
+        or re.search(r"\b(?:qty|quantity|stock|adadi|guda)\s*(\d+(?:\.\d+)?)\b", cleaned)
+    )
     price_matches = re.findall(r"(\d+(?:\.\d+)?)", cleaned)
     price = price_matches[-1] if price_matches else "0"
     quantity = quantity_match.group(1) if quantity_match else "1"
 
-    words = re.findall(r"[a-zA-Z-]+", cleaned)
+    name_source = re.sub(r"\b\d+(?:\.\d+)?\s*(?:pieces|piece|pcs|pc|guda|bags|bag|cartons|carton|ctn|kwali|kwali-kwali)\b", " ", cleaned)
+    name_source = re.sub(r"\b(?:qty|quantity|stock|adadi|guda)\s*\d+(?:\.\d+)?\b", " ", name_source)
+    if price_matches:
+        name_source = re.sub(rf"\b{re.escape(price_matches[-1])}\b", " ", name_source)
+    words = re.findall(r"[a-zA-Z0-9-]+", name_source)
     stop_words = {
         "small", "big", "large", "pieces", "piece", "pcs", "pc", "carton", "ctn",
-        "price", "for", "with", "qty", "quantity", "and", "na", "ne",
+        "price", "farashi", "for", "with", "qty", "quantity", "stock", "adadi", "and", "na", "ne",
     }
     name_words = [word for word in words if word not in stop_words]
     product_name = " ".join(name_words).strip().title()
@@ -510,6 +517,9 @@ HAUSA_TRANSLATION_TABLE = str.maketrans({
     "ƙ": "k", "Ƙ": "K", "ḳ": "k",
     "ɗ": "d", "Ɗ": "D",
     "ɓ": "b", "Ɓ": "B",
+    "ƙ": "k", "Ƙ": "K", "ḳ": "k",
+    "ɗ": "d", "Ɗ": "D",
+    "ɓ": "b", "Ɓ": "B",
     "₦": "n",
 })
 
@@ -586,18 +596,23 @@ def _extract_labeled_number(text, labels):
     bridge = r"(?:\s+(?:is|are|as|shi|ta|ne|na|=)|\s*[:=])?"
     number = r"(?:ngn|n|#)?\s*([0-9][0-9,]*(?:\.\d+)?k?)"
     pattern = rf"(?:^|[\s,.;])(?:{label_pattern}){bridge}\s*{number}"
-    match = re.search(pattern, text, flags=re.IGNORECASE)
-    return _parse_inventory_number(match.group(1)) if match else ""
+    for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+        matched_label = re.sub(r"^[\s,.;]+", "", match.group(0)).split()[0].lower()
+        previous_text = text[max(0, match.start() - 18):match.start()].lower()
+        if matched_label in {"price", "farashi"} and re.search(r"\b(cost|buying|purchase|saye|sayen|sayan)\b", previous_text):
+            continue
+        return _parse_inventory_number(match.group(1))
+    return ""
 
 
 def _extract_quantity(text):
-    quantity = _extract_labeled_number(text, ["quantity", "qty", "stock", "adadi", "guda", "pieces", "piece", "pcs"])
+    quantity = _extract_labeled_number(text, ["quantity", "qty", "stock", "adadi"])
     if quantity:
         return quantity
-    match = re.search(r"\b(?:guda|pieces|piece|pcs)\s*([0-9][0-9,]*(?:\.\d+)?)\b", text, flags=re.IGNORECASE)
+    match = re.search(r"\b([0-9][0-9,]*(?:\.\d+)?)\s*(?:guda|pieces|piece|pcs|bags|bag|cartons|carton|ctn)\b", text, flags=re.IGNORECASE)
     if match:
         return _parse_inventory_number(match.group(1))
-    match = re.search(r"\b([0-9][0-9,]*(?:\.\d+)?)\s*(?:guda|pieces|piece|pcs|carton|ctn)\b", text, flags=re.IGNORECASE)
+    match = re.search(r"\b(?:guda|pieces|piece|pcs|bags|bag|cartons|carton|ctn)\s*([0-9][0-9,]*(?:\.\d+)?)\b", text, flags=re.IGNORECASE)
     return _parse_inventory_number(match.group(1)) if match else ""
 
 
@@ -620,7 +635,10 @@ def _extract_category_name_from_phrase(text):
 
 def _extract_product_name_by_fallback(text):
     working = re.sub(r"\b(?:ngn|naira|n)\s*[0-9][0-9,]*(?:\.\d+)?k?\b", " ", text, flags=re.IGNORECASE)
-    working = re.sub(r"\b[0-9][0-9,]*(?:\.\d+)?k?\s*(?:naira|ngn|guda|pieces|piece|pcs|carton|ctn)\b", " ", working, flags=re.IGNORECASE)
+    working = re.sub(r"\b[0-9][0-9,]*(?:\.\d+)?k?\s*(?:naira|ngn|n|guda|pieces|piece|pcs|bags|bag|cartons|carton|ctn)\b", " ", working, flags=re.IGNORECASE)
+    numbers = re.findall(r"\b[0-9][0-9,]*(?:\.\d+)?k?\b", working, flags=re.IGNORECASE)
+    if numbers:
+        working = re.sub(rf"\b{re.escape(numbers[-1])}\b", " ", working)
     for label in INVENTORY_STOP_LABELS:
         working = re.sub(rf"\b{re.escape(label)}\b\s*(?:is|shi|ta|ne|na|=|:)?\s*[^,.;]*", " ", working, flags=re.IGNORECASE)
     words = re.findall(r"[A-Za-z0-9&/\-]+", working)

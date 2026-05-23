@@ -862,6 +862,59 @@ class OwnerInventoryApiTests(TestCase):
         self.assertEqual(parsed["category"], "Food")
         self.assertEqual(parsed["description"], "imported sugar")
 
+    def test_inventory_ai_assistant_parses_unlabeled_local_product_phrase(self):
+        response = self.client.post(
+            reverse("api_owner_ai_inventory_assistant"),
+            data={
+                "mode": "product",
+                "command": "Add Indomie small carton 15 pieces 12000 naira",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        parsed = response.json()["parsed"]
+        self.assertTrue(response.json()["can_save"])
+        self.assertEqual(parsed["product_name"], "Indomie Small Carton")
+        self.assertEqual(parsed["quantity"], "15")
+        self.assertEqual(parsed["selling_price"], "12000.00")
+        self.assertEqual(parsed["category"], "Food")
+
+    def test_inventory_ai_assistant_keeps_cost_and_selling_price_separate(self):
+        response = self.client.post(
+            reverse("api_owner_ai_inventory_assistant"),
+            data={
+                "mode": "product",
+                "command": "Add product Golden morn 500g cost price 2200 selling price 2800 quantity 10 category cereals description family pack",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        parsed = response.json()["parsed"]
+        self.assertEqual(parsed["product_name"], "Golden Morn 500g")
+        self.assertEqual(parsed["cost_price"], "2200.00")
+        self.assertEqual(parsed["selling_price"], "2800.00")
+        self.assertEqual(parsed["quantity"], "10")
+        self.assertEqual(parsed["category"], "Cereals")
+        self.assertEqual(parsed["description"], "family pack")
+
+    def test_inventory_ai_assistant_parses_bag_quantity_without_using_weight(self):
+        response = self.client.post(
+            reverse("api_owner_ai_inventory_assistant"),
+            data={"mode": "product", "command": "Add rice 50kg 3 bags 75000"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer inventory-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        parsed = response.json()["parsed"]
+        self.assertEqual(parsed["product_name"], "Rice 50kg")
+        self.assertEqual(parsed["quantity"], "3")
+        self.assertEqual(parsed["selling_price"], "75000.00")
+
     def test_inventory_ai_assistant_returns_missing_fields_message(self):
         response = self.client.post(
             reverse("api_owner_ai_inventory_assistant"),
