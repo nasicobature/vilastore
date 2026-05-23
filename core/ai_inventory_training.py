@@ -80,6 +80,21 @@ INVENTORY_COMMAND_EXAMPLES = [
         "fields": {"product_name": "Indomie small carton", "quantity": "15", "price": "12000", "category": "Food"},
     },
     {
+        "text": "Add Indomie small carton 15 pieces 12000 naira.",
+        "intent": "create_product",
+        "fields": {"product_name": "Indomie small carton", "quantity": "15", "price": "12000", "category": "Food"},
+    },
+    {
+        "text": "Add rice 50kg 3 bags 75000.",
+        "intent": "create_product",
+        "fields": {"product_name": "Rice 50kg", "quantity": "3", "price": "75000", "category": "Food"},
+    },
+    {
+        "text": "Add product Golden morn 500g cost price 2200 selling price 2800 quantity 10 category cereals.",
+        "intent": "create_product",
+        "fields": {"product_name": "Golden morn 500g", "cost_price": "2200", "price": "2800", "quantity": "10", "category": "Cereals"},
+    },
+    {
         "text": "Sunan kaya sugar 1kg, farashin saye 900, farashin saidawa 1100, adadi 20, rukuni food.",
         "intent": "create_product",
         "fields": {"product_name": "Sugar 1kg", "cost_price": "900", "price": "1100", "quantity": "20", "category": "Food"},
@@ -102,4 +117,3 @@ PRODUCT_ACTION_WORDS = {
 CREATE_WORDS = {
     "add", "create", "make", "new", "register", "saka", "kara", "karo", "kirkira", "kirkiro", "sabon",
 }
-
