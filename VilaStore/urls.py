@@ -24,6 +24,7 @@ from core import views as core_views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('edu/', include(('edu.urls', 'edu'), namespace='edu')),
+    path('whatsapp-bot/', include(('whatsapp_bot.urls', 'whatsapp_bot'), namespace='whatsapp_bot')),
     path('', include('core.urls'))
 ]
 

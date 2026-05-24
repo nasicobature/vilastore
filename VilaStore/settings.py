@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'core',
     'edu.apps.EduConfig',
+    'whatsapp_bot',
 ]
 
 MIDDLEWARE = [
@@ -223,6 +224,15 @@ PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY") or "pk_test_66cf9af7a9821
 FLUTTERWAVE_PUBLIC_KEY = os.getenv("FLUTTERWAVE_PUBLIC_KEY", "")
 FLUTTERWAVE_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY") or os.getenv("FLUTTERWAVE_CLIENT_SECRET", "")
 FLUTTERWAVE_ENCRYPTION_KEY = os.getenv("FLUTTERWAVE_ENCRYPTION_KEY", "")
+
+# WhatsApp data subscription bot integrations.
+WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
+WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
+PAYMENT_WEBHOOK_SECRET = os.getenv("PAYMENT_WEBHOOK_SECRET", "")
+PAYMENT_CHECKOUT_URL = os.getenv("PAYMENT_CHECKOUT_URL", "")
+VTU_API_URL = os.getenv("VTU_API_URL", "")
+VTU_API_KEY = os.getenv("VTU_API_KEY", "")
 
 # Email (SMTP)
 EMAIL_HOST = os.getenv("EMAIL_HOST") or "smtp.gmail.com"
