@@ -53,7 +53,7 @@ from . import ai as ai_engine
 
 PLAN_LIMITS = {
     "starter": {"name": "Starter", "product_limit": 1000, "staff_limit": 0, "branch_limit": 1},
-    "growth": {"name": "Growth", "product_limit": 5000, "staff_limit": 3, "branch_limit": 1},
+    "growth": {"name": "Growth", "product_limit": 5000, "staff_limit": 3, "branch_limit": 2},
     "business": {"name": "Business", "product_limit": 20000, "staff_limit": 10, "branch_limit": 5},
     "pro": {"name": "Pro / Enterprise", "product_limit": None, "staff_limit": None, "branch_limit": None},
 }

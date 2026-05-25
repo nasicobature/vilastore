@@ -481,6 +481,28 @@ class SubscriptionEntitlementTests(TestCase):
         customer = Customer.objects.get(user=self.owner)
         self.assertEqual(customer.email, "amina@example.com")
 
+    def test_growth_can_add_second_branch_but_not_third(self):
+        self.owner.plan = "growth"
+        self.owner.save(update_fields=["plan"])
+        self.client.force_login(self.owner)
+
+        second_response = self.client.post(
+            reverse("add_branch"),
+            data={"name": "Second Branch", "address": "22 Market Road"},
+        )
+
+        self.assertEqual(second_response.status_code, 302)
+        self.assertEqual(ShopBranch.objects.filter(user=self.owner, is_active=True).count(), 2)
+
+        third_response = self.client.post(
+            reverse("add_branch"),
+            data={"name": "Third Branch", "address": "33 Market Road"},
+            follow=True,
+        )
+
+        self.assertEqual(ShopBranch.objects.filter(user=self.owner, is_active=True).count(), 2)
+        self.assertContains(third_response, "Growth plan has reached its branch limit")
+
     def test_starter_blocks_customer_profile_details(self):
         self.client.force_login(self.owner)
         response = self.client.post(
