@@ -72,6 +72,27 @@ def _json_feature_required(owner, feature):
     if _plan_has_feature(owner, feature):
         return None
     return _json_error(_feature_upgrade_message(feature), status=403, feature=feature, upgrade_required=True)
+
+
+def _branch_scoped_products(owner, branch, queryset=None):
+    queryset = queryset if queryset is not None else Product.objects.filter(user=owner)
+    if not branch:
+        return queryset
+    branch_filter = Q(branch_inventory__branch=branch, branch_inventory__is_active=True)
+    if branch.is_default:
+        branch_filter |= Q(branch_inventory__isnull=True)
+    return queryset.filter(branch_filter).distinct()
+
+
+def _branch_inventory_for_product(product, branch):
+    if not branch:
+        return None
+    inventory = BranchInventory.objects.filter(branch=branch, product=product, is_active=True).first()
+    if inventory:
+        product._branch_inventory = inventory
+    return inventory
+
+
 from .views import (
     _authenticate_with_identifier,
     _calculate_item_vat,
@@ -527,7 +548,15 @@ def _serialize_shopboy_cart(request, cart, shopboy):
     items = []
     total = Decimal("0.00")
     product_ids = [int(pid) for pid in cart.data.keys() if str(pid).isdigit()]
-    products = Product.objects.filter(user=shopboy.user, id__in=product_ids)
+    products = _branch_scoped_products(shopboy.user, shopboy.branch, Product.objects.filter(user=shopboy.user, id__in=product_ids))
+    products = list(products)
+    if shopboy.branch:
+        inventory_map = {
+            item.product_id: item
+            for item in BranchInventory.objects.filter(branch=shopboy.branch, product__in=products)
+        }
+        for product in products:
+            product._branch_inventory = inventory_map.get(product.id)
     product_map = {str(p.id): p for p in products}
 
     for pid, row in cart.data.items():
@@ -545,7 +574,7 @@ def _serialize_shopboy_cart(request, cart, shopboy):
             "name": product.name,
             "price": _money(price),
             "quantity": _format_quantity(qty),
-            "stock": str(product.stock),
+            "stock": str(_effective_product_stock(product, shopboy.branch)),
         })
 
     return {
@@ -2315,7 +2344,7 @@ def api_owner_dashboard(request):
         if selected_branch:
             sales_qs = sales_qs.filter(branch=selected_branch)
 
-        products_qs = Product.objects.filter(user=owner)
+        products_qs = _branch_scoped_products(owner, selected_branch)
         products_for_counts = list(products_qs)
         if selected_branch:
             inventory_map = {
@@ -2795,8 +2824,17 @@ def api_owner_pos(request):
 
         category_id = (request.GET.get("category") or "").strip()
         q = (request.GET.get("q") or "").strip()
+        branch_id = (request.GET.get("branch_id") or "").strip()
+        branch = None
+        if branch_id:
+            feature_error = _json_feature_required(owner, "multi_branch")
+            if feature_error:
+                return feature_error
+            branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+            if not branch:
+                return _json_error("Branch not found.", status=404)
 
-        products = Product.objects.filter(user=owner)
+        products = _branch_scoped_products(owner, branch)
         if category_id:
             products = products.filter(category_id=category_id)
         if q:
@@ -2812,7 +2850,10 @@ def api_owner_pos(request):
 
         last_sale = None
         if cart.last_sale_id:
-            sale = Sale.objects.filter(user=owner, id=cart.last_sale_id).first()
+            sale_qs = Sale.objects.filter(user=owner, id=cart.last_sale_id)
+            if branch:
+                sale_qs = sale_qs.filter(branch=branch)
+            sale = sale_qs.first()
             if sale:
                 last_sale = {
                     "id": sale.id,
@@ -2820,11 +2861,23 @@ def api_owner_pos(request):
                     "created_at": sale.created_at.isoformat(),
                 }
 
+        product_rows = list(products.select_related("category").order_by("name"))
+        if branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.filter(branch=branch, product__in=product_rows)
+            }
+            for product in product_rows:
+                product._branch_inventory = inventory_map.get(product.id)
+        branches = _serialize_business_branch_analytics(owner)["branches"]
+
         return _json_success({
-            "products": [_serialize_owner_product(request, product) for product in products.select_related("category")],
+            "products": [_serialize_owner_product(request, product, branch=branch) for product in product_rows],
             "categories": [_serialize_category(cat) for cat in categories],
             "cart": cart_payload,
             "last_sale": last_sale,
+            "branch": _serialize_branch(branch) if branch else None,
+            "branches": branches,
             "can_edit_price": True,
         })
     except Exception as exc:
@@ -2849,20 +2902,33 @@ def api_owner_cart_add(request):
     except Exception:
         return _json_error("Invalid product or quantity.")
 
-    product = get_object_or_404(Product, id=product_id, user=owner)
-    if product.stock <= 0:
+    branch_id = (data.get("branch_id") or "").strip()
+    branch = None
+    if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
+
+    product = get_object_or_404(_branch_scoped_products(owner, branch), id=product_id)
+    _branch_inventory_for_product(product, branch)
+    available_stock = _effective_product_stock(product, branch)
+    price = _effective_product_price(product, branch)
+    if available_stock <= 0:
         return _json_error(f"{product.name} is out of stock.", status=409)
 
     cart = _get_owner_cart(token_obj)
     product_key = str(product.id)
     current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
     desired_qty = current_qty + quantity
-    if desired_qty > product.stock:
-        desired_qty = product.stock
+    if desired_qty > available_stock:
+        desired_qty = available_stock
 
     cart.data[product_key] = {
         "name": product.name,
-        "price": float(product.selling_price),
+        "price": float(price),
         "cost": float(product.cost_price),
         "quantity": _format_quantity(desired_qty),
     }
@@ -2895,22 +2961,35 @@ def api_owner_cart_add_by_code(request):
     except Exception:
         return _json_error("Invalid quantity.")
 
-    product = Product.objects.filter(user=owner, code__iexact=code).first()
+    branch_id = (data.get("branch_id") or "").strip()
+    branch = None
+    if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
+
+    product = _branch_scoped_products(owner, branch).filter(code__iexact=code).first()
     if not product:
         return _json_error(f"No product found for code {code}.", status=404)
-    if product.stock <= 0:
+    _branch_inventory_for_product(product, branch)
+    available_stock = _effective_product_stock(product, branch)
+    price = _effective_product_price(product, branch)
+    if available_stock <= 0:
         return _json_error(f"{product.name} is out of stock.", status=409)
 
     cart = _get_owner_cart(token_obj)
     product_key = str(product.id)
     current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
     desired_qty = current_qty + quantity
-    if desired_qty > product.stock:
-        desired_qty = product.stock
+    if desired_qty > available_stock:
+        desired_qty = available_stock
 
     cart.data[product_key] = {
         "name": product.name,
-        "price": float(product.selling_price),
+        "price": float(price),
         "cost": float(product.cost_price),
         "quantity": _format_quantity(desired_qty),
     }
@@ -2945,7 +3024,18 @@ def api_owner_cart_update(request):
     if product_key not in cart.data:
         return _json_error("Item not in cart.", status=404)
 
-    product = get_object_or_404(Product, id=product_id, user=owner)
+    branch_id = (data.get("branch_id") or "").strip()
+    branch = None
+    if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
+    product = get_object_or_404(_branch_scoped_products(owner, branch), id=product_id)
+    _branch_inventory_for_product(product, branch)
+    available_stock = _effective_product_stock(product, branch)
     current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
 
     if action == "price":
@@ -2958,8 +3048,8 @@ def api_owner_cart_update(request):
         cart.data[product_key]["price"] = float(price.quantize(Decimal("0.01")))
     elif action == "increase":
         desired_qty = current_qty + Decimal("1")
-        if desired_qty > product.stock:
-            desired_qty = product.stock
+        if desired_qty > available_stock:
+            desired_qty = available_stock
         cart.data[product_key]["quantity"] = _format_quantity(desired_qty)
     elif action == "decrease":
         desired_qty = current_qty - Decimal("1")
@@ -2971,8 +3061,8 @@ def api_owner_cart_update(request):
         quantity = _cart_quantity_value(quantity_raw)
         if quantity <= 0:
             cart.data.pop(product_key, None)
-        elif quantity > product.stock:
-            cart.data[product_key]["quantity"] = _format_quantity(product.stock)
+        elif quantity > available_stock:
+            cart.data[product_key]["quantity"] = _format_quantity(available_stock)
         else:
             cart.data[product_key]["quantity"] = _format_quantity(quantity)
 
@@ -3173,7 +3263,7 @@ def api_owner_inventory(request):
         branch = ShopBranch.objects.filter(user=owner, id=branch_id).first()
         if not branch:
             return _json_error("Branch not found.", status=404)
-    products = Product.objects.filter(user=owner)
+    products = _branch_scoped_products(owner, branch)
     if q:
         products = products.filter(
             Q(name__icontains=q) |
@@ -3181,19 +3271,20 @@ def api_owner_inventory(request):
             Q(category__name__icontains=q)
         )
 
-    products = products.select_related("category")
+    products = products.select_related("category").order_by("name")
+    product_rows = list(products)
     if branch:
         inventory_map = {
             item.product_id: item
-            for item in BranchInventory.objects.filter(branch=branch, product__in=products)
+            for item in BranchInventory.objects.filter(branch=branch, product__in=product_rows)
         }
-        for product in products:
+        for product in product_rows:
             product._branch_inventory = inventory_map.get(product.id)
 
-    total_products = products.count()
-    total_value = sum((_effective_product_price(p, branch) * _effective_product_stock(p, branch) for p in products), Decimal("0.00"))
-    low_stock = sum(1 for p in products if Decimal(_effective_product_stock(p, branch)) <= p.low_stock_threshold and Decimal(_effective_product_stock(p, branch)) > 0)
-    out_of_stock = sum(1 for p in products if Decimal(_effective_product_stock(p, branch)) <= 0)
+    total_products = len(product_rows)
+    total_value = sum((_effective_product_price(p, branch) * _effective_product_stock(p, branch) for p in product_rows), Decimal("0.00"))
+    low_stock = sum(1 for p in product_rows if Decimal(_effective_product_stock(p, branch)) <= p.low_stock_threshold and Decimal(_effective_product_stock(p, branch)) > 0)
+    out_of_stock = sum(1 for p in product_rows if Decimal(_effective_product_stock(p, branch)) <= 0)
 
     return _json_success({
         "summary": {
@@ -3203,7 +3294,7 @@ def api_owner_inventory(request):
             "out_of_stock": out_of_stock,
         },
         "branch": _serialize_branch(branch) if branch else None,
-        "products": [_serialize_owner_product(request, product, branch=branch) for product in products.order_by("name")],
+        "products": [_serialize_owner_product(request, product, branch=branch) for product in product_rows],
     })
 
 
@@ -3830,7 +3921,10 @@ def api_owner_reports(request):
         row["visits"] += 1
     top_customers = sorted(customer_sales.values(), key=lambda item: item["sales"], reverse=True)[:5]
     repeat_customer_count = len([row for row in customer_sales.values() if row["visits"] > 1])
-    customer_count = Customer.objects.filter(user=owner).count()
+    customer_count_qs = Customer.objects.filter(user=owner)
+    if selected_branch:
+        customer_count_qs = customer_count_qs.filter(Q(branch=selected_branch) | Q(sale__branch=selected_branch)).distinct()
+    customer_count = customer_count_qs.count()
 
     expense_warnings = []
     if expense_rows and expense_rows[0]["percent"] > Decimal("45.00"):
@@ -5202,7 +5296,7 @@ def api_shopboy_dashboard(request):
     category_id = (request.GET.get("category") or "").strip()
 
     branch = shopboy.branch
-    products = Product.objects.filter(user=shopboy.user)
+    products = _branch_scoped_products(shopboy.user, branch)
     if category_id:
         products = products.filter(category_id=category_id)
     if q:
@@ -5213,12 +5307,13 @@ def api_shopboy_dashboard(request):
         )
 
     categories = Category.objects.filter(user=shopboy.user).order_by("name")
+    product_rows = list(products.select_related("category").order_by("name"))
     if branch:
         inventory_map = {
             item.product_id: item
-            for item in BranchInventory.objects.filter(branch=branch, product__in=products)
+            for item in BranchInventory.objects.filter(branch=branch, product__in=product_rows)
         }
-        for product in products:
+        for product in product_rows:
             product._branch_inventory = inventory_map.get(product.id)
     cart = _get_shopboy_cart(token_obj)
     cart_payload = _serialize_shopboy_cart(request, cart, shopboy)
@@ -5236,7 +5331,7 @@ def api_shopboy_dashboard(request):
     return _json_success({
         "shopboy": _serialize_shopboy(shopboy),
         "branch": _serialize_branch(branch) if branch else None,
-        "products": [_serialize_owner_product(request, product, branch=branch) for product in products.select_related("category")],
+        "products": [_serialize_owner_product(request, product, branch=branch) for product in product_rows],
         "categories": [_serialize_category(cat) for cat in categories],
         "cart": cart_payload,
         "last_sale": last_sale,
@@ -5260,7 +5355,8 @@ def api_shopboy_cart_add(request):
     except Exception:
         return _json_error("Invalid product or quantity.")
 
-    product = get_object_or_404(Product, id=product_id, user=shopboy.user)
+    product = get_object_or_404(_branch_scoped_products(shopboy.user, shopboy.branch), id=product_id)
+    _branch_inventory_for_product(product, shopboy.branch)
     available_stock = _effective_product_stock(product, shopboy.branch)
     if available_stock <= 0:
         return _json_error(f"{product.name} is out of stock.", status=409)
@@ -5274,7 +5370,7 @@ def api_shopboy_cart_add(request):
 
     cart.data[product_key] = {
         "name": product.name,
-        "price": float(product.selling_price),
+        "price": float(_effective_product_price(product, shopboy.branch)),
         "cost": float(product.cost_price),
         "quantity": _format_quantity(desired_qty),
     }
@@ -5306,9 +5402,10 @@ def api_shopboy_cart_add_by_code(request):
     except Exception:
         return _json_error("Invalid quantity.")
 
-    product = Product.objects.filter(user=shopboy.user, code__iexact=code).first()
+    product = _branch_scoped_products(shopboy.user, shopboy.branch).filter(code__iexact=code).first()
     if not product:
         return _json_error(f"No product found for code {code}.", status=404)
+    _branch_inventory_for_product(product, shopboy.branch)
     available_stock = _effective_product_stock(product, shopboy.branch)
     if available_stock <= 0:
         return _json_error(f"{product.name} is out of stock.", status=409)
@@ -5322,7 +5419,7 @@ def api_shopboy_cart_add_by_code(request):
 
     cart.data[product_key] = {
         "name": product.name,
-        "price": float(product.selling_price),
+        "price": float(_effective_product_price(product, shopboy.branch)),
         "cost": float(product.cost_price),
         "quantity": _format_quantity(desired_qty),
     }
@@ -5355,7 +5452,8 @@ def api_shopboy_cart_update(request):
     if product_key not in cart.data:
         return _json_error("Item not in cart.", status=404)
 
-    product = get_object_or_404(Product, id=product_id, user=shopboy.user)
+    product = get_object_or_404(_branch_scoped_products(shopboy.user, shopboy.branch), id=product_id)
+    _branch_inventory_for_product(product, shopboy.branch)
     available_stock = _effective_product_stock(product, shopboy.branch)
     current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
 
@@ -5426,7 +5524,11 @@ def api_shopboy_cart_checkout(request):
 
     with transaction.atomic():
         branch = shopboy.branch
-        products = Product.objects.select_for_update().filter(user=shopboy.user, id__in=product_ids)
+        products = _branch_scoped_products(
+            shopboy.user,
+            branch,
+            Product.objects.select_for_update().filter(user=shopboy.user, id__in=product_ids),
+        )
         product_map = {str(p.id): p for p in products}
         inventory_map = {}
         if branch:

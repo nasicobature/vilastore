@@ -247,6 +247,25 @@ def _attach_branch_inventory(products, branch):
     return products
 
 
+def _branch_scoped_products(user, branch, queryset=None):
+    queryset = queryset if queryset is not None else Product.objects.filter(user=user)
+    if not branch:
+        return queryset
+    branch_filter = Q(branch_inventory__branch=branch, branch_inventory__is_active=True)
+    if branch.is_default:
+        branch_filter |= Q(branch_inventory__isnull=True)
+    return queryset.filter(branch_filter).distinct()
+
+
+def _branch_inventory_for_product(product, branch):
+    if not branch:
+        return None
+    inventory = BranchInventory.objects.filter(branch=branch, product=product, is_active=True).first()
+    if inventory:
+        product._branch_inventory = inventory
+    return inventory
+
+
 def _sync_global_product_stock(product):
     branch_rows = BranchInventory.objects.filter(product=product, is_active=True)
     if not branch_rows.exists():
@@ -548,7 +567,7 @@ def index(request):
     if selected_branch:
         expenses_qs = expenses_qs.filter(branch=selected_branch)
 
-    products_qs = Product.objects.filter(user=user)
+    products_qs = _branch_scoped_products(user, selected_branch)
     products = _attach_branch_inventory(products_qs.order_by("-created_at"), selected_branch)
     for product in products:
         product.display_stock = _effective_product_stock(product, selected_branch)
@@ -577,7 +596,7 @@ def index(request):
     )
 
     top_products = (
-        Product.objects.filter(user=user)
+        _branch_scoped_products(user, selected_branch)
         .annotate(total_sold=Sum('saleitem__quantity', filter=Q(saleitem__sale__branch=selected_branch) if selected_branch else Q()))
         .order_by('-total_sold', '-created_at')[:6]
     )
@@ -594,7 +613,10 @@ def index(request):
     last_sale = None
     last_sale_id = request.session.get("last_sale_id")
     if last_sale_id:
-        last_sale = Sale.objects.filter(user=user, id=last_sale_id).first()
+        last_sale_qs = Sale.objects.filter(user=user, id=last_sale_id)
+        if selected_branch:
+            last_sale_qs = last_sale_qs.filter(branch=selected_branch)
+        last_sale = last_sale_qs.first()
         if not last_sale:
             request.session.pop("last_sale_id", None)
 
@@ -635,7 +657,7 @@ def product(request):
         messages.info(request, "Cart was cleared so you can work with the selected branch stock.")
     request.session["owner_cart_branch_id"] = selected_branch_id
 
-    products = Product.objects.filter(user=request.user)
+    products = _branch_scoped_products(request.user, selected_branch)
     if category_id:
         products = products.filter(category_id=category_id)
     if search_query:
@@ -653,7 +675,10 @@ def product(request):
     last_sale = None
     last_sale_id = request.session.get('last_sale_id')
     if last_sale_id:
-        last_sale = Sale.objects.filter(user=request.user, id=last_sale_id).first()
+        last_sale_qs = Sale.objects.filter(user=request.user, id=last_sale_id)
+        if selected_branch:
+            last_sale_qs = last_sale_qs.filter(branch=selected_branch)
+        last_sale = last_sale_qs.first()
         if not last_sale:
             request.session.pop('last_sale_id', None)
 
@@ -684,12 +709,12 @@ def _can_edit_cart_price(user):
 @login_required
 @require_POST
 def add_to_cart(request, product_id):
-    product = get_object_or_404(Product, id=product_id, user=request.user)
     qty_raw = request.POST.get("quantity")
     selected_branch = _default_branch_for_user(request.user)
     selected_branch_id = str(request.session.get("owner_selected_branch_id") or "")
     if selected_branch_id:
         selected_branch = ShopBranch.objects.filter(user=request.user, id=selected_branch_id, is_active=True).first() or selected_branch
+    product = get_object_or_404(_branch_scoped_products(request.user, selected_branch), id=product_id)
 
     cart = request.session.get('cart', {})
     product_key = str(product_id)
@@ -751,7 +776,7 @@ def add_to_cart_by_code(request):
     if selected_branch_id:
         selected_branch = ShopBranch.objects.filter(user=request.user, id=selected_branch_id, is_active=True).first() or selected_branch
 
-    product = Product.objects.filter(user=request.user, code__iexact=code).first()
+    product = _branch_scoped_products(request.user, selected_branch).filter(code__iexact=code).first()
     if not product:
         messages.error(request, f"No product found for code {code}.")
         return redirect('product')
@@ -801,17 +826,19 @@ def product_lookup_by_code(request):
     if not _plan_has_feature(user, "barcode"):
         return JsonResponse({"success": False, "message": _feature_upgrade_message("barcode")}, status=403)
 
-    product = Product.objects.filter(user=user, code__iexact=code).first()
-    if not product:
-        return JsonResponse({"success": False, "message": "Product not found."}, status=404)
-
     branch = None
     if branch_id:
         if not _plan_has_feature(user, "multi_branch"):
             return JsonResponse({"success": False, "message": _feature_upgrade_message("multi_branch")}, status=403)
         branch = ShopBranch.objects.filter(user=user, id=branch_id, is_active=True).first()
-        if branch:
-            product._branch_inventory = BranchInventory.objects.filter(branch=branch, product=product).first()
+        if not branch:
+            return JsonResponse({"success": False, "message": "Branch not found."}, status=404)
+
+    product = _branch_scoped_products(user, branch).filter(code__iexact=code).first()
+    if not product:
+        return JsonResponse({"success": False, "message": "Product not found in this branch."}, status=404)
+    if branch:
+        product._branch_inventory = BranchInventory.objects.filter(branch=branch, product=product).first()
 
     return JsonResponse({
         "success": True,
@@ -862,7 +889,7 @@ def update_cart(request, product_id):
         selected_branch = ShopBranch.objects.filter(user=request.user, id=selected_branch_id, is_active=True).first() or selected_branch
 
     if product_id in cart:
-        product = get_object_or_404(Product, id=product_id, user=request.user)
+        product = get_object_or_404(_branch_scoped_products(request.user, selected_branch), id=product_id)
         available_stock = _effective_product_stock(product, selected_branch)
 
         if action == "price":
@@ -953,7 +980,11 @@ def checkout(request):
     line_items = []
 
     with transaction.atomic():
-        products = Product.objects.select_for_update().filter(user=request.user, id__in=product_ids)
+        products = _branch_scoped_products(
+            request.user,
+            selected_branch,
+            Product.objects.select_for_update().filter(user=request.user, id__in=product_ids),
+        )
         product_map = {str(p.id): p for p in products}
         inventory_map = {}
         if selected_branch:
@@ -1070,7 +1101,7 @@ def checkout(request):
 def inventory(request):
     search_query = (request.GET.get("q") or "").strip()
     branches, selected_branch, _ = _selected_branch_for_request(request)
-    products = Product.objects.filter(user=request.user)
+    products = _branch_scoped_products(request.user, selected_branch)
     categories = Category.objects.filter(user=request.user)
     if search_query:
         products = products.filter(
@@ -1949,7 +1980,10 @@ def reports(request):
     if not action_recommendations:
         action_recommendations.append("Keep recording sales, expenses, and customers daily so VilaStore can keep improving recommendations.")
 
-    customer_count = Customer.objects.filter(user=request.user).count()
+    customer_count_qs = Customer.objects.filter(user=request.user)
+    if selected_branch:
+        customer_count_qs = customer_count_qs.filter(Q(branch=selected_branch) | Q(sale__branch=selected_branch)).distinct()
+    customer_count = customer_count_qs.count()
     business_insights = []
     if total_transactions == 0:
         business_insights.append({
@@ -5096,9 +5130,14 @@ def shopboy_dashboard(request):
 
     shopboy = get_object_or_404(ShopBoy.objects.select_related("user"), id=shopboy_id, is_active=True)
     category_id = (request.GET.get("category") or "").strip()
-    products = Product.objects.filter(user=shopboy.user).order_by("name")
+    branch = shopboy.branch
+    products = _branch_scoped_products(shopboy.user, branch).order_by("name")
     if category_id:
         products = products.filter(category_id=category_id)
+    products = _attach_branch_inventory(products, branch)
+    for product in products:
+        product.display_stock = _effective_product_stock(product, branch)
+        product.display_price = _effective_product_price(product, branch)
     categories = Category.objects.filter(user=shopboy.user).order_by("name")
     cart = request.session.get("shopboy_cart", {})
     total = sum(
@@ -5116,6 +5155,7 @@ def shopboy_dashboard(request):
     return render(request, "shopboy/shopboy-dashboard.html", {
         "shopboy": shopboy,
         "owner": shopboy.user,
+        "branch": branch,
         "products": products,
         "categories": categories,
         "selected_category": category_id,
@@ -5131,12 +5171,16 @@ def shopboy_add_to_cart(request, product_id):
     if not shopboy:
         return redirect("shopboy_login")
 
-    product = get_object_or_404(Product, id=product_id, user=shopboy.user)
+    branch = shopboy.branch
+    product = get_object_or_404(_branch_scoped_products(shopboy.user, branch), id=product_id)
+    _branch_inventory_for_product(product, branch)
     qty_raw = request.POST.get("quantity")
     cart = request.session.get("shopboy_cart", {})
     product_key = str(product_id)
 
-    if product.stock <= 0:
+    available_stock = _effective_product_stock(product, branch)
+    price = _effective_product_price(product, branch)
+    if available_stock <= 0:
         messages.error(request, f"{product.name} is out of stock.")
         return redirect("shopboy_dashboard")
 
@@ -5148,16 +5192,16 @@ def shopboy_add_to_cart(request, product_id):
 
     current_qty = _cart_quantity(cart.get(product_key, {}))
     desired_qty = current_qty + qty
-    if desired_qty > product.stock:
-        desired_qty = product.stock
-        messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+    if desired_qty > available_stock:
+        desired_qty = available_stock
+        messages.warning(request, f"Only {available_stock} units available for {product.name}.")
 
     if product_key in cart:
         cart[product_key]["quantity"] = _format_quantity(desired_qty)
     else:
         cart[product_key] = {
             "name": product.name,
-            "price": float(product.selling_price),
+            "price": float(price),
             "cost": float(product.cost_price),
             "quantity": _format_quantity(desired_qty),
         }
@@ -5184,12 +5228,16 @@ def shopboy_add_to_cart_by_code(request):
         messages.error(request, "Please enter a valid quantity (e.g., 1 or 1.5).")
         return redirect("shopboy_dashboard")
 
-    product = Product.objects.filter(user=shopboy.user, code__iexact=code).first()
+    branch = shopboy.branch
+    product = _branch_scoped_products(shopboy.user, branch).filter(code__iexact=code).first()
     if not product:
         messages.error(request, f"No product found for code {code}.")
         return redirect("shopboy_dashboard")
+    _branch_inventory_for_product(product, branch)
 
-    if product.stock <= 0:
+    available_stock = _effective_product_stock(product, branch)
+    price = _effective_product_price(product, branch)
+    if available_stock <= 0:
         messages.error(request, f"{product.name} is out of stock.")
         return redirect("shopboy_dashboard")
 
@@ -5198,16 +5246,16 @@ def shopboy_add_to_cart_by_code(request):
 
     current_qty = _cart_quantity(cart.get(product_key, {}))
     desired_qty = current_qty + qty
-    if desired_qty > product.stock:
-        desired_qty = product.stock
-        messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+    if desired_qty > available_stock:
+        desired_qty = available_stock
+        messages.warning(request, f"Only {available_stock} units available for {product.name}.")
 
     if product_key in cart:
         cart[product_key]["quantity"] = _format_quantity(desired_qty)
     else:
         cart[product_key] = {
             "name": product.name,
-            "price": float(product.selling_price),
+            "price": float(price),
             "cost": float(product.cost_price),
             "quantity": _format_quantity(desired_qty),
         }
@@ -5228,15 +5276,18 @@ def shopboy_update_cart(request, product_id):
     quantity_raw = request.POST.get("quantity")
 
     if product_id in cart:
-        product = get_object_or_404(Product, id=product_id, user=shopboy.user)
+        branch = shopboy.branch
+        product = get_object_or_404(_branch_scoped_products(shopboy.user, branch), id=product_id)
+        _branch_inventory_for_product(product, branch)
+        available_stock = _effective_product_stock(product, branch)
 
         if action == "increase":
             current_qty = _cart_quantity(cart[product_id])
             desired_qty = current_qty + Decimal("1")
-            if desired_qty <= product.stock:
+            if desired_qty <= available_stock:
                 cart[product_id]["quantity"] = _format_quantity(desired_qty)
             else:
-                messages.warning(request, f"Cannot add more than available stock ({product.stock}).")
+                messages.warning(request, f"Cannot add more than available stock ({available_stock}).")
         elif action == "decrease":
             current_qty = _cart_quantity(cart[product_id])
             desired_qty = current_qty - Decimal("1")
@@ -5252,9 +5303,9 @@ def shopboy_update_cart(request, product_id):
             else:
                 if quantity <= 0:
                     del cart[product_id]
-                elif quantity > product.stock:
-                    cart[product_id]["quantity"] = _format_quantity(product.stock)
-                    messages.warning(request, f"Only {product.stock} units available for {product.name}.")
+                elif quantity > available_stock:
+                    cart[product_id]["quantity"] = _format_quantity(available_stock)
+                    messages.warning(request, f"Only {available_stock} units available for {product.name}.")
                 else:
                     cart[product_id]["quantity"] = _format_quantity(quantity)
 
@@ -5292,8 +5343,21 @@ def shopboy_checkout(request):
     line_items = []
 
     with transaction.atomic():
-        products = Product.objects.select_for_update().filter(user=shopboy.user, id__in=product_ids)
+        branch = shopboy.branch
+        products = _branch_scoped_products(
+            shopboy.user,
+            branch,
+            Product.objects.select_for_update().filter(user=shopboy.user, id__in=product_ids),
+        )
         product_map = {str(p.id): p for p in products}
+        inventory_map = {}
+        if branch:
+            inventory_map = {
+                item.product_id: item
+                for item in BranchInventory.objects.select_for_update().filter(branch=branch, product__in=products)
+            }
+            for product in products:
+                product._branch_inventory = inventory_map.get(product.id)
 
         for pid, item in cart.items():
             product = product_map.get(pid)
@@ -5305,8 +5369,9 @@ def shopboy_checkout(request):
             if quantity <= 0:
                 continue
 
-            if product.stock < quantity:
-                messages.error(request, f"Not enough stock for {product.name}. Available: {product.stock}.")
+            available_stock = _effective_product_stock(product, branch)
+            if available_stock < quantity:
+                messages.error(request, f"Not enough stock for {product.name}. Available: {available_stock}.")
                 return redirect("shopboy_dashboard")
 
             price = Decimal(str(item["price"]))
@@ -5329,6 +5394,7 @@ def shopboy_checkout(request):
 
         sale = Sale.objects.create(
             user=shopboy.user,
+            branch=branch,
             sales_channel=Sale.CHANNEL_SHOPBOY_PORTAL,
             handled_by_shopboy=shopboy,
             total_amount=total_amount.quantize(Decimal("0.01")),
@@ -5345,8 +5411,14 @@ def shopboy_checkout(request):
                 price=row["price"].quantize(Decimal("0.01")),
                 profit=row["profit"].quantize(Decimal("0.01")),
             )
-            row["product"].stock -= row["quantity"]
-            row["product"].save(update_fields=["stock"])
+            branch_inventory = _branch_inventory_row(branch, row["product"])
+            if branch_inventory and branch_inventory.track_separately:
+                branch_inventory.stock = max(Decimal("0.00"), branch_inventory.stock - row["quantity"])
+                branch_inventory.save(update_fields=["stock"])
+                _sync_global_product_stock(row["product"])
+            else:
+                row["product"].stock -= row["quantity"]
+                row["product"].save(update_fields=["stock"])
 
     request.session["shopboy_cart"] = {}
     request.session["shopboy_last_sale_id"] = sale.id
@@ -5369,14 +5441,22 @@ def shopboy_sell_product(request, product_id):
         return redirect("shopboy_dashboard")
 
     with transaction.atomic():
-        product = get_object_or_404(Product.objects.select_for_update(), id=product_id, user=shopboy.user)
+        branch = shopboy.branch
+        product = get_object_or_404(
+            _branch_scoped_products(shopboy.user, branch, Product.objects.select_for_update()),
+            id=product_id,
+            user=shopboy.user,
+        )
+        _branch_inventory_for_product(product, branch)
 
-        if product.stock < qty:
-            messages.error(request, f"Not enough stock for {product.name}. Available: {product.stock}.")
+        available_stock = _effective_product_stock(product, branch)
+        selling_price = _effective_product_price(product, branch)
+        if available_stock < qty:
+            messages.error(request, f"Not enough stock for {product.name}. Available: {available_stock}.")
             return redirect("shopboy_dashboard")
 
-        total_amount = product.selling_price * qty
-        total_profit = (product.selling_price - product.cost_price) * qty
+        total_amount = selling_price * qty
+        total_profit = (selling_price - product.cost_price) * qty
         vat_registered = _vat_registered_for_sale(shopboy.user, timezone.now(), total_amount)
         vat_status, vat_applicable, vat_rate, vat_amount = _calculate_item_vat(
             product,
@@ -5386,6 +5466,7 @@ def shopboy_sell_product(request, product_id):
 
         sale = Sale.objects.create(
             user=shopboy.user,
+            branch=branch,
             sales_channel=Sale.CHANNEL_SHOPBOY_PORTAL,
             handled_by_shopboy=shopboy,
             total_amount=total_amount.quantize(Decimal("0.01")),
@@ -5399,7 +5480,7 @@ def shopboy_sell_product(request, product_id):
             sale=sale,
             product=product,
             quantity=qty,
-            price=product.selling_price.quantize(Decimal("0.01")),
+            price=selling_price.quantize(Decimal("0.01")),
             profit=total_profit.quantize(Decimal("0.01")),
             vat_status=vat_status,
             vat_rate=vat_rate,
@@ -5407,8 +5488,14 @@ def shopboy_sell_product(request, product_id):
             vat_applicable=vat_applicable,
         )
 
-        product.stock -= qty
-        product.save(update_fields=["stock"])
+        branch_inventory = _branch_inventory_row(branch, product)
+        if branch_inventory and branch_inventory.track_separately:
+            branch_inventory.stock = max(Decimal("0.00"), branch_inventory.stock - qty)
+            branch_inventory.save(update_fields=["stock"])
+            _sync_global_product_stock(product)
+        else:
+            product.stock -= qty
+            product.save(update_fields=["stock"])
 
     request.session["shopboy_last_sale_id"] = sale.id
     messages.success(request, f"Sold {_format_quantity(qty)} x {product.name}.")

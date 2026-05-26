@@ -165,6 +165,32 @@ class BranchSelectionScopeTests(TestCase):
             last_name="Customer",
             phone="08000002002",
         )
+        self.product_a = Product.objects.create(
+            user=self.user,
+            name="Main Branch Product",
+            cost_price=Decimal("500.00"),
+            selling_price=Decimal("700.00"),
+            stock=Decimal("10.00"),
+        )
+        self.product_b = Product.objects.create(
+            user=self.user,
+            name="Second Branch Product",
+            cost_price=Decimal("800.00"),
+            selling_price=Decimal("1200.00"),
+            stock=Decimal("5.00"),
+        )
+        BranchInventory.objects.create(
+            branch=self.branch_a,
+            product=self.product_a,
+            stock=Decimal("10.00"),
+            selling_price=Decimal("700.00"),
+        )
+        BranchInventory.objects.create(
+            branch=self.branch_b,
+            product=self.product_b,
+            stock=Decimal("5.00"),
+            selling_price=Decimal("1200.00"),
+        )
         self.client.force_login(self.user)
 
     def test_selected_branch_persists_to_sales_history(self):
@@ -185,6 +211,45 @@ class BranchSelectionScopeTests(TestCase):
         self.assertEqual(response.context["selected_branch"], self.branch_b)
         self.assertContains(response, "Second Customer")
         self.assertNotContains(response, "Main Customer")
+
+    def test_selected_branch_filters_inventory_products(self):
+        self.client.get(reverse("inventory"), data={"branch": str(self.branch_b.id)})
+
+        response = self.client.get(reverse("inventory"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_branch"], self.branch_b)
+        self.assertEqual(list(response.context["products"]), [self.product_b])
+        self.assertContains(response, "Second Branch Product")
+        self.assertNotContains(response, "Main Branch Product")
+
+    def test_selected_branch_filters_dashboard_product_counts(self):
+        self.client.get(reverse("index"), data={"branch": str(self.branch_b.id)})
+
+        response = self.client.get(reverse("index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_branch"], self.branch_b)
+        self.assertEqual(response.context["total_products"], 1)
+
+    def test_mobile_inventory_respects_selected_branch(self):
+        AuthToken.objects.create(
+            token="branch-mobile-token",
+            role=AuthToken.ROLE_OWNER,
+            owner=self.user,
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+
+        response = self.client.get(
+            reverse("api_owner_inventory"),
+            data={"branch_id": str(self.branch_b.id)},
+            HTTP_AUTHORIZATION="Bearer branch-mobile-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        product_names = [product["name"] for product in data["products"]]
+        self.assertEqual(product_names, ["Second Branch Product"])
 
 
 class MobileOwnerLoginTests(TestCase):
