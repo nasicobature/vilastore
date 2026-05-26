@@ -302,6 +302,34 @@ class BranchSelectionScopeTests(TestCase):
         self.assertEqual(inventory.stock, Decimal("4.00"))
         self.assertEqual(self.client.session.get("cart"), {})
 
+    def test_checkout_handles_high_value_sale_without_server_error(self):
+        self.product_b.selling_price = Decimal("100000000.00")
+        self.product_b.cost_price = Decimal("70000000.00")
+        self.product_b.save(update_fields=["selling_price", "cost_price"])
+        BranchInventory.objects.filter(branch=self.branch_b, product=self.product_b).update(
+            stock=Decimal("5.00"),
+            selling_price=Decimal("100000000.00"),
+        )
+        self.client.get(reverse("product"), data={"branch": str(self.branch_b.id)})
+        session = self.client.session
+        session["cart"] = {
+            str(self.product_b.id): {
+                "name": self.product_b.name,
+                "price": "100000000.00",
+                "cost": "70000000.00",
+                "quantity": "2",
+            }
+        }
+        session["owner_cart_branch_id"] = str(self.branch_b.id)
+        session.save()
+
+        response = self.client.post(reverse("checkout"), data={"payment_status": Sale.PAYMENT_PAID})
+
+        self.assertEqual(response.status_code, 302)
+        sale = Sale.objects.filter(user=self.user, branch=self.branch_b).latest("id")
+        self.assertEqual(sale.total_amount, Decimal("200000000.00"))
+        self.assertEqual(sale.total_profit, Decimal("60000000.00"))
+
     def test_mobile_checkout_completes_sale_for_selected_branch(self):
         token = AuthToken.objects.create(
             token="branch-checkout-token",
