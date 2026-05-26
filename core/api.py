@@ -7,7 +7,8 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib.auth.hashers import check_password, make_password
-from django.db import transaction
+from django.db import OperationalError, ProgrammingError, transaction
+from django.db.migrations.recorder import MigrationRecorder
 from django.db.models import Q, Sum, F, Count
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -57,6 +58,16 @@ PLAN_LIMITS = {
     "business": {"name": "Business", "product_limit": 20000, "staff_limit": 10, "branch_limit": 5},
     "pro": {"name": "Pro / Enterprise", "product_limit": None, "staff_limit": None, "branch_limit": None},
 }
+
+
+def _sale_amount_migration_missing():
+    try:
+        return not MigrationRecorder.Migration.objects.filter(
+            app="core",
+            name="0044_widen_sale_amount_fields",
+        ).exists()
+    except (OperationalError, ProgrammingError):
+        return True
 
 
 def _plan_limit(owner, key):
@@ -3271,6 +3282,9 @@ def api_owner_cart_checkout(request):
     if not cart_rows:
         return _json_error("Cart is empty.", status=400)
 
+    if _sale_amount_migration_missing():
+        return _json_error("Checkout update is not active on the server yet. Please run database migrations and try again.", status=503)
+
     sanitized_cart = {
         str(pid): item
         for pid, item in cart_rows.items()
@@ -5674,6 +5688,9 @@ def api_shopboy_cart_checkout(request):
     cart = _get_shopboy_cart(token_obj)
     if not cart.data:
         return _json_error("Cart is empty.", status=400)
+
+    if _sale_amount_migration_missing():
+        return _json_error("Checkout update is not active on the server yet. Please run database migrations and try again.", status=503)
 
     product_ids = [int(pid) for pid in cart.data.keys() if str(pid).isdigit()]
     total_amount = Decimal("0.00")

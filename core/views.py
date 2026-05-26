@@ -49,8 +49,9 @@ from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 import json
 from django.db.models import F, Sum, Q, Case, When, IntegerField
-from django.db import transaction
+from django.db import transaction, DatabaseError
 from django.db import OperationalError, ProgrammingError
+from django.db.migrations.recorder import MigrationRecorder
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
@@ -155,6 +156,16 @@ def _check_migrations():
         return ""
     except (OperationalError, ProgrammingError):
         return "Database migrations are missing. Please run: python manage.py migrate"
+
+
+def _sale_amount_migration_missing():
+    try:
+        return not MigrationRecorder.Migration.objects.filter(
+            app="core",
+            name="0044_widen_sale_amount_fields",
+        ).exists()
+    except (OperationalError, ProgrammingError):
+        return True
 
 
 USER_BANK_FIELDS = ("bank_name", "bank_account_number", "bank_account_name")
@@ -1051,110 +1062,119 @@ def checkout(request):
     total_profit = Decimal("0.00")
     line_items = []
 
-    with transaction.atomic():
-        products = _branch_scoped_products(
-            request.user,
-            selected_branch,
-            Product.objects.select_for_update().filter(user=request.user, id__in=product_ids),
-        )
-        product_map = {str(p.id): p for p in products}
-        inventory_map = {}
-        if selected_branch:
-            inventory_map = {
-                item.product_id: item
-                for item in BranchInventory.objects.select_for_update().filter(branch=selected_branch, product__in=products)
-            }
-            for product in products:
-                product._branch_inventory = inventory_map.get(product.id)
+    if _sale_amount_migration_missing():
+        messages.error(request, "Checkout update is not active on the server yet. Please run database migrations and try again.")
+        return redirect('product')
 
-        for pid, item in cart.items():
-            product = product_map.get(pid)
-            if not product:
-                messages.error(request, "A cart item no longer exists.")
+    try:
+        with transaction.atomic():
+            products = _branch_scoped_products(
+                request.user,
+                selected_branch,
+                Product.objects.select_for_update().filter(user=request.user, id__in=product_ids),
+            )
+            product_map = {str(p.id): p for p in products}
+            inventory_map = {}
+            if selected_branch:
+                inventory_map = {
+                    item.product_id: item
+                    for item in BranchInventory.objects.select_for_update().filter(branch=selected_branch, product__in=products)
+                }
+                for product in products:
+                    product._branch_inventory = inventory_map.get(product.id)
+
+            for pid, item in cart.items():
+                product = product_map.get(pid)
+                if not product:
+                    messages.error(request, "A cart item no longer exists.")
+                    return redirect('product')
+
+                quantity = _cart_quantity(item)
+                if quantity <= 0:
+                    continue
+
+                available_stock = _effective_product_stock(product, selected_branch)
+                if available_stock < quantity:
+                    messages.error(request, f"Not enough stock for {product.name}. Available: {available_stock}.")
+                    return redirect('product')
+
+                price = _cart_money(item.get("price"), _effective_product_price(product, selected_branch))
+                cost = _cart_money(item.get("cost"), product.cost_price)
+                line_total = price * quantity
+                line_profit = (price - cost) * quantity
+                total_amount += line_total
+                total_profit += line_profit
+
+                line_items.append({
+                    "product": product,
+                    "quantity": quantity,
+                    "price": price,
+                    "profit": line_profit,
+                    "line_total": line_total,
+                })
+
+            if not line_items:
+                messages.warning(request, "Cart is empty.")
                 return redirect('product')
 
-            quantity = _cart_quantity(item)
-            if quantity <= 0:
-                continue
+            vat_registered = _vat_registered_for_sale(request.user, timezone.now(), total_amount)
+            vat_total = Decimal("0.00")
+            for row in line_items:
+                vat_status, vat_applicable, vat_rate, vat_amount = _calculate_item_vat(
+                    row["product"],
+                    row["line_total"],
+                    vat_registered,
+                )
+                row["vat_status"] = vat_status
+                row["vat_applicable"] = vat_applicable
+                row["vat_rate"] = vat_rate
+                row["vat_amount"] = vat_amount
+                vat_total += vat_amount
 
-            available_stock = _effective_product_stock(product, selected_branch)
-            if available_stock < quantity:
-                messages.error(request, f"Not enough stock for {product.name}. Available: {available_stock}.")
-                return redirect('product')
-
-            price = _cart_money(item.get("price"), _effective_product_price(product, selected_branch))
-            cost = _cart_money(item.get("cost"), product.cost_price)
-            line_total = price * quantity
-            line_profit = (price - cost) * quantity
-            total_amount += line_total
-            total_profit += line_profit
-
-            line_items.append({
-                "product": product,
-                "quantity": quantity,
-                "price": price,
-                "profit": line_profit,
-                "line_total": line_total,
-            })
-
-        if not line_items:
-            messages.warning(request, "Cart is empty.")
-            return redirect('product')
-
-        vat_registered = _vat_registered_for_sale(request.user, timezone.now(), total_amount)
-        vat_total = Decimal("0.00")
-        for row in line_items:
-            vat_status, vat_applicable, vat_rate, vat_amount = _calculate_item_vat(
-                row["product"],
-                row["line_total"],
-                vat_registered,
+            sale = Sale.objects.create(
+                user=request.user,
+                branch=selected_branch,
+                customer_name=customer_name,
+                sales_channel=Sale.CHANNEL_OWNER_POS,
+                total_amount=total_amount.quantize(Decimal("0.01")),
+                total_profit=total_profit.quantize(Decimal("0.01")),
+                vat_total=vat_total.quantize(Decimal("0.01")),
+                amount_paid=(
+                    total_amount.quantize(Decimal("0.01"))
+                    if payment_status == Sale.PAYMENT_PAID
+                    else min(initial_payment, total_amount).quantize(Decimal("0.01"))
+                ),
+                payment_status=(
+                    Sale.PAYMENT_PAID
+                    if payment_status == Sale.PAYMENT_PAID
+                    else _derive_payment_status(total_amount, min(initial_payment, total_amount))
+                ),
             )
-            row["vat_status"] = vat_status
-            row["vat_applicable"] = vat_applicable
-            row["vat_rate"] = vat_rate
-            row["vat_amount"] = vat_amount
-            vat_total += vat_amount
 
-        sale = Sale.objects.create(
-            user=request.user,
-            branch=selected_branch,
-            customer_name=customer_name,
-            sales_channel=Sale.CHANNEL_OWNER_POS,
-            total_amount=total_amount.quantize(Decimal("0.01")),
-            total_profit=total_profit.quantize(Decimal("0.01")),
-            vat_total=vat_total.quantize(Decimal("0.01")),
-            amount_paid=(
-                total_amount.quantize(Decimal("0.01"))
-                if payment_status == Sale.PAYMENT_PAID
-                else min(initial_payment, total_amount).quantize(Decimal("0.01"))
-            ),
-            payment_status=(
-                Sale.PAYMENT_PAID
-                if payment_status == Sale.PAYMENT_PAID
-                else _derive_payment_status(total_amount, min(initial_payment, total_amount))
-            ),
-        )
-
-        for row in line_items:
-            SaleItem.objects.create(
-                sale=sale,
-                product=row["product"],
-                quantity=row["quantity"],
-                price=row["price"].quantize(Decimal("0.01")),
-                profit=row["profit"].quantize(Decimal("0.01")),
-                vat_status=row["vat_status"],
-                vat_rate=row["vat_rate"],
-                vat_amount=row["vat_amount"],
-                vat_applicable=row["vat_applicable"],
-            )
-            branch_inventory = _branch_inventory_row(selected_branch, row["product"])
-            if branch_inventory and branch_inventory.track_separately:
-                branch_inventory.stock = max(Decimal("0.00"), branch_inventory.stock - row["quantity"])
-                branch_inventory.save(update_fields=["stock"])
-                _sync_global_product_stock(row["product"])
-            else:
-                row["product"].stock -= row["quantity"]
-                row["product"].save(update_fields=["stock"])
+            for row in line_items:
+                SaleItem.objects.create(
+                    sale=sale,
+                    product=row["product"],
+                    quantity=row["quantity"],
+                    price=row["price"].quantize(Decimal("0.01")),
+                    profit=row["profit"].quantize(Decimal("0.01")),
+                    vat_status=row["vat_status"],
+                    vat_rate=row["vat_rate"],
+                    vat_amount=row["vat_amount"],
+                    vat_applicable=row["vat_applicable"],
+                )
+                branch_inventory = _branch_inventory_row(selected_branch, row["product"])
+                if branch_inventory and branch_inventory.track_separately:
+                    branch_inventory.stock = max(Decimal("0.00"), branch_inventory.stock - row["quantity"])
+                    branch_inventory.save(update_fields=["stock"])
+                    _sync_global_product_stock(row["product"])
+                else:
+                    row["product"].stock -= row["quantity"]
+                    row["product"].save(update_fields=["stock"])
+    except DatabaseError:
+        logger.exception("Owner checkout failed", extra={"user_id": request.user.id, "branch_id": selected_branch.id if selected_branch else None})
+        messages.error(request, "Sale could not be completed because the server database is not ready. Please run migrations and try again.")
+        return redirect('product')
 
     request.session['last_sale_id'] = sale.id
     _set_session_cart(request, selected_branch, {})
@@ -5449,83 +5469,92 @@ def shopboy_checkout(request):
     total_profit = Decimal("0.00")
     line_items = []
 
-    with transaction.atomic():
-        branch = shopboy.branch
-        products = _branch_scoped_products(
-            shopboy.user,
-            branch,
-            Product.objects.select_for_update().filter(user=shopboy.user, id__in=product_ids),
-        )
-        product_map = {str(p.id): p for p in products}
-        inventory_map = {}
-        if branch:
-            inventory_map = {
-                item.product_id: item
-                for item in BranchInventory.objects.select_for_update().filter(branch=branch, product__in=products)
-            }
-            for product in products:
-                product._branch_inventory = inventory_map.get(product.id)
+    if _sale_amount_migration_missing():
+        messages.error(request, "Checkout update is not active on the server yet. Please run database migrations and try again.")
+        return redirect("shopboy_dashboard")
 
-        for pid, item in cart.items():
-            product = product_map.get(pid)
-            if not product:
-                messages.error(request, "A cart item no longer exists.")
-                return redirect("shopboy_dashboard")
-
-            quantity = _cart_quantity(item)
-            if quantity <= 0:
-                continue
-
-            available_stock = _effective_product_stock(product, branch)
-            if available_stock < quantity:
-                messages.error(request, f"Not enough stock for {product.name}. Available: {available_stock}.")
-                return redirect("shopboy_dashboard")
-
-            price = _cart_money(item.get("price"), _effective_product_price(product, branch))
-            cost = _cart_money(item.get("cost"), product.cost_price)
-            line_total = price * quantity
-            line_profit = (price - cost) * quantity
-            total_amount += line_total
-            total_profit += line_profit
-
-            line_items.append({
-                "product": product,
-                "quantity": quantity,
-                "price": price,
-                "profit": line_profit,
-            })
-
-        if not line_items:
-            messages.warning(request, "Cart is empty.")
-            return redirect("shopboy_dashboard")
-
-        sale = Sale.objects.create(
-            user=shopboy.user,
-            branch=branch,
-            sales_channel=Sale.CHANNEL_SHOPBOY_PORTAL,
-            handled_by_shopboy=shopboy,
-            total_amount=total_amount.quantize(Decimal("0.01")),
-            total_profit=total_profit.quantize(Decimal("0.01")),
-            amount_paid=total_amount.quantize(Decimal("0.01")),
-            payment_status=Sale.PAYMENT_PAID,
-        )
-
-        for row in line_items:
-            SaleItem.objects.create(
-                sale=sale,
-                product=row["product"],
-                quantity=row["quantity"],
-                price=row["price"].quantize(Decimal("0.01")),
-                profit=row["profit"].quantize(Decimal("0.01")),
+    try:
+        with transaction.atomic():
+            branch = shopboy.branch
+            products = _branch_scoped_products(
+                shopboy.user,
+                branch,
+                Product.objects.select_for_update().filter(user=shopboy.user, id__in=product_ids),
             )
-            branch_inventory = _branch_inventory_row(branch, row["product"])
-            if branch_inventory and branch_inventory.track_separately:
-                branch_inventory.stock = max(Decimal("0.00"), branch_inventory.stock - row["quantity"])
-                branch_inventory.save(update_fields=["stock"])
-                _sync_global_product_stock(row["product"])
-            else:
-                row["product"].stock -= row["quantity"]
-                row["product"].save(update_fields=["stock"])
+            product_map = {str(p.id): p for p in products}
+            inventory_map = {}
+            if branch:
+                inventory_map = {
+                    item.product_id: item
+                    for item in BranchInventory.objects.select_for_update().filter(branch=branch, product__in=products)
+                }
+                for product in products:
+                    product._branch_inventory = inventory_map.get(product.id)
+
+            for pid, item in cart.items():
+                product = product_map.get(pid)
+                if not product:
+                    messages.error(request, "A cart item no longer exists.")
+                    return redirect("shopboy_dashboard")
+
+                quantity = _cart_quantity(item)
+                if quantity <= 0:
+                    continue
+
+                available_stock = _effective_product_stock(product, branch)
+                if available_stock < quantity:
+                    messages.error(request, f"Not enough stock for {product.name}. Available: {available_stock}.")
+                    return redirect("shopboy_dashboard")
+
+                price = _cart_money(item.get("price"), _effective_product_price(product, branch))
+                cost = _cart_money(item.get("cost"), product.cost_price)
+                line_total = price * quantity
+                line_profit = (price - cost) * quantity
+                total_amount += line_total
+                total_profit += line_profit
+
+                line_items.append({
+                    "product": product,
+                    "quantity": quantity,
+                    "price": price,
+                    "profit": line_profit,
+                })
+
+            if not line_items:
+                messages.warning(request, "Cart is empty.")
+                return redirect("shopboy_dashboard")
+
+            sale = Sale.objects.create(
+                user=shopboy.user,
+                branch=branch,
+                sales_channel=Sale.CHANNEL_SHOPBOY_PORTAL,
+                handled_by_shopboy=shopboy,
+                total_amount=total_amount.quantize(Decimal("0.01")),
+                total_profit=total_profit.quantize(Decimal("0.01")),
+                amount_paid=total_amount.quantize(Decimal("0.01")),
+                payment_status=Sale.PAYMENT_PAID,
+            )
+
+            for row in line_items:
+                SaleItem.objects.create(
+                    sale=sale,
+                    product=row["product"],
+                    quantity=row["quantity"],
+                    price=row["price"].quantize(Decimal("0.01")),
+                    profit=row["profit"].quantize(Decimal("0.01")),
+                )
+                branch_inventory = _branch_inventory_row(branch, row["product"])
+                if branch_inventory and branch_inventory.track_separately:
+                    branch_inventory.stock = max(Decimal("0.00"), branch_inventory.stock - row["quantity"])
+                    branch_inventory.save(update_fields=["stock"])
+                    _sync_global_product_stock(row["product"])
+                else:
+                    row["product"].stock -= row["quantity"]
+                    row["product"].save(update_fields=["stock"])
+    except DatabaseError:
+        logger.exception("Staff checkout failed", extra={"shopboy_id": shopboy.id, "user_id": shopboy.user_id})
+        messages.error(request, "Sale could not be completed because the server database is not ready. Please run migrations and try again.")
+        return redirect("shopboy_dashboard")
 
     request.session["shopboy_cart"] = {}
     request.session["shopboy_last_sale_id"] = sale.id
