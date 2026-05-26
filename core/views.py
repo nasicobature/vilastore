@@ -251,7 +251,10 @@ def _branch_scoped_products(user, branch, queryset=None):
     queryset = queryset if queryset is not None else Product.objects.filter(user=user)
     if not branch:
         return queryset
-    return queryset.filter(branch_inventory__branch=branch, branch_inventory__is_active=True).distinct()
+    return queryset.filter(
+        Q(branch_inventory__branch=branch, branch_inventory__is_active=True) |
+        Q(category__branch=branch)
+    ).distinct()
 
 
 def _branch_scoped_categories(user, branch, queryset=None):
@@ -662,6 +665,10 @@ def product(request):
     request.session["owner_cart_branch_id"] = selected_branch_id
 
     products = _branch_scoped_products(request.user, selected_branch)
+    categories = _branch_scoped_categories(request.user, selected_branch).order_by("name")
+    if category_id and not categories.filter(id=category_id).exists():
+        category_id = ""
+
     if category_id:
         products = products.filter(category_id=category_id)
     if search_query:
@@ -675,7 +682,6 @@ def product(request):
         item.display_stock = _effective_product_stock(item, selected_branch)
         item.display_price = _effective_product_price(item, selected_branch)
 
-    categories = _branch_scoped_categories(request.user, selected_branch).order_by("name")
     last_sale = None
     last_sale_id = request.session.get('last_sale_id')
     if last_sale_id:

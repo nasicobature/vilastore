@@ -77,11 +77,9 @@
       <div class="products-section">
 
         <form method="GET" action="{% url 'product' %}" style="margin-bottom:1rem;">
-          {% if selected_category %}
-            <input type="hidden" name="category" value="{{ selected_category }}">
-          {% endif %}
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
             <select name="branch" class="input" style="min-width:220px;">
+              <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
               {% for branch in branches %}
                 <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}{% if branch.is_default %} (Default){% endif %}</option>
               {% endfor %}

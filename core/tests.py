@@ -240,6 +240,44 @@ class BranchSelectionScopeTests(TestCase):
         self.assertNotContains(response, "Main Category")
         self.assertNotContains(response, "Overall Category")
 
+    def test_selected_branch_includes_products_assigned_by_branch_category(self):
+        category_only_product = Product.objects.create(
+            user=self.user,
+            category=self.category_b,
+            name="Second Branch Category Only Product",
+            cost_price=Decimal("200.00"),
+            selling_price=Decimal("350.00"),
+            stock=Decimal("3.00"),
+        )
+
+        response = self.client.get(reverse("inventory"), data={"branch": str(self.branch_b.id)})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_branch"], self.branch_b)
+        self.assertIn(category_only_product, list(response.context["products"]))
+        self.assertContains(response, "Second Branch Category Only Product")
+
+    def test_product_branch_switch_ignores_category_from_other_branch(self):
+        response = self.client.get(
+            reverse("product"),
+            data={"branch": str(self.branch_b.id), "category": str(self.category_a.id)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_branch"], self.branch_b)
+        self.assertEqual(response.context["selected_category"], "")
+        self.assertContains(response, "Second Branch Product")
+        self.assertNotContains(response, "Main Branch Product")
+
+    def test_product_page_has_all_branches_filter(self):
+        response = self.client.get(reverse("product"), data={"branch": "all"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["selected_branch"])
+        self.assertContains(response, '<option value="all" selected>All branches</option>', html=True)
+        self.assertContains(response, "Main Branch Product")
+        self.assertContains(response, "Second Branch Product")
+
     def test_default_branch_does_not_show_unassigned_inventory(self):
         self.client.get(reverse("inventory"), data={"branch": str(self.branch_a.id)})
 
