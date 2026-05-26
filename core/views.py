@@ -272,6 +272,16 @@ def _branch_scoped_products(user, branch, queryset=None):
     queryset = queryset if queryset is not None else Product.objects.filter(user=user)
     if not branch:
         return queryset
+    if getattr(queryset.query, "select_for_update", False):
+        branch_product_ids = BranchInventory.objects.filter(
+            branch=branch,
+            is_active=True,
+        ).values("product_id")
+        category_product_ids = Product.objects.filter(
+            user=user,
+            category__branch=branch,
+        ).values("id")
+        return queryset.filter(Q(id__in=branch_product_ids) | Q(id__in=category_product_ids))
     return queryset.filter(
         Q(branch_inventory__branch=branch, branch_inventory__is_active=True) |
         Q(category__branch=branch)
