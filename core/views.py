@@ -261,7 +261,10 @@ def _branch_scoped_categories(user, branch, queryset=None):
     queryset = queryset if queryset is not None else Category.objects.filter(user=user)
     if not branch:
         return queryset
-    return queryset.filter(branch=branch)
+    return queryset.filter(
+        Q(branch=branch) |
+        Q(product__branch_inventory__branch=branch, product__branch_inventory__is_active=True)
+    ).distinct()
 
 
 def _branch_inventory_for_product(product, branch):
