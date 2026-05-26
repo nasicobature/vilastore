@@ -278,6 +278,101 @@ class BranchSelectionScopeTests(TestCase):
         self.assertContains(response, "Main Branch Product")
         self.assertContains(response, "Second Branch Product")
 
+    def test_checkout_completes_sale_for_selected_branch(self):
+        self.client.get(reverse("product"), data={"branch": str(self.branch_b.id)})
+        session = self.client.session
+        session["cart"] = {
+            str(self.product_b.id): {
+                "name": self.product_b.name,
+                "price": float(self.product_b.selling_price),
+                "cost": float(self.product_b.cost_price),
+                "quantity": "1",
+            }
+        }
+        session["owner_cart_branch_id"] = str(self.branch_b.id)
+        session.save()
+
+        response = self.client.post(reverse("checkout"), data={"payment_status": Sale.PAYMENT_PAID})
+
+        self.assertEqual(response.status_code, 302)
+        sale = Sale.objects.filter(user=self.user, branch=self.branch_b).latest("id")
+        self.assertEqual(sale.total_amount, Decimal("1200.00"))
+        self.assertEqual(sale.payment_status, Sale.PAYMENT_PAID)
+        inventory = BranchInventory.objects.get(branch=self.branch_b, product=self.product_b)
+        self.assertEqual(inventory.stock, Decimal("4.00"))
+        self.assertEqual(self.client.session.get("cart"), {})
+
+    def test_mobile_checkout_completes_sale_for_selected_branch(self):
+        token = AuthToken.objects.create(
+            token="branch-checkout-token",
+            role=AuthToken.ROLE_OWNER,
+            owner=self.user,
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+        from .api import _get_owner_cart
+
+        cart = _get_owner_cart(token)
+        cart.data = {
+            str(self.product_b.id): {
+                "name": self.product_b.name,
+                "price": str(self.product_b.selling_price),
+                "cost": str(self.product_b.cost_price),
+                "quantity": "1",
+            }
+        }
+        cart.save(update_fields=["data", "updated_at"])
+
+        response = self.client.post(
+            reverse("api_owner_cart_checkout"),
+            data={
+                "payment_status": Sale.PAYMENT_PAID,
+                "branch_id": str(self.branch_b.id),
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer branch-checkout-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        sale = Sale.objects.filter(user=self.user, branch=self.branch_b).latest("id")
+        self.assertEqual(sale.total_amount, Decimal("1200.00"))
+        inventory = BranchInventory.objects.get(branch=self.branch_b, product=self.product_b)
+        self.assertEqual(inventory.stock, Decimal("4.00"))
+
+    def test_mobile_checkout_accepts_all_branch_marker(self):
+        token = AuthToken.objects.create(
+            token="branch-checkout-all-token",
+            role=AuthToken.ROLE_OWNER,
+            owner=self.user,
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+        from .api import _get_owner_cart
+
+        cart = _get_owner_cart(token)
+        cart.data = {
+            str(self.unassigned_product.id): {
+                "name": self.unassigned_product.name,
+                "price": str(self.unassigned_product.selling_price),
+                "cost": str(self.unassigned_product.cost_price),
+                "quantity": "1",
+            }
+        }
+        cart.save(update_fields=["data", "updated_at"])
+
+        response = self.client.post(
+            reverse("api_owner_cart_checkout"),
+            data={"payment_status": Sale.PAYMENT_PAID, "branch_id": "all"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer branch-checkout-all-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        sale = Sale.objects.filter(user=self.user, branch__isnull=True).latest("id")
+        self.assertEqual(sale.total_amount, Decimal("450.00"))
+
     def test_default_branch_does_not_show_unassigned_inventory(self):
         self.client.get(reverse("inventory"), data={"branch": str(self.branch_a.id)})
 

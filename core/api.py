@@ -74,6 +74,11 @@ def _json_feature_required(owner, feature):
     return _json_error(_feature_upgrade_message(feature), status=403, feature=feature, upgrade_required=True)
 
 
+def _normalize_branch_id(value):
+    branch_id = str(value or "").strip()
+    return "" if branch_id.lower() in {"", "all", "none", "null"} else branch_id
+
+
 def _branch_scoped_products(owner, branch, queryset=None):
     queryset = queryset if queryset is not None else Product.objects.filter(user=owner)
     if not branch:
@@ -1412,7 +1417,7 @@ def api_marketplace_place_order(request, username):
     buyer_name = (data.get("buyer_name") or "").strip()
     buyer_contact = (data.get("buyer_contact") or "").strip()
     buyer_address = (data.get("buyer_address") or "").strip()
-    branch_id = data.get("branch_id") or None
+    branch_id = _normalize_branch_id(data.get("branch_id"))
 
     if not buyer_name or not buyer_contact:
         return _json_error("Buyer name and contact are required.")
@@ -2072,7 +2077,7 @@ def api_owner_categories(request):
         return _json_error("Unauthorized.", status=401)
 
     data = _get_body_data(request) if request.method == "POST" else None
-    branch_id = ((request.GET.get("branch_id") if request.method == "GET" else data.get("branch_id") if data else "") or "").strip()
+    branch_id = _normalize_branch_id(request.GET.get("branch_id") if request.method == "GET" else data.get("branch_id") if data else "")
     branch = None
     if branch_id:
         feature_error = _json_feature_required(owner, "multi_branch")
@@ -2111,7 +2116,7 @@ def api_owner_products(request):
 
     if request.method == "GET":
         q = (request.GET.get("q") or "").strip()
-        branch_id = (request.GET.get("branch_id") or "").strip()
+        branch_id = _normalize_branch_id(request.GET.get("branch_id"))
         branch = None
         if branch_id:
             feature_error = _json_feature_required(owner, "multi_branch")
@@ -2138,7 +2143,7 @@ def api_owner_products(request):
 
     name = (data.get("name") or "").strip()
     category_id = data.get("category_id") or None
-    branch_id = (data.get("branch_id") or "").strip()
+    branch_id = _normalize_branch_id(data.get("branch_id"))
     code = (data.get("code") or "").strip()
     vat_status = (data.get("vat_status") or Product.VAT_STANDARD).strip()
 
@@ -2349,7 +2354,7 @@ def api_owner_adjust_stock(request, pk):
         adjustment = _parse_stock(data.get("adjustment", 0))
     except Exception:
         return _json_error("Invalid adjustment amount.")
-    branch_id = data.get("branch_id") or None
+    branch_id = _normalize_branch_id(data.get("branch_id"))
     branch = None
     if branch_id:
         feature_error = _json_feature_required(owner, "multi_branch")
@@ -2877,7 +2882,7 @@ def api_owner_pos(request):
 
         category_id = (request.GET.get("category") or "").strip()
         q = (request.GET.get("q") or "").strip()
-        branch_id = (request.GET.get("branch_id") or "").strip()
+        branch_id = _normalize_branch_id(request.GET.get("branch_id"))
         branch = None
         if branch_id:
             feature_error = _json_feature_required(owner, "multi_branch")
@@ -2955,7 +2960,7 @@ def api_owner_cart_add(request):
     except Exception:
         return _json_error("Invalid product or quantity.")
 
-    branch_id = (data.get("branch_id") or "").strip()
+    branch_id = _normalize_branch_id(data.get("branch_id"))
     branch = None
     if branch_id:
         feature_error = _json_feature_required(owner, "multi_branch")
@@ -3014,7 +3019,7 @@ def api_owner_cart_add_by_code(request):
     except Exception:
         return _json_error("Invalid quantity.")
 
-    branch_id = (data.get("branch_id") or "").strip()
+    branch_id = _normalize_branch_id(data.get("branch_id"))
     branch = None
     if branch_id:
         feature_error = _json_feature_required(owner, "multi_branch")
@@ -3077,7 +3082,7 @@ def api_owner_cart_update(request):
     if product_key not in cart.data:
         return _json_error("Item not in cart.", status=404)
 
-    branch_id = (data.get("branch_id") or "").strip()
+    branch_id = _normalize_branch_id(data.get("branch_id"))
     branch = None
     if branch_id:
         feature_error = _json_feature_required(owner, "multi_branch")
@@ -3161,7 +3166,7 @@ def api_owner_cart_checkout(request):
         payment_status = Sale.PAYMENT_PAID
 
     customer_name = (data.get("customer_name") or "").strip()
-    branch_id = data.get("branch_id") or None
+    branch_id = _normalize_branch_id(data.get("branch_id"))
     try:
         initial_payment = Decimal(str(data.get("initial_payment") or "0"))
         if initial_payment < 0:
@@ -3307,7 +3312,7 @@ def api_owner_inventory(request):
         return _json_error("Unauthorized.", status=401)
 
     q = (request.GET.get("q") or "").strip()
-    branch_id = (request.GET.get("branch_id") or "").strip()
+    branch_id = _normalize_branch_id(request.GET.get("branch_id"))
     branch = None
     if branch_id:
         feature_error = _json_feature_required(owner, "multi_branch")
