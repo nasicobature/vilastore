@@ -125,6 +125,16 @@ def _cart_quantity(item):
     except Exception:
         return Decimal("0.00")
 
+
+def _cart_money(value, default=Decimal("0.00")):
+    try:
+        amount = Decimal(str(value if value not in (None, "") else default))
+    except (InvalidOperation, TypeError, ValueError):
+        amount = Decimal(str(default or "0.00"))
+    if amount < 0:
+        amount = Decimal("0.00")
+    return amount.quantize(Decimal("0.01"))
+
 def _generate_product_code(user, length=12):
     for _ in range(20):
         code = "".join(random.choice(string.digits) for _ in range(length))
@@ -274,6 +284,60 @@ def _branch_inventory_for_product(product, branch):
     if inventory:
         product._branch_inventory = inventory
     return inventory
+
+
+def _cart_key_for_branch(branch):
+    return str(branch.id) if branch else "all"
+
+
+def _session_branch_carts(request):
+    carts = request.session.get("branch_carts")
+    if not isinstance(carts, dict):
+        carts = {}
+    legacy_cart = request.session.get("cart")
+    if isinstance(legacy_cart, dict) and legacy_cart:
+        legacy_key = str(request.session.get("owner_cart_branch_id") or "all")
+        carts.setdefault(legacy_key, legacy_cart)
+        request.session["cart"] = {}
+    request.session["branch_carts"] = carts
+    request.session["cart"] = {}
+    return carts
+
+
+def _get_session_cart(request, branch):
+    return dict(_session_branch_carts(request).get(_cart_key_for_branch(branch), {}))
+
+
+def _set_session_cart(request, branch, cart):
+    carts = _session_branch_carts(request)
+    key = _cart_key_for_branch(branch)
+    if cart:
+        carts[key] = cart
+    else:
+        carts.pop(key, None)
+    request.session["branch_carts"] = carts
+    request.session["cart"] = {}
+    request.session["owner_cart_branch_id"] = "" if key == "all" else key
+
+
+def _current_pos_branch_from_session(request, *, prefer_cart=False):
+    branch = None
+    if prefer_cart:
+        branch_id = str(request.session.get("owner_cart_branch_id") or "")
+        if branch_id:
+            branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
+        if branch and _cart_key_for_branch(branch) in _session_branch_carts(request):
+            return branch
+        if not branch_id and "all" in _session_branch_carts(request):
+            return None
+    if "owner_selected_branch_id" in request.session:
+        branch_id = str(request.session.get("owner_selected_branch_id") or "")
+        if not branch_id:
+            return None
+        branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
+        if branch:
+            return branch
+    return _default_branch_for_user(request.user)
 
 
 def _sync_global_product_stock(product):
@@ -657,15 +721,10 @@ def index(request):
 def product(request):
     category_id = (request.GET.get("category") or "").strip()
     search_query = (request.GET.get("q") or "").strip()
-    branches, selected_branch, branch_changed = _selected_branch_for_request(request)
-    cart = request.session.get('cart', {})
-    cart_branch_id = str(request.session.get("owner_cart_branch_id") or "")
-    selected_branch_id = str(selected_branch.id) if selected_branch else ""
-    if branch_changed and cart and cart_branch_id != selected_branch_id:
-        request.session['cart'] = {}
-        cart = {}
-        messages.info(request, "Cart was cleared so you can work with the selected branch stock.")
-    request.session["owner_cart_branch_id"] = selected_branch_id
+    branches, selected_branch, _ = _selected_branch_for_request(request)
+    cart = _get_session_cart(request, selected_branch)
+    request.session["cart"] = {}
+    request.session["owner_cart_branch_id"] = str(selected_branch.id) if selected_branch else ""
 
     products = _branch_scoped_products(request.user, selected_branch)
     categories = _branch_scoped_categories(request.user, selected_branch).order_by("name")
@@ -723,13 +782,10 @@ def _can_edit_cart_price(user):
 @require_POST
 def add_to_cart(request, product_id):
     qty_raw = request.POST.get("quantity")
-    selected_branch = _default_branch_for_user(request.user)
-    selected_branch_id = str(request.session.get("owner_selected_branch_id") or "")
-    if selected_branch_id:
-        selected_branch = ShopBranch.objects.filter(user=request.user, id=selected_branch_id, is_active=True).first() or selected_branch
+    selected_branch = _current_pos_branch_from_session(request)
     product = get_object_or_404(_branch_scoped_products(request.user, selected_branch), id=product_id)
 
-    cart = request.session.get('cart', {})
+    cart = _get_session_cart(request, selected_branch)
     product_key = str(product_id)
     available_stock = _effective_product_stock(product, selected_branch)
     price = _effective_product_price(product, selected_branch)
@@ -760,8 +816,7 @@ def add_to_cart(request, product_id):
             'quantity': _format_quantity(desired_qty)
         }
 
-    request.session['cart'] = cart
-    request.session["owner_cart_branch_id"] = str(selected_branch.id) if selected_branch else ""
+    _set_session_cart(request, selected_branch, cart)
     return redirect('product')
 
 @login_required
@@ -800,7 +855,7 @@ def add_to_cart_by_code(request):
         messages.error(request, f"{product.name} is out of stock.")
         return redirect('product')
 
-    cart = request.session.get('cart', {})
+    cart = _get_session_cart(request, selected_branch)
     product_key = str(product.id)
 
     current_qty = _cart_quantity(cart.get(product_key, {}))
@@ -819,8 +874,7 @@ def add_to_cart_by_code(request):
             'quantity': _format_quantity(desired_qty)
         }
 
-    request.session['cart'] = cart
-    request.session["owner_cart_branch_id"] = str(selected_branch.id) if selected_branch else ""
+    _set_session_cart(request, selected_branch, cart)
     return redirect('product')
 
 def product_lookup_by_code(request):
@@ -891,15 +945,12 @@ def product_labels(request):
 @login_required
 @require_POST
 def update_cart(request, product_id):
-    cart = request.session.get('cart', {})
     product_id = str(product_id)
     action = request.POST.get('action') or ""
     quantity_raw = request.POST.get('quantity')
     price_raw = request.POST.get("price")
-    selected_branch = _default_branch_for_user(request.user)
-    selected_branch_id = str(request.session.get("owner_selected_branch_id") or "")
-    if selected_branch_id:
-        selected_branch = ShopBranch.objects.filter(user=request.user, id=selected_branch_id, is_active=True).first() or selected_branch
+    selected_branch = _current_pos_branch_from_session(request)
+    cart = _get_session_cart(request, selected_branch)
 
     if product_id in cart:
         product = get_object_or_404(_branch_scoped_products(request.user, selected_branch), id=product_id)
@@ -947,22 +998,24 @@ def update_cart(request, product_id):
                 else:
                     cart[product_id]["quantity"] = _format_quantity(quantity)
 
-    request.session['cart'] = cart
+    _set_session_cart(request, selected_branch, cart)
     return redirect('product')
 
 @login_required
 @require_POST
 def remove_from_cart(request, product_id):
-    cart = request.session.get('cart', {})
+    selected_branch = _current_pos_branch_from_session(request)
+    cart = _get_session_cart(request, selected_branch)
     cart.pop(str(product_id), None)
-    request.session['cart'] = cart
+    _set_session_cart(request, selected_branch, cart)
     return redirect('product')
 
 
 @login_required
 @require_POST
 def checkout(request):
-    cart = request.session.get('cart', {})
+    selected_branch = _current_pos_branch_from_session(request, prefer_cart=True)
+    cart = _get_session_cart(request, selected_branch)
     if not cart:
         messages.warning(request, "Cart is empty.")
         return redirect('product')
@@ -982,12 +1035,18 @@ def checkout(request):
         messages.error(request, "Initial payment must be 0 or more.")
         return redirect('product')
 
-    product_ids = [int(pid) for pid in cart.keys()]
-    selected_branch = _default_branch_for_user(request.user)
-    selected_branch_id = str(request.session.get("owner_cart_branch_id") or request.session.get("owner_selected_branch_id") or "")
-    if selected_branch_id:
-        selected_branch = ShopBranch.objects.filter(user=request.user, id=selected_branch_id, is_active=True).first() or selected_branch
+    sanitized_cart = {
+        str(pid): item
+        for pid, item in cart.items()
+        if str(pid).isdigit() and isinstance(item, dict)
+    }
+    if sanitized_cart != cart:
+        cart = sanitized_cart
+        _set_session_cart(request, selected_branch, cart)
+        messages.warning(request, "Old cart data was cleaned. Please review the cart and complete the sale again.")
+        return redirect('product')
 
+    product_ids = [int(pid) for pid in cart.keys()]
     total_amount = Decimal("0.00")
     total_profit = Decimal("0.00")
     line_items = []
@@ -1023,8 +1082,8 @@ def checkout(request):
                 messages.error(request, f"Not enough stock for {product.name}. Available: {available_stock}.")
                 return redirect('product')
 
-            price = Decimal(str(item['price']))
-            cost = Decimal(str(item['cost']))
+            price = _cart_money(item.get("price"), _effective_product_price(product, selected_branch))
+            cost = _cart_money(item.get("cost"), product.cost_price)
             line_total = price * quantity
             line_profit = (price - cost) * quantity
             total_amount += line_total
@@ -1098,8 +1157,7 @@ def checkout(request):
                 row["product"].save(update_fields=["stock"])
 
     request.session['last_sale_id'] = sale.id
-    request.session['cart'] = {}
-    request.session['owner_cart_branch_id'] = str(selected_branch.id) if selected_branch else ""
+    _set_session_cart(request, selected_branch, {})
     if payment_status == Sale.PAYMENT_LOAN:
         messages.success(request, "Sale recorded as credit.")
     else:
@@ -1201,13 +1259,14 @@ def add_product(request):
 
     branch = None
     if branch_id:
-        feature_redirect = _require_feature_or_redirect(request, "multi_branch", "inventory")
-        if feature_redirect:
-            return feature_redirect
         branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
         if not branch:
             messages.error(request, "Selected branch is invalid.")
             return redirect('inventory')
+        if not branch.is_default:
+            feature_redirect = _require_feature_or_redirect(request, "multi_branch", "inventory")
+            if feature_redirect:
+                return feature_redirect
 
     if category_id:
         category_exists = _branch_scoped_categories(request.user, branch).filter(id=category_id).exists() if branch else Category.objects.filter(id=category_id, user=request.user).exists()
@@ -5374,6 +5433,16 @@ def shopboy_checkout(request):
         messages.warning(request, "Cart is empty.")
         return redirect("shopboy_dashboard")
 
+    sanitized_cart = {
+        str(pid): item
+        for pid, item in cart.items()
+        if str(pid).isdigit() and isinstance(item, dict)
+    }
+    if sanitized_cart != cart:
+        request.session["shopboy_cart"] = sanitized_cart
+        messages.warning(request, "Old cart data was cleaned. Please review the cart and complete the sale again.")
+        return redirect("shopboy_dashboard")
+
     product_ids = [int(pid) for pid in cart.keys()]
 
     total_amount = Decimal("0.00")
@@ -5412,8 +5481,8 @@ def shopboy_checkout(request):
                 messages.error(request, f"Not enough stock for {product.name}. Available: {available_stock}.")
                 return redirect("shopboy_dashboard")
 
-            price = Decimal(str(item["price"]))
-            cost = Decimal(str(item["cost"]))
+            price = _cart_money(item.get("price"), _effective_product_price(product, branch))
+            cost = _cart_money(item.get("cost"), product.cost_price)
             line_total = price * quantity
             line_profit = (price - cost) * quantity
             total_amount += line_total

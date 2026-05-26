@@ -901,6 +901,7 @@
       return;
     }
     const checkoutPath = window.location.pathname.includes("/shopboy/") ? "/shopboy/cart/checkout/" : "/checkout/";
+    const csrfToken = decodeURIComponent(cookieValue("csrftoken") || "");
     host.innerHTML = `
       <div class="card" style="padding:0.75rem 1rem;margin-bottom:0.75rem;border:1px dashed var(--border);">
         <strong>Offline cart</strong>
@@ -912,6 +913,7 @@
         </ul>
         <strong>Total: NGN ${cart.total}</strong>
         <form method="POST" action="${checkoutPath}" data-offline-local-checkout="true" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.5rem;">
+          ${csrfToken ? `<input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">` : ""}
           <select name="payment_status" class="input">
             <option value="paid">Paid</option>
             <option value="loan">Credit</option>
@@ -1200,6 +1202,11 @@
       const form = event.target;
       if (!(form instanceof HTMLFormElement)) return;
       if (form.dataset.offlineIgnore === "true") return;
+      if (form.dataset.offlineLocalCheckout === "true") {
+        event.preventDefault();
+        handleOfflineForm(form, event.submitter);
+        return;
+      }
       if (navigator.onLine) {
         const { fields } = formFields(form, event.submitter);
         rememberPendingLogin(form, fields);

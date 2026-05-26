@@ -500,6 +500,16 @@ def _format_quantity(qty):
     return text or "0"
 
 
+def _cart_money_value(value, default=Decimal("0.00")):
+    try:
+        amount = Decimal(str(value if value not in (None, "") else default))
+    except Exception:
+        amount = Decimal(str(default or "0.00"))
+    if amount < 0:
+        amount = Decimal("0.00")
+    return amount.quantize(Decimal("0.01"))
+
+
 def _derive_payment_status(total_amount, amount_paid):
     if amount_paid >= total_amount:
         return Sale.PAYMENT_PAID
@@ -529,21 +539,75 @@ def _get_owner_cart(token_obj):
     return cart
 
 
-def _serialize_owner_cart(request, cart, owner):
+OWNER_CART_BRANCHES_KEY = "branch_carts"
+
+
+def _cart_key_for_branch(branch):
+    return str(branch.id) if branch else "all"
+
+
+def _owner_cart_branches(cart):
+    if not isinstance(cart.data, dict):
+        cart.data = {}
+    branch_carts = cart.data.get(OWNER_CART_BRANCHES_KEY)
+    if not isinstance(branch_carts, dict):
+        legacy_rows = {
+            key: value
+            for key, value in cart.data.items()
+            if str(key).isdigit() and isinstance(value, dict)
+        }
+        branch_carts = {}
+        if legacy_rows:
+            branch_carts["all"] = legacy_rows
+        cart.data = {OWNER_CART_BRANCHES_KEY: branch_carts}
+    return branch_carts
+
+
+def _owner_cart_data(cart, branch):
+    branch_carts = _owner_cart_branches(cart)
+    key = _cart_key_for_branch(branch)
+    rows = branch_carts.get(key)
+    if rows is None and key != "all" and branch_carts.get("all"):
+        rows = branch_carts.pop("all")
+        branch_carts[key] = rows
+        cart.data = {OWNER_CART_BRANCHES_KEY: branch_carts}
+    return dict(rows or {})
+
+
+def _set_owner_cart_data(cart, branch, rows):
+    branch_carts = _owner_cart_branches(cart)
+    key = _cart_key_for_branch(branch)
+    if rows:
+        branch_carts[key] = rows
+    else:
+        branch_carts.pop(key, None)
+    cart.data = {OWNER_CART_BRANCHES_KEY: branch_carts}
+
+
+def _serialize_owner_cart(request, cart, owner, branch=None):
     items = []
     total = Decimal("0.00")
-    product_ids = [int(pid) for pid in cart.data.keys() if str(pid).isdigit()]
-    products = Product.objects.filter(user=owner, id__in=product_ids)
+    cart_rows = _owner_cart_data(cart, branch)
+    product_ids = [int(pid) for pid in cart_rows.keys() if str(pid).isdigit()]
+    products = _branch_scoped_products(owner, branch, Product.objects.filter(user=owner, id__in=product_ids))
+    products = list(products)
+    if branch:
+        inventory_map = {
+            item.product_id: item
+            for item in BranchInventory.objects.filter(branch=branch, product__in=products)
+        }
+        for product in products:
+            product._branch_inventory = inventory_map.get(product.id)
     product_map = {str(p.id): p for p in products}
 
-    for pid, row in cart.data.items():
+    for pid, row in cart_rows.items():
         product = product_map.get(str(pid))
         if not product:
             continue
         qty = _cart_quantity_value(row.get("quantity"))
         if qty <= 0:
             continue
-        price = Decimal(str(row.get("price", product.selling_price)))
+        price = _cart_money_value(row.get("price"), product.selling_price)
         line_total = price * qty
         total += line_total
         items.append({
@@ -551,12 +615,13 @@ def _serialize_owner_cart(request, cart, owner):
             "name": product.name,
             "price": _money(price),
             "quantity": _format_quantity(qty),
-            "stock": str(product.stock),
+            "stock": str(_effective_product_stock(product, branch)),
         })
 
     return {
         "items": items,
         "total": _money(total),
+        "branch_id": str(branch.id) if branch else "",
     }
 
 
@@ -2904,7 +2969,7 @@ def api_owner_pos(request):
 
         categories = _branch_scoped_categories(owner, branch).order_by("name")
         cart = _get_owner_cart(token_obj)
-        cart_payload = _serialize_owner_cart(request, cart, owner)
+        cart_payload = _serialize_owner_cart(request, cart, owner, branch=branch)
 
         last_sale = None
         if cart.last_sale_id:
@@ -2978,21 +3043,23 @@ def api_owner_cart_add(request):
         return _json_error(f"{product.name} is out of stock.", status=409)
 
     cart = _get_owner_cart(token_obj)
+    cart_rows = _owner_cart_data(cart, branch)
     product_key = str(product.id)
-    current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
+    current_qty = _cart_quantity_value(cart_rows.get(product_key, {}).get("quantity"))
     desired_qty = current_qty + quantity
     if desired_qty > available_stock:
         desired_qty = available_stock
 
-    cart.data[product_key] = {
+    cart_rows[product_key] = {
         "name": product.name,
         "price": float(price),
         "cost": float(product.cost_price),
         "quantity": _format_quantity(desired_qty),
     }
+    _set_owner_cart_data(cart, branch, cart_rows)
     cart.save(update_fields=["data", "updated_at"])
 
-    return _json_success({"cart": _serialize_owner_cart(request, cart, owner)})
+    return _json_success({"cart": _serialize_owner_cart(request, cart, owner, branch=branch)})
 
 
 @csrf_exempt
@@ -3039,21 +3106,23 @@ def api_owner_cart_add_by_code(request):
         return _json_error(f"{product.name} is out of stock.", status=409)
 
     cart = _get_owner_cart(token_obj)
+    cart_rows = _owner_cart_data(cart, branch)
     product_key = str(product.id)
-    current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
+    current_qty = _cart_quantity_value(cart_rows.get(product_key, {}).get("quantity"))
     desired_qty = current_qty + quantity
     if desired_qty > available_stock:
         desired_qty = available_stock
 
-    cart.data[product_key] = {
+    cart_rows[product_key] = {
         "name": product.name,
         "price": float(price),
         "cost": float(product.cost_price),
         "quantity": _format_quantity(desired_qty),
     }
+    _set_owner_cart_data(cart, branch, cart_rows)
     cart.save(update_fields=["data", "updated_at"])
 
-    return _json_success({"cart": _serialize_owner_cart(request, cart, owner)})
+    return _json_success({"cart": _serialize_owner_cart(request, cart, owner, branch=branch)})
 
 
 @csrf_exempt
@@ -3076,12 +3145,6 @@ def api_owner_cart_update(request):
     action = (data.get("action") or "").strip()
     quantity_raw = data.get("quantity")
     price_raw = data.get("price")
-
-    cart = _get_owner_cart(token_obj)
-    product_key = str(product_id)
-    if product_key not in cart.data:
-        return _json_error("Item not in cart.", status=404)
-
     branch_id = _normalize_branch_id(data.get("branch_id"))
     branch = None
     if branch_id:
@@ -3091,10 +3154,17 @@ def api_owner_cart_update(request):
         branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
         if not branch:
             return _json_error("Branch not found.", status=404)
+
+    cart = _get_owner_cart(token_obj)
+    cart_rows = _owner_cart_data(cart, branch)
+    product_key = str(product_id)
+    if product_key not in cart_rows:
+        return _json_error("Item not in cart.", status=404)
+
     product = get_object_or_404(_branch_scoped_products(owner, branch), id=product_id)
     _branch_inventory_for_product(product, branch)
     available_stock = _effective_product_stock(product, branch)
-    current_qty = _cart_quantity_value(cart.data.get(product_key, {}).get("quantity"))
+    current_qty = _cart_quantity_value(cart_rows.get(product_key, {}).get("quantity"))
 
     if action == "price":
         try:
@@ -3103,29 +3173,30 @@ def api_owner_cart_update(request):
             return _json_error("Invalid price.")
         if price < 0:
             return _json_error("Price cannot be negative.")
-        cart.data[product_key]["price"] = float(price.quantize(Decimal("0.01")))
+        cart_rows[product_key]["price"] = float(price.quantize(Decimal("0.01")))
     elif action == "increase":
         desired_qty = current_qty + Decimal("1")
         if desired_qty > available_stock:
             desired_qty = available_stock
-        cart.data[product_key]["quantity"] = _format_quantity(desired_qty)
+        cart_rows[product_key]["quantity"] = _format_quantity(desired_qty)
     elif action == "decrease":
         desired_qty = current_qty - Decimal("1")
         if desired_qty <= 0:
-            cart.data.pop(product_key, None)
+            cart_rows.pop(product_key, None)
         else:
-            cart.data[product_key]["quantity"] = _format_quantity(desired_qty)
+            cart_rows[product_key]["quantity"] = _format_quantity(desired_qty)
     else:
         quantity = _cart_quantity_value(quantity_raw)
         if quantity <= 0:
-            cart.data.pop(product_key, None)
+            cart_rows.pop(product_key, None)
         elif quantity > available_stock:
-            cart.data[product_key]["quantity"] = _format_quantity(available_stock)
+            cart_rows[product_key]["quantity"] = _format_quantity(available_stock)
         else:
-            cart.data[product_key]["quantity"] = _format_quantity(quantity)
+            cart_rows[product_key]["quantity"] = _format_quantity(quantity)
 
+    _set_owner_cart_data(cart, branch, cart_rows)
     cart.save(update_fields=["data", "updated_at"])
-    return _json_success({"cart": _serialize_owner_cart(request, cart, owner)})
+    return _json_success({"cart": _serialize_owner_cart(request, cart, owner, branch=branch)})
 
 
 @csrf_exempt
@@ -3145,10 +3216,22 @@ def api_owner_cart_remove(request):
     except Exception:
         return _json_error("Invalid product.")
 
+    branch_id = _normalize_branch_id(data.get("branch_id"))
+    branch = None
+    if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
+
     cart = _get_owner_cart(token_obj)
-    cart.data.pop(str(product_id), None)
+    cart_rows = _owner_cart_data(cart, branch)
+    cart_rows.pop(str(product_id), None)
+    _set_owner_cart_data(cart, branch, cart_rows)
     cart.save(update_fields=["data", "updated_at"])
-    return _json_success({"cart": _serialize_owner_cart(request, cart, owner)})
+    return _json_success({"cart": _serialize_owner_cart(request, cart, owner, branch=branch)})
 
 
 @csrf_exempt
@@ -3174,14 +3257,6 @@ def api_owner_cart_checkout(request):
     except Exception:
         return _json_error("Initial payment must be 0 or more.")
 
-    cart = _get_owner_cart(token_obj)
-    if not cart.data:
-        return _json_error("Cart is empty.", status=400)
-
-    product_ids = [int(pid) for pid in cart.data.keys() if str(pid).isdigit()]
-    total_amount = Decimal("0.00")
-    total_profit = Decimal("0.00")
-    line_items = []
     branch = None
     if branch_id:
         feature_error = _json_feature_required(owner, "multi_branch")
@@ -3191,8 +3266,32 @@ def api_owner_cart_checkout(request):
         if not branch:
             return _json_error("Branch not found.", status=404)
 
+    cart = _get_owner_cart(token_obj)
+    cart_rows = _owner_cart_data(cart, branch)
+    if not cart_rows:
+        return _json_error("Cart is empty.", status=400)
+
+    sanitized_cart = {
+        str(pid): item
+        for pid, item in cart_rows.items()
+        if str(pid).isdigit() and isinstance(item, dict)
+    }
+    if sanitized_cart != cart_rows:
+        _set_owner_cart_data(cart, branch, sanitized_cart)
+        cart.save(update_fields=["data", "updated_at"])
+        return _json_error("Old cart data was cleaned. Please review the cart and complete the sale again.", status=409)
+
+    product_ids = [int(pid) for pid in cart_rows.keys()]
+    total_amount = Decimal("0.00")
+    total_profit = Decimal("0.00")
+    line_items = []
+
     with transaction.atomic():
-        products = Product.objects.select_for_update().filter(user=owner, id__in=product_ids)
+        products = _branch_scoped_products(
+            owner,
+            branch,
+            Product.objects.select_for_update().filter(user=owner, id__in=product_ids),
+        )
         product_map = {str(p.id): p for p in products}
         inventory_map = {}
         if branch:
@@ -3203,7 +3302,7 @@ def api_owner_cart_checkout(request):
             for product in products:
                 product._branch_inventory = inventory_map.get(product.id)
 
-        for pid, item in cart.data.items():
+        for pid, item in cart_rows.items():
             product = product_map.get(str(pid))
             if not product:
                 return _json_error("A cart item no longer exists.", status=409)
@@ -3216,8 +3315,8 @@ def api_owner_cart_checkout(request):
             if available_stock < quantity:
                 return _json_error(f"Not enough stock for {product.name}. Available: {available_stock}.", status=409)
 
-            price = Decimal(str(item.get("price", product.selling_price)))
-            cost = Decimal(str(item.get("cost", product.cost_price)))
+            price = _cart_money_value(item.get("price"), _effective_product_price(product, branch))
+            cost = _cart_money_value(item.get("cost"), product.cost_price)
             line_total = price * quantity
             line_profit = (price - cost) * quantity
             total_amount += line_total
@@ -3286,11 +3385,12 @@ def api_owner_cart_checkout(request):
             if inventory and inventory.track_separately:
                 inventory.stock = max(Decimal("0.00"), inventory.stock - row["quantity"])
                 inventory.save(update_fields=["stock", "updated_at"])
+                _sync_global_product_stock(row["product"])
             else:
                 row["product"].stock -= row["quantity"]
                 row["product"].save(update_fields=["stock"])
 
-    cart.data = {}
+    _set_owner_cart_data(cart, branch, {})
     cart.last_sale_id = sale.id
     cart.save(update_fields=["data", "last_sale_id", "updated_at"])
 
@@ -3300,7 +3400,7 @@ def api_owner_cart_checkout(request):
             "total_amount": _money(sale.total_amount),
             "created_at": sale.created_at.isoformat(),
         },
-        "cart": _serialize_owner_cart(request, cart, owner),
+        "cart": _serialize_owner_cart(request, cart, owner, branch=branch),
     })
 
 
