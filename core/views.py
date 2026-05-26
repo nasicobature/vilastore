@@ -254,6 +254,13 @@ def _branch_scoped_products(user, branch, queryset=None):
     return queryset.filter(branch_inventory__branch=branch, branch_inventory__is_active=True).distinct()
 
 
+def _branch_scoped_categories(user, branch, queryset=None):
+    queryset = queryset if queryset is not None else Category.objects.filter(user=user)
+    if not branch:
+        return queryset
+    return queryset.filter(branch=branch)
+
+
 def _branch_inventory_for_product(product, branch):
     if not branch:
         return None
@@ -668,7 +675,7 @@ def product(request):
         item.display_stock = _effective_product_stock(item, selected_branch)
         item.display_price = _effective_product_price(item, selected_branch)
 
-    categories = Category.objects.filter(user=request.user).order_by("name")
+    categories = _branch_scoped_categories(request.user, selected_branch).order_by("name")
     last_sale = None
     last_sale_id = request.session.get('last_sale_id')
     if last_sale_id:
@@ -1099,7 +1106,7 @@ def inventory(request):
     search_query = (request.GET.get("q") or "").strip()
     branches, selected_branch, _ = _selected_branch_for_request(request)
     products = _branch_scoped_products(request.user, selected_branch)
-    categories = Category.objects.filter(user=request.user)
+    categories = _branch_scoped_categories(request.user, selected_branch)
     if search_query:
         products = products.filter(
             Q(name__icontains=search_query) |
@@ -1178,18 +1185,10 @@ def add_product(request):
         messages.error(request, "Prices cannot be negative.")
         return redirect('inventory')
 
-    if category_id:
-        category_exists = Category.objects.filter(id=category_id, user=request.user).exists()
-        if not category_exists:
-            messages.error(request, "Selected category is invalid.")
-            return redirect('inventory')
-    elif new_category_name:
-        category, _ = Category.objects.get_or_create(
-            user=request.user,
-            name__iexact=new_category_name,
-            defaults={"name": new_category_name},
-        )
-        category_id = category.id
+    if not branch_id:
+        _, selected_branch, _ = _selected_branch_for_request(request)
+        if selected_branch:
+            branch_id = str(selected_branch.id)
 
     branch = None
     if branch_id:
@@ -1200,6 +1199,20 @@ def add_product(request):
         if not branch:
             messages.error(request, "Selected branch is invalid.")
             return redirect('inventory')
+
+    if category_id:
+        category_exists = _branch_scoped_categories(request.user, branch).filter(id=category_id).exists() if branch else Category.objects.filter(id=category_id, user=request.user).exists()
+        if not category_exists:
+            messages.error(request, "Selected category is invalid.")
+            return redirect('inventory')
+    elif new_category_name:
+        category, _ = Category.objects.get_or_create(
+            user=request.user,
+            branch=branch,
+            name__iexact=new_category_name,
+            defaults={"name": new_category_name, "branch": branch},
+        )
+        category_id = category.id
 
     valid_vat_status = {choice[0] for choice in Product.VAT_STATUS_CHOICES}
     if vat_status not in valid_vat_status:
@@ -1246,15 +1259,30 @@ def add_category(request):
         messages.error(request, "Category name is required.")
         return redirect('inventory')
 
-    if Category.objects.filter(user=request.user, name__iexact=name).exists():
+    _, selected_branch, _ = _selected_branch_for_request(request)
+    branch_id = (request.POST.get("branch_id") or "").strip()
+    branch = selected_branch
+    if branch_id:
+        feature_redirect = _require_feature_or_redirect(request, "multi_branch", "inventory")
+        if feature_redirect:
+            return feature_redirect
+        branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
+        if not branch:
+            messages.error(request, "Selected branch is invalid.")
+            return redirect('inventory')
+
+    if _branch_scoped_categories(request.user, branch).filter(name__iexact=name).exists():
         messages.warning(request, "Category already exists.")
         return redirect('inventory')
 
     Category.objects.create(
         user=request.user,
+        branch=branch,
         name=name
     )
     messages.success(request, "Category added successfully.")
+    if branch:
+        return redirect(f"{reverse('inventory')}?branch={branch.id}")
     return redirect('inventory')
 
 @login_required
@@ -1304,6 +1332,10 @@ def delete_product(request, pk):
 def edit_product(request, pk):
     product = get_object_or_404(Product, pk=pk, user=request.user)
     branch_id = (request.POST.get("branch_id") or "").strip()
+    if not branch_id:
+        _, selected_branch, _ = _selected_branch_for_request(request)
+        if selected_branch:
+            branch_id = str(selected_branch.id)
     branch = None
     if branch_id:
         branch = ShopBranch.objects.filter(user=request.user, id=branch_id, is_active=True).first()
@@ -1325,7 +1357,7 @@ def edit_product(request, pk):
         return redirect('inventory')
 
     category_id = request.POST.get('category') or None
-    if category_id and not Category.objects.filter(id=category_id, user=request.user).exists():
+    if category_id and not (_branch_scoped_categories(request.user, branch).filter(id=category_id).exists() if branch else Category.objects.filter(id=category_id, user=request.user).exists()):
         messages.error(request, "Selected category is invalid.")
         return redirect('inventory')
 
@@ -5135,7 +5167,7 @@ def shopboy_dashboard(request):
     for product in products:
         product.display_stock = _effective_product_stock(product, branch)
         product.display_price = _effective_product_price(product, branch)
-    categories = Category.objects.filter(user=shopboy.user).order_by("name")
+    categories = _branch_scoped_categories(shopboy.user, branch).order_by("name")
     cart = request.session.get("shopboy_cart", {})
     total = sum(
         (Decimal(str(item["price"])) * _cart_quantity(item) for item in cart.values()),

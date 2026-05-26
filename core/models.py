@@ -158,6 +158,7 @@ class User(AbstractUser):
 class Category(models.Model):
     name = models.CharField(max_length=100)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    branch = models.ForeignKey("ShopBranch", on_delete=models.CASCADE, null=True, blank=True, related_name="categories")
 
     def __str__(self):
         return self.name

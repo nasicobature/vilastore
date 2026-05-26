@@ -165,8 +165,12 @@ class BranchSelectionScopeTests(TestCase):
             last_name="Customer",
             phone="08000002002",
         )
+        self.category_a = Category.objects.create(user=self.user, branch=self.branch_a, name="Main Category")
+        self.category_b = Category.objects.create(user=self.user, branch=self.branch_b, name="Second Category")
+        self.overall_category = Category.objects.create(user=self.user, name="Overall Category")
         self.product_a = Product.objects.create(
             user=self.user,
+            category=self.category_a,
             name="Main Branch Product",
             cost_price=Decimal("500.00"),
             selling_price=Decimal("700.00"),
@@ -174,6 +178,7 @@ class BranchSelectionScopeTests(TestCase):
         )
         self.product_b = Product.objects.create(
             user=self.user,
+            category=self.category_b,
             name="Second Branch Product",
             cost_price=Decimal("800.00"),
             selling_price=Decimal("1200.00"),
@@ -230,6 +235,10 @@ class BranchSelectionScopeTests(TestCase):
         self.assertContains(response, "Second Branch Product")
         self.assertNotContains(response, "Main Branch Product")
         self.assertNotContains(response, "Unassigned Product")
+        self.assertEqual(list(response.context["categories"]), [self.category_b])
+        self.assertContains(response, "Second Category")
+        self.assertNotContains(response, "Main Category")
+        self.assertNotContains(response, "Overall Category")
 
     def test_default_branch_does_not_show_unassigned_inventory(self):
         self.client.get(reverse("inventory"), data={"branch": str(self.branch_a.id)})
@@ -252,6 +261,36 @@ class BranchSelectionScopeTests(TestCase):
             product_names,
             ["Main Branch Product", "Second Branch Product", "Unassigned Product"],
         )
+
+    def test_add_product_in_selected_branch_creates_branch_inventory(self):
+        self.client.get(reverse("inventory"), data={"branch": str(self.branch_b.id)})
+
+        response = self.client.post(
+            reverse("add_product"),
+            data={
+                "name": "Branch B New Product",
+                "category": str(self.category_b.id),
+                "cost_price": "100.00",
+                "selling_price": "150.00",
+                "stock": "4",
+                "low_stock_threshold": "2",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        product = Product.objects.get(user=self.user, name="Branch B New Product")
+        self.assertEqual(product.category, self.category_b)
+        inventory = BranchInventory.objects.get(branch=self.branch_b, product=product)
+        self.assertEqual(inventory.stock, Decimal("4.00"))
+
+    def test_add_category_in_selected_branch_stays_in_that_branch(self):
+        self.client.get(reverse("inventory"), data={"branch": str(self.branch_b.id)})
+
+        response = self.client.post(reverse("add_category"), data={"name": "Branch B Only"})
+
+        self.assertEqual(response.status_code, 302)
+        category = Category.objects.get(user=self.user, name="Branch B Only")
+        self.assertEqual(category.branch, self.branch_b)
 
     def test_selected_branch_filters_dashboard_product_counts(self):
         self.client.get(reverse("index"), data={"branch": str(self.branch_b.id)})

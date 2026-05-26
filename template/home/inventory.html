@@ -357,6 +357,10 @@
       </select>
       <input type="hidden" name="new_category_name" id="newProductNewCategory" value="">
       {% if entitlements.multi_branch.allowed %}
+      {% if selected_branch %}
+      <input type="hidden" name="branch_id" value="{{ selected_branch.id }}">
+      <small style="color:var(--muted-foreground);">This product will be saved to {{ selected_branch.name }} only.</small>
+      {% else %}
       <select name="branch_id" class="input">
         <option value="">Apply to overall store</option>
         {% for branch in branches %}
@@ -364,6 +368,7 @@
         {% endfor %}
       </select>
       <small style="color:var(--muted-foreground);">Choose a branch if this stock should belong to one location only.</small>
+      {% endif %}
       {% endif %}
 
       <input type="number" name="cost_price" id="newProductCostPrice" placeholder="Cost Price" class="input" required>
@@ -425,6 +430,10 @@
         {% endfor %}
       </select>
       {% if entitlements.multi_branch.allowed %}
+      {% if selected_branch %}
+      <input type="hidden" name="branch_id" id="editProductBranch" value="{{ selected_branch.id }}">
+      <small style="color:var(--muted-foreground);">This update applies to {{ selected_branch.name }} inventory only.</small>
+      {% else %}
       <select name="branch_id" id="editProductBranch" class="input">
         <option value="">Apply to overall store</option>
         {% for branch in branches %}
@@ -432,6 +441,7 @@
         {% endfor %}
       </select>
       <small style="color:var(--muted-foreground);">When a branch is selected, stock and branch price update for that location.</small>
+      {% endif %}
       {% else %}
       <input type="hidden" name="branch_id" id="editProductBranch" value="">
       {% endif %}
@@ -486,6 +496,9 @@
 
     <form method="POST" action="{% url 'add_category' %}">
       {% csrf_token %}
+      {% if selected_branch %}
+      <input type="hidden" name="branch_id" value="{{ selected_branch.id }}">
+      {% endif %}
       <div class="ai-assistant-panel">
         <div class="ai-assistant-title">
           <i data-lucide="sparkles"></i>

@@ -105,9 +105,9 @@ class CustomerScanCartAdmin(admin.ModelAdmin):
 # =============================
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("name", "user")
+    list_display = ("name", "user", "branch")
     search_fields = ("name",)
-    list_filter = ("user",)
+    list_filter = ("user", "branch")
 
 
 # =============================

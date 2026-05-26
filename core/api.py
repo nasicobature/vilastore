@@ -81,6 +81,13 @@ def _branch_scoped_products(owner, branch, queryset=None):
     return queryset.filter(branch_inventory__branch=branch, branch_inventory__is_active=True).distinct()
 
 
+def _branch_scoped_categories(owner, branch, queryset=None):
+    queryset = queryset if queryset is not None else Category.objects.filter(user=owner)
+    if not branch:
+        return queryset
+    return queryset.filter(branch=branch)
+
+
 def _branch_inventory_for_product(product, branch):
     if not branch:
         return None
@@ -106,6 +113,7 @@ from .views import (
     _is_vat_registered,
     _vat_registration_note,
     _generate_product_code,
+    _sync_global_product_stock,
     _plan_has_feature,
     _feature_upgrade_message,
     _feature_entitlements,
@@ -2057,13 +2065,23 @@ def api_owner_categories(request):
     if not owner:
         return _json_error("Unauthorized.", status=401)
 
+    data = _get_body_data(request) if request.method == "POST" else None
+    branch_id = ((request.GET.get("branch_id") if request.method == "GET" else data.get("branch_id") if data else "") or "").strip()
+    branch = None
+    if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
+
     if request.method == "GET":
-        categories = Category.objects.filter(user=owner).order_by("name")
+        categories = _branch_scoped_categories(owner, branch).order_by("name")
         return _json_success({
             "categories": [_serialize_category(cat) for cat in categories],
         })
 
-    data = _get_body_data(request)
     if data is None:
         return _json_error("Invalid JSON payload.")
 
@@ -2071,10 +2089,10 @@ def api_owner_categories(request):
     if not name:
         return _json_error("Category name is required.")
 
-    if Category.objects.filter(user=owner, name__iexact=name).exists():
+    if _branch_scoped_categories(owner, branch).filter(name__iexact=name).exists():
         return _json_error("Category already exists.", status=409)
 
-    category = Category.objects.create(user=owner, name=name)
+    category = Category.objects.create(user=owner, branch=branch, name=name)
     return _json_success({"category": _serialize_category(category)}, status=201)
 
 
@@ -2087,7 +2105,16 @@ def api_owner_products(request):
 
     if request.method == "GET":
         q = (request.GET.get("q") or "").strip()
-        products = Product.objects.filter(user=owner)
+        branch_id = (request.GET.get("branch_id") or "").strip()
+        branch = None
+        if branch_id:
+            feature_error = _json_feature_required(owner, "multi_branch")
+            if feature_error:
+                return feature_error
+            branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+            if not branch:
+                return _json_error("Branch not found.", status=404)
+        products = _branch_scoped_products(owner, branch)
         if q:
             products = products.filter(
                 Q(name__icontains=q) |
@@ -2105,6 +2132,7 @@ def api_owner_products(request):
 
     name = (data.get("name") or "").strip()
     category_id = data.get("category_id") or None
+    branch_id = (data.get("branch_id") or "").strip()
     code = (data.get("code") or "").strip()
     vat_status = (data.get("vat_status") or Product.VAT_STANDARD).strip()
 
@@ -2133,8 +2161,17 @@ def api_owner_products(request):
         if existing_code:
             return _json_error(f"A product with code {code} already exists.", status=409)
 
+    branch = None
+    if branch_id:
+        feature_error = _json_feature_required(owner, "multi_branch")
+        if feature_error:
+            return feature_error
+        branch = ShopBranch.objects.filter(user=owner, id=branch_id, is_active=True).first()
+        if not branch:
+            return _json_error("Branch not found.", status=404)
+
     if category_id:
-        category_exists = Category.objects.filter(id=category_id, user=owner).exists()
+        category_exists = _branch_scoped_categories(owner, branch).filter(id=category_id).exists() if branch else Category.objects.filter(id=category_id, user=owner).exists()
         if not category_exists:
             return _json_error("Selected category is invalid.")
 
@@ -2158,7 +2195,20 @@ def api_owner_products(request):
         vat_status=vat_status,
         image=request.FILES.get("image"),
     )
-    return _json_success({"product": _serialize_owner_product(request, product)}, status=201)
+    if branch:
+        BranchInventory.objects.update_or_create(
+            branch=branch,
+            product=product,
+            defaults={
+                "stock": stock,
+                "selling_price": selling_price,
+                "is_active": True,
+                "track_separately": True,
+            },
+        )
+        _sync_global_product_stock(product)
+        product._branch_inventory = BranchInventory.objects.filter(branch=branch, product=product).first()
+    return _json_success({"product": _serialize_owner_product(request, product, branch=branch)}, status=201)
 
 
 @csrf_exempt
@@ -2211,7 +2261,7 @@ def api_owner_product_detail(request, pk):
     if "category_id" in data:
         category_id = data.get("category_id") or None
         if category_id:
-            category_exists = Category.objects.filter(id=category_id, user=owner).exists()
+            category_exists = _branch_scoped_categories(owner, branch).filter(id=category_id).exists() if branch else Category.objects.filter(id=category_id, user=owner).exists()
             if not category_exists:
                 return _json_error("Selected category is invalid.")
         product.category_id = category_id
@@ -2841,7 +2891,7 @@ def api_owner_pos(request):
                 Q(category__name__icontains=q)
             )
 
-        categories = Category.objects.filter(user=owner).order_by("name")
+        categories = _branch_scoped_categories(owner, branch).order_by("name")
         cart = _get_owner_cart(token_obj)
         cart_payload = _serialize_owner_cart(request, cart, owner)
 
@@ -5303,7 +5353,7 @@ def api_shopboy_dashboard(request):
             Q(category__name__icontains=q)
         )
 
-    categories = Category.objects.filter(user=shopboy.user).order_by("name")
+    categories = _branch_scoped_categories(shopboy.user, branch).order_by("name")
     product_rows = list(products.select_related("category").order_by("name"))
     if branch:
         inventory_map = {
