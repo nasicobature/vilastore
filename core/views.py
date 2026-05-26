@@ -251,10 +251,7 @@ def _branch_scoped_products(user, branch, queryset=None):
     queryset = queryset if queryset is not None else Product.objects.filter(user=user)
     if not branch:
         return queryset
-    branch_filter = Q(branch_inventory__branch=branch, branch_inventory__is_active=True)
-    if branch.is_default:
-        branch_filter |= Q(branch_inventory__isnull=True)
-    return queryset.filter(branch_filter).distinct()
+    return queryset.filter(branch_inventory__branch=branch, branch_inventory__is_active=True).distinct()
 
 
 def _branch_inventory_for_product(product, branch):

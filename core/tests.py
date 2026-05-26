@@ -179,6 +179,13 @@ class BranchSelectionScopeTests(TestCase):
             selling_price=Decimal("1200.00"),
             stock=Decimal("5.00"),
         )
+        self.unassigned_product = Product.objects.create(
+            user=self.user,
+            name="Unassigned Product",
+            cost_price=Decimal("300.00"),
+            selling_price=Decimal("450.00"),
+            stock=Decimal("7.00"),
+        )
         BranchInventory.objects.create(
             branch=self.branch_a,
             product=self.product_a,
@@ -222,6 +229,29 @@ class BranchSelectionScopeTests(TestCase):
         self.assertEqual(list(response.context["products"]), [self.product_b])
         self.assertContains(response, "Second Branch Product")
         self.assertNotContains(response, "Main Branch Product")
+        self.assertNotContains(response, "Unassigned Product")
+
+    def test_default_branch_does_not_show_unassigned_inventory(self):
+        self.client.get(reverse("inventory"), data={"branch": str(self.branch_a.id)})
+
+        response = self.client.get(reverse("inventory"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_branch"], self.branch_a)
+        self.assertEqual(list(response.context["products"]), [self.product_a])
+        self.assertContains(response, "Main Branch Product")
+        self.assertNotContains(response, "Unassigned Product")
+
+    def test_overall_inventory_still_shows_all_products(self):
+        response = self.client.get(reverse("inventory"), data={"branch": "all"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["selected_branch"])
+        product_names = [product.name for product in response.context["products"]]
+        self.assertEqual(
+            product_names,
+            ["Main Branch Product", "Second Branch Product", "Unassigned Product"],
+        )
 
     def test_selected_branch_filters_dashboard_product_counts(self):
         self.client.get(reverse("index"), data={"branch": str(self.branch_b.id)})
