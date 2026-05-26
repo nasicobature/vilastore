@@ -7,7 +7,7 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib.auth.hashers import check_password, make_password
-from django.db import OperationalError, ProgrammingError, transaction
+from django.db import DatabaseError, OperationalError, ProgrammingError, transaction
 from django.db.migrations.recorder import MigrationRecorder
 from django.db.models import Q, Sum, F, Count
 from django.http import JsonResponse
@@ -3282,9 +3282,6 @@ def api_owner_cart_checkout(request):
     if not cart_rows:
         return _json_error("Cart is empty.", status=400)
 
-    if _sale_amount_migration_missing():
-        return _json_error("Checkout update is not active on the server yet. Please run database migrations and try again.", status=503)
-
     sanitized_cart = {
         str(pid): item
         for pid, item in cart_rows.items()
@@ -3300,109 +3297,113 @@ def api_owner_cart_checkout(request):
     total_profit = Decimal("0.00")
     line_items = []
 
-    with transaction.atomic():
-        products = _branch_scoped_products(
-            owner,
-            branch,
-            Product.objects.select_for_update().filter(user=owner, id__in=product_ids),
-        )
-        product_map = {str(p.id): p for p in products}
-        inventory_map = {}
-        if branch:
-            inventory_map = {
-                item.product_id: item
-                for item in BranchInventory.objects.select_for_update().filter(branch=branch, product__in=products)
-            }
-            for product in products:
-                product._branch_inventory = inventory_map.get(product.id)
-
-        for pid, item in cart_rows.items():
-            product = product_map.get(str(pid))
-            if not product:
-                return _json_error("A cart item no longer exists.", status=409)
-
-            quantity = _cart_quantity_value(item.get("quantity"))
-            if quantity <= 0:
-                continue
-
-            available_stock = _effective_product_stock(product, branch)
-            if available_stock < quantity:
-                return _json_error(f"Not enough stock for {product.name}. Available: {available_stock}.", status=409)
-
-            price = _cart_money_value(item.get("price"), _effective_product_price(product, branch))
-            cost = _cart_money_value(item.get("cost"), product.cost_price)
-            line_total = price * quantity
-            line_profit = (price - cost) * quantity
-            total_amount += line_total
-            total_profit += line_profit
-
-            line_items.append({
-                "product": product,
-                "quantity": quantity,
-                "price": price,
-                "profit": line_profit,
-                "line_total": line_total,
-            })
-
-        if not line_items:
-            return _json_error("Cart is empty.", status=400)
-
-        vat_registered = _vat_registered_for_sale(owner, timezone.now(), total_amount)
-        vat_total = Decimal("0.00")
-        for row in line_items:
-            vat_status, vat_applicable, vat_rate, vat_amount = _calculate_item_vat(
-                row["product"],
-                row["line_total"],
-                vat_registered,
+    try:
+        with transaction.atomic():
+            products = _branch_scoped_products(
+                owner,
+                branch,
+                Product.objects.select_for_update().filter(user=owner, id__in=product_ids),
             )
-            row["vat_status"] = vat_status
-            row["vat_applicable"] = vat_applicable
-            row["vat_rate"] = vat_rate
-            row["vat_amount"] = vat_amount
-            vat_total += vat_amount
+            product_map = {str(p.id): p for p in products}
+            inventory_map = {}
+            if branch:
+                inventory_map = {
+                    item.product_id: item
+                    for item in BranchInventory.objects.select_for_update().filter(branch=branch, product__in=products)
+                }
+                for product in products:
+                    product._branch_inventory = inventory_map.get(product.id)
 
-        amount_paid = (
-            total_amount.quantize(Decimal("0.01"))
-            if payment_status == Sale.PAYMENT_PAID
-            else min(initial_payment, total_amount).quantize(Decimal("0.01"))
-        )
+            for pid, item in cart_rows.items():
+                product = product_map.get(str(pid))
+                if not product:
+                    return _json_error("A cart item no longer exists.", status=409)
 
-        sale = Sale.objects.create(
-            user=owner,
-            branch=branch,
-            sales_channel=Sale.CHANNEL_OWNER_POS,
-            customer_name=customer_name,
-            total_amount=total_amount.quantize(Decimal("0.01")),
-            total_profit=total_profit.quantize(Decimal("0.01")),
-            vat_total=vat_total.quantize(Decimal("0.01")),
-            amount_paid=amount_paid,
-            payment_status=(
-                Sale.PAYMENT_PAID
+                quantity = _cart_quantity_value(item.get("quantity"))
+                if quantity <= 0:
+                    continue
+
+                available_stock = _effective_product_stock(product, branch)
+                if available_stock < quantity:
+                    return _json_error(f"Not enough stock for {product.name}. Available: {available_stock}.", status=409)
+
+                price = _cart_money_value(item.get("price"), _effective_product_price(product, branch))
+                cost = _cart_money_value(item.get("cost"), product.cost_price)
+                line_total = price * quantity
+                line_profit = (price - cost) * quantity
+                total_amount += line_total
+                total_profit += line_profit
+
+                line_items.append({
+                    "product": product,
+                    "quantity": quantity,
+                    "price": price,
+                    "profit": line_profit,
+                    "line_total": line_total,
+                })
+
+            if not line_items:
+                return _json_error("Cart is empty.", status=400)
+
+            vat_registered = _vat_registered_for_sale(owner, timezone.now(), total_amount)
+            vat_total = Decimal("0.00")
+            for row in line_items:
+                vat_status, vat_applicable, vat_rate, vat_amount = _calculate_item_vat(
+                    row["product"],
+                    row["line_total"],
+                    vat_registered,
+                )
+                row["vat_status"] = vat_status
+                row["vat_applicable"] = vat_applicable
+                row["vat_rate"] = vat_rate
+                row["vat_amount"] = vat_amount
+                vat_total += vat_amount
+
+            amount_paid = (
+                total_amount.quantize(Decimal("0.01"))
                 if payment_status == Sale.PAYMENT_PAID
-                else _derive_payment_status(total_amount, amount_paid)
-            ),
-        )
-
-        for row in line_items:
-            SaleItem.objects.create(
-                sale=sale,
-                product=row["product"],
-                quantity=row["quantity"],
-                price=row["price"].quantize(Decimal("0.01")),
-                profit=row["profit"].quantize(Decimal("0.01")),
-                vat_status=row["vat_status"],
-                vat_rate=row["vat_rate"],
-                vat_amount=row["vat_amount"],
-                vat_applicable=row["vat_applicable"],
+                else min(initial_payment, total_amount).quantize(Decimal("0.01"))
             )
-            inventory = inventory_map.get(row["product"].id) if branch else None
-            if inventory and inventory.track_separately:
-                inventory.stock = max(Decimal("0.00"), inventory.stock - row["quantity"])
-                inventory.save(update_fields=["stock", "updated_at"])
-                _sync_global_product_stock(row["product"])
-            else:
-                row["product"].stock -= row["quantity"]
-                row["product"].save(update_fields=["stock"])
+
+            sale = Sale.objects.create(
+                user=owner,
+                branch=branch,
+                sales_channel=Sale.CHANNEL_OWNER_POS,
+                customer_name=customer_name,
+                total_amount=total_amount.quantize(Decimal("0.01")),
+                total_profit=total_profit.quantize(Decimal("0.01")),
+                vat_total=vat_total.quantize(Decimal("0.01")),
+                amount_paid=amount_paid,
+                payment_status=(
+                    Sale.PAYMENT_PAID
+                    if payment_status == Sale.PAYMENT_PAID
+                    else _derive_payment_status(total_amount, amount_paid)
+                ),
+            )
+
+            for row in line_items:
+                SaleItem.objects.create(
+                    sale=sale,
+                    product=row["product"],
+                    quantity=row["quantity"],
+                    price=row["price"].quantize(Decimal("0.01")),
+                    profit=row["profit"].quantize(Decimal("0.01")),
+                    vat_status=row["vat_status"],
+                    vat_rate=row["vat_rate"],
+                    vat_amount=row["vat_amount"],
+                    vat_applicable=row["vat_applicable"],
+                )
+                inventory = inventory_map.get(row["product"].id) if branch else None
+                if inventory and inventory.track_separately:
+                    inventory.stock = max(Decimal("0.00"), inventory.stock - row["quantity"])
+                    inventory.save(update_fields=["stock", "updated_at"])
+                    _sync_global_product_stock(row["product"])
+                else:
+                    row["product"].stock -= row["quantity"]
+                    row["product"].save(update_fields=["stock"])
+    except DatabaseError:
+        logger.exception("Mobile owner checkout failed", extra={"owner_id": owner.id, "branch_id": branch.id if branch else None})
+        return _json_error("Sale could not be completed. Please check server logs.", status=500)
 
     _set_owner_cart_data(cart, branch, {})
     cart.last_sale_id = sale.id
@@ -5688,9 +5689,6 @@ def api_shopboy_cart_checkout(request):
     cart = _get_shopboy_cart(token_obj)
     if not cart.data:
         return _json_error("Cart is empty.", status=400)
-
-    if _sale_amount_migration_missing():
-        return _json_error("Checkout update is not active on the server yet. Please run database migrations and try again.", status=503)
 
     product_ids = [int(pid) for pid in cart.data.keys() if str(pid).isdigit()]
     total_amount = Decimal("0.00")

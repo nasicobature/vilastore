@@ -1062,10 +1062,6 @@ def checkout(request):
     total_profit = Decimal("0.00")
     line_items = []
 
-    if _sale_amount_migration_missing():
-        messages.error(request, "Checkout update is not active on the server yet. Please run database migrations and try again.")
-        return redirect('product')
-
     try:
         with transaction.atomic():
             products = _branch_scoped_products(
@@ -1173,7 +1169,7 @@ def checkout(request):
                     row["product"].save(update_fields=["stock"])
     except DatabaseError:
         logger.exception("Owner checkout failed", extra={"user_id": request.user.id, "branch_id": selected_branch.id if selected_branch else None})
-        messages.error(request, "Sale could not be completed because the server database is not ready. Please run migrations and try again.")
+        messages.error(request, "Sale could not be completed. Please check Render logs for 'Owner checkout failed' and send the error line.")
         return redirect('product')
 
     request.session['last_sale_id'] = sale.id
@@ -5469,10 +5465,6 @@ def shopboy_checkout(request):
     total_profit = Decimal("0.00")
     line_items = []
 
-    if _sale_amount_migration_missing():
-        messages.error(request, "Checkout update is not active on the server yet. Please run database migrations and try again.")
-        return redirect("shopboy_dashboard")
-
     try:
         with transaction.atomic():
             branch = shopboy.branch
@@ -5553,7 +5545,7 @@ def shopboy_checkout(request):
                     row["product"].save(update_fields=["stock"])
     except DatabaseError:
         logger.exception("Staff checkout failed", extra={"shopboy_id": shopboy.id, "user_id": shopboy.user_id})
-        messages.error(request, "Sale could not be completed because the server database is not ready. Please run migrations and try again.")
+        messages.error(request, "Sale could not be completed. Please check Render logs for 'Staff checkout failed' and send the error line.")
         return redirect("shopboy_dashboard")
 
     request.session["shopboy_cart"] = {}
