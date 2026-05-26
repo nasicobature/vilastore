@@ -9,6 +9,7 @@
   const EXPENSES_KEY = "vilastore_web_expenses_v1";
   const ACTIVITIES_KEY = "vilastore_web_activities_v1";
   const OFFLINE_AUTH_KEY = "vilastore_web_offline_auth_v1";
+  const PENDING_LOGIN_KEY = "vilastore_web_pending_login_v1";
   const LAST_SYNC_KEY = "vilastore_web_last_sync_v1";
   const LAST_SYNC_ERROR_KEY = "vilastore_web_last_sync_error_v1";
   const OFFLINE_RECEIPTS_KEY = "vilastore_web_offline_receipts_v1";
@@ -57,6 +58,15 @@
 
   function nowId(prefix) {
     return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function simpleHash(value) {
+    const text = String(value || "");
+    let hash = 5381;
+    for (let index = 0; index < text.length; index += 1) {
+      hash = (hash * 33) ^ text.charCodeAt(index);
+    }
+    return (hash >>> 0).toString(16);
   }
 
   function escapeHtml(value) {
@@ -124,6 +134,45 @@
     return String(value || "").trim().toLowerCase();
   }
 
+  function loginIdentityFromFields(fields, actionPath) {
+    if (actionPath.includes("/shopboy/login")) {
+      return [
+        "staff",
+        normalizeIdentity(fieldValue(fields, "shop_code", "")),
+        normalizeIdentity(fieldValue(fields, "username", "")),
+      ].join(":");
+    }
+    return [
+      "owner",
+      normalizeIdentity(fieldValue(fields, "email", "")),
+      normalizeIdentity(fieldValue(fields, "account_type", "")),
+    ].join(":");
+  }
+
+  function loginCredentialHash(fields, actionPath) {
+    return simpleHash(`${loginIdentityFromFields(fields, actionPath)}:${fieldValue(fields, "password", "")}`);
+  }
+
+  function rememberPendingLogin(form, fields) {
+    const actionPath = actionPathFromUrl(form.action || window.location.href);
+    if (!actionPath.includes("/login/")) return;
+    write(PENDING_LOGIN_KEY, {
+      login_identity: loginIdentityFromFields(fields, actionPath),
+      credential_hash: loginCredentialHash(fields, actionPath),
+      display_identity:
+        fieldValue(fields, "email", "") ||
+        fieldValue(fields, "username", "") ||
+        fieldValue(fields, "shop_code", ""),
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  function pendingLoginIsFresh(pending) {
+    if (!pending?.created_at) return false;
+    const createdAt = new Date(pending.created_at).getTime();
+    return Number.isFinite(createdAt) && Date.now() - createdAt <= 15 * 60 * 1000;
+  }
+
   function rememberOfflineSession() {
     const userMarker = document.querySelector('meta[name="vilastore-offline-user"]');
     const emailMarker = document.querySelector('meta[name="vilastore-offline-email"]');
@@ -132,12 +181,33 @@
       emailMarker ? emailMarker.getAttribute("content") : "",
     ].filter(Boolean);
     if (!identities.length) return;
+    const existing = getOfflineSession();
+    const pending = read(PENDING_LOGIN_KEY, null);
+    const pendingIsFresh = pendingLoginIsFresh(pending);
+    const canPreserveCredential =
+      existing &&
+      (existing.identities || [existing.identity]).some((identity) =>
+        identities.map(normalizeIdentity).includes(normalizeIdentity(identity))
+      );
+    const credential = pendingIsFresh
+      ? {
+          login_identity: pending.login_identity,
+          credential_hash: pending.credential_hash,
+        }
+      : canPreserveCredential
+      ? {
+          login_identity: existing.login_identity,
+          credential_hash: existing.credential_hash,
+        }
+      : {};
     write(OFFLINE_AUTH_KEY, {
       identity: identities[0],
       identities,
+      ...credential,
       saved_at: new Date().toISOString(),
       last_path: window.location.pathname || "/index/",
     });
+    localStorage.removeItem(PENDING_LOGIN_KEY);
   }
 
   function getOfflineSession() {
@@ -163,10 +233,29 @@
       notify("Offline login is available only after this browser has logged in successfully online once.", true);
       return true;
     }
-    const enteredIdentity = normalizeIdentity(fieldValue(fields, "email", ""));
+    const actionPath = actionPathFromUrl(form.action || window.location.href);
+    const enteredIdentity =
+      fieldValue(fields, "email", "") ||
+      fieldValue(fields, "username", "") ||
+      fieldValue(fields, "shop_code", "");
     const savedIdentities = (session.identities || [session.identity]).map(normalizeIdentity).filter(Boolean);
-    if (enteredIdentity && !savedIdentities.includes(enteredIdentity)) {
+    const normalizedEntered = normalizeIdentity(enteredIdentity);
+    const enteredLooksSaved =
+      savedIdentities.includes(normalizedEntered) ||
+      savedIdentities.some((identity) => identity.includes(normalizedEntered) || normalizedEntered.includes(identity));
+    if (normalizedEntered && !enteredLooksSaved) {
       notify(`Offline login is saved for ${session.identity}. Connect to internet to login with another account.`, true);
+      return true;
+    }
+    if (!session.credential_hash || !session.login_identity) {
+      notify("Connect once and login online again to activate stronger offline login on this browser.", true);
+      return true;
+    }
+    if (
+      session.login_identity !== loginIdentityFromFields(fields, actionPath) ||
+      session.credential_hash !== loginCredentialHash(fields, actionPath)
+    ) {
+      notify("Offline login failed. Use the same username and password you used during your last successful online login.", true);
       return true;
     }
     notify("Offline login accepted on this trusted browser. Opening your saved dashboard...");
@@ -1111,7 +1200,11 @@
       const form = event.target;
       if (!(form instanceof HTMLFormElement)) return;
       if (form.dataset.offlineIgnore === "true") return;
-      if (navigator.onLine) return;
+      if (navigator.onLine) {
+        const { fields } = formFields(form, event.submitter);
+        rememberPendingLogin(form, fields);
+        return;
+      }
       if (handleOfflineForm(form, event.submitter)) {
         event.preventDefault();
       }
@@ -1169,5 +1262,8 @@
   });
   window.addEventListener("online", flushQueue);
   window.addEventListener("online", warmOfflinePages);
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) flushQueue();
+  });
   window.addEventListener("offline", updateStatus);
 })();
