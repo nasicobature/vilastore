@@ -259,6 +259,12 @@
     }
   }
 
+  function browserDirectHelp() {
+    if (!window.isSecureContext) return "Open VilaStore using HTTPS, Chrome, or Edge before browser-direct printer connection can work.";
+    if (!("serial" in navigator) && !("bluetooth" in navigator)) return "This browser cannot connect directly to printers. Use Chrome or Edge on desktop/Android.";
+    return "Try Auto Connect Printer, then choose your thermal printer in the browser popup.";
+  }
+
   async function printReceipt(receipt) {
     if (await printBrowserDirect(receipt)) return { ok: true, direct: true };
     return bridgeFetch("/print", {
@@ -358,6 +364,7 @@
     const scan = panel.querySelector("[data-printer-scan]");
     const disconnect = panel.querySelector("[data-printer-disconnect]");
     const test = panel.querySelector("[data-printer-test]");
+    const browserAutoConnect = panel.querySelector("[data-browser-auto-connect]");
     const browserSerialConnect = panel.querySelector("[data-browser-serial-connect]");
     const browserBluetoothConnect = panel.querySelector("[data-browser-bluetooth-connect]");
     const browserSerialBaud = panel.querySelector("[data-browser-serial-baud]");
@@ -365,6 +372,7 @@
     const comInput = panel.querySelector("[data-printer-com]");
     const settings = readSettings();
     updateConnectionUi(panel, settings.connection);
+    setText(panel, "[data-printer-status]", browserDirectHelp());
 
     const scanPrinters = async () => {
       if (!select) return;
@@ -383,29 +391,85 @@
       }
     };
 
-    scan?.addEventListener("click", scanPrinters);
-    browserSerialConnect?.addEventListener("click", async () => {
+    const connectBrowserSerial = async () => {
       if (!("serial" in navigator)) {
-        setText(panel, "[data-printer-status]", "Browser Serial is not supported. Use Chrome or Edge on desktop.");
-        return;
+        throw new Error("Browser Serial is not supported. Use Chrome or Edge on desktop.");
       }
-      browserSerialConnect.disabled = true;
       setText(panel, "[data-printer-status]", "Choose the USB/Bluetooth serial printer in the browser popup...");
+      browserSerialPort = await navigator.serial.requestPort();
+      const serialBaud = Number(browserSerialBaud?.value || 9600);
+      saveSettings({
+        ...readSettings(),
+        browserMode: "serial",
+        serialBaud,
+        connection: {
+          connected: true,
+          status: "Connected",
+          target: { label: `Browser Serial/USB (${serialBaud})`, id: "browser:serial" },
+        },
+      });
+      updateConnectionUi(panel, readSettings().connection);
+      setText(panel, "[data-printer-status]", "Browser Serial/USB connected. Click Test Print.");
+      return true;
+    };
+
+    const connectBrowserBluetooth = async () => {
+      if (!("bluetooth" in navigator)) {
+        throw new Error("Browser Bluetooth is not supported. Use Chrome or Edge on desktop/Android.");
+      }
+      setText(panel, "[data-printer-status]", "Choose the Bluetooth printer in the browser popup...");
+      browserBluetoothDevice = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: BLE_SERVICES,
+      });
+      const server = await browserBluetoothDevice.gatt.connect();
+      browserBluetoothCharacteristic = await findBluetoothCharacteristic(server);
+      saveSettings({
+        ...readSettings(),
+        browserMode: "bluetooth",
+        connection: {
+          connected: true,
+          status: "Connected",
+          target: { label: `${browserBluetoothDevice.name || "Browser Bluetooth printer"}`, id: "browser:bluetooth" },
+        },
+      });
+      updateConnectionUi(panel, readSettings().connection);
+      setText(panel, "[data-printer-status]", "Browser Bluetooth connected. Click Test Print.");
+      return true;
+    };
+
+    scan?.addEventListener("click", scanPrinters);
+    browserAutoConnect?.addEventListener("click", async () => {
+      browserAutoConnect.disabled = true;
+      setText(panel, "[data-printer-status]", browserDirectHelp());
       try {
-        browserSerialPort = await navigator.serial.requestPort();
-        const serialBaud = Number(browserSerialBaud?.value || 9600);
-        saveSettings({
-          ...readSettings(),
-          browserMode: "serial",
-          serialBaud,
-          connection: {
-            connected: true,
-            status: "Connected",
-            target: { label: `Browser Serial/USB (${serialBaud})`, id: "browser:serial" },
-          },
-        });
-        updateConnectionUi(panel, readSettings().connection);
-        setText(panel, "[data-printer-status]", "Browser Serial/USB connected. Click Test Print.");
+        if ("serial" in navigator) {
+          await connectBrowserSerial();
+          return;
+        }
+        if ("bluetooth" in navigator) {
+          await connectBrowserBluetooth();
+          return;
+        }
+        setText(panel, "[data-printer-status]", browserDirectHelp());
+      } catch (serialError) {
+        try {
+          if ("bluetooth" in navigator) {
+            await connectBrowserBluetooth();
+            return;
+          }
+          setText(panel, "[data-printer-status]", serialError.message || browserDirectHelp());
+        } catch (bluetoothError) {
+          setText(panel, "[data-printer-status]", bluetoothError.message || serialError.message || browserDirectHelp());
+        }
+      } finally {
+        browserAutoConnect.disabled = false;
+      }
+    });
+    browserSerialConnect?.addEventListener("click", async () => {
+      browserSerialConnect.disabled = true;
+      try {
+        await connectBrowserSerial();
       } catch (error) {
         setText(panel, "[data-printer-status]", error.message || "Serial connection was cancelled.");
       } finally {
@@ -413,30 +477,9 @@
       }
     });
     browserBluetoothConnect?.addEventListener("click", async () => {
-      if (!("bluetooth" in navigator)) {
-        setText(panel, "[data-printer-status]", "Browser Bluetooth is not supported. Use Chrome or Edge on desktop/Android.");
-        return;
-      }
       browserBluetoothConnect.disabled = true;
-      setText(panel, "[data-printer-status]", "Choose the Bluetooth printer in the browser popup...");
       try {
-        browserBluetoothDevice = await navigator.bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: BLE_SERVICES,
-        });
-        const server = await browserBluetoothDevice.gatt.connect();
-        browserBluetoothCharacteristic = await findBluetoothCharacteristic(server);
-        saveSettings({
-          ...readSettings(),
-          browserMode: "bluetooth",
-          connection: {
-            connected: true,
-            status: "Connected",
-            target: { label: `${browserBluetoothDevice.name || "Browser Bluetooth printer"}`, id: "browser:bluetooth" },
-          },
-        });
-        updateConnectionUi(panel, readSettings().connection);
-        setText(panel, "[data-printer-status]", "Browser Bluetooth connected. Click Test Print.");
+        await connectBrowserBluetooth();
       } catch (error) {
         setText(panel, "[data-printer-status]", error.message || "Bluetooth connection was cancelled.");
       } finally {
@@ -579,7 +622,7 @@
     });
 
     loadStatus(panel).catch(() => {
-      setText(panel, "[data-printer-status]", BRIDGE_OFFLINE_MESSAGE);
+      setText(panel, "[data-printer-status]", browserDirectHelp());
     });
   }
 
