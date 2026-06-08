@@ -30,6 +30,16 @@
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings || {}));
   }
 
+  function withTimeout(promise, ms, message) {
+    let timer = null;
+    const timeout = new Promise((_, reject) => {
+      timer = window.setTimeout(() => reject(new Error(message)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => {
+      if (timer) window.clearTimeout(timer);
+    });
+  }
+
   function cleanText(value) {
     return String(value || "")
       .replace(/\r|\n/g, " ")
@@ -407,6 +417,13 @@
       showPrinterStatus(panel, "Choose the USB/Bluetooth serial printer in the browser popup...");
       browserSerialPort = await navigator.serial.requestPort();
       const serialBaud = Number(browserSerialBaud?.value || 9600);
+      showPrinterStatus(panel, `Opening serial printer at ${serialBaud} baud...`);
+      await withTimeout(
+        browserSerialPort.open({ baudRate: serialBaud }),
+        12000,
+        "Serial printer did not open. Try another baud rate, reconnect the printer, or choose a different device."
+      );
+      await browserSerialPort.close().catch(() => {});
       saveSettings({
         ...readSettings(),
         browserMode: "serial",
@@ -431,8 +448,18 @@
         acceptAllDevices: true,
         optionalServices: BLE_SERVICES,
       });
-      const server = await browserBluetoothDevice.gatt.connect();
-      browserBluetoothCharacteristic = await findBluetoothCharacteristic(server);
+      showPrinterStatus(panel, "Connecting to Bluetooth printer service...");
+      const server = await withTimeout(
+        browserBluetoothDevice.gatt.connect(),
+        12000,
+        "Bluetooth connection timed out. If this is a classic Bluetooth printer, use Connect Browser Serial/USB or Connect COM instead."
+      );
+      showPrinterStatus(panel, "Finding writable ESC/POS Bluetooth service...");
+      browserBluetoothCharacteristic = await withTimeout(
+        findBluetoothCharacteristic(server),
+        12000,
+        "No writable BLE ESC/POS service was found. This printer likely uses classic Bluetooth; try Connect Browser Serial/USB or Connect COM."
+      );
       saveSettings({
         ...readSettings(),
         browserMode: "bluetooth",
