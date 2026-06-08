@@ -1,6 +1,7 @@
 (function () {
-  const BRIDGE_URL = "http://127.0.0.1:8787";
+  const BRIDGE_URLS = ["http://127.0.0.1:8787", "http://localhost:8787"];
   const SETTINGS_KEY = "vilastore_thermal_printer_settings_v2";
+  const BRIDGE_OFFLINE_MESSAGE = "VilaPrintBridge is not running or the browser blocked it. Start start-vila-print-bridge.bat, keep its window open, then try again.";
 
   function readSettings() {
     try {
@@ -15,18 +16,29 @@
   }
 
   async function bridgeFetch(path, options = {}) {
-    const response = await fetch(`${BRIDGE_URL}${path}`, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload.ok === false) {
-      throw new Error(payload.error || "Printer bridge request failed.");
+    let lastError = null;
+    for (const bridgeUrl of BRIDGE_URLS) {
+      try {
+        const response = await fetch(`${bridgeUrl}${path}`, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.ok === false) {
+          throw new Error(payload.error || "Printer bridge request failed.");
+        }
+        return payload;
+      } catch (error) {
+        lastError = error;
+      }
     }
-    return payload;
+    if (lastError && lastError.message && lastError.message !== "Failed to fetch") {
+      throw lastError;
+    }
+    throw new Error(BRIDGE_OFFLINE_MESSAGE);
   }
 
   function getReceiptPayload() {
@@ -127,7 +139,7 @@
         await printReceipt(receipt);
         if (status) status.textContent = "Receipt sent to connected printer.";
       } catch (error) {
-        if (status) status.textContent = `${error.message} Use Browser Print or reconnect the printer.`;
+        if (status) status.textContent = error.message || BRIDGE_OFFLINE_MESSAGE;
       } finally {
         button.disabled = false;
       }
@@ -159,7 +171,7 @@
         saveSettings({ connection: payload.connection || null });
         setText(panel, "[data-printer-status]", payload.printers?.length ? "Select a printer, then connect." : "No available printers found.");
       } catch (error) {
-        setText(panel, "[data-printer-status]", "Start VilaPrintBridge, then scan again.");
+        setText(panel, "[data-printer-status]", error.message || BRIDGE_OFFLINE_MESSAGE);
       } finally {
         scan.disabled = false;
       }
@@ -222,7 +234,7 @@
     });
 
     loadStatus(panel).catch(() => {
-      setText(panel, "[data-printer-status]", "Start VilaPrintBridge to connect printers.");
+      setText(panel, "[data-printer-status]", BRIDGE_OFFLINE_MESSAGE);
     });
   }
 
