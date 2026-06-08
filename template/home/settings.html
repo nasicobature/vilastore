@@ -952,12 +952,26 @@
                   <input type="text" class="input" value="58mm ESC/POS thermal receipt" disabled>
                 </div>
                 <div class="settings-note" style="grid-column:1/-1;">
+                  <i data-lucide="zap"></i>
+                  <span>Driver unavailable? Use direct ESC/POS connection below: Wi-Fi printer IP or paired Bluetooth COM port.</span>
+                </div>
+                <div class="form-group">
+                  <label>Wi-Fi printer IP</label>
+                  <input type="text" class="input" data-printer-ip placeholder="Example: 192.168.1.50">
+                </div>
+                <div class="form-group">
+                  <label>Bluetooth COM port</label>
+                  <input type="text" class="input" data-printer-com placeholder="Example: COM3">
+                </div>
+                <div class="settings-note" style="grid-column:1/-1;">
                   <i data-lucide="printer"></i>
                   <span data-printer-status>Start VilaPrintBridge, then scan for Windows, paired Bluetooth, and Wi-Fi printers.</span>
                 </div>
                 <div class="settings-section-actions" style="grid-column:1/-1;">
                   <button type="button" class="btn btn-outline" data-printer-scan><i data-lucide="search"></i> Scan Printers</button>
                   <button type="button" class="btn btn-primary" data-printer-connect><i data-lucide="plug"></i> Connect Printer</button>
+                  <button type="button" class="btn btn-outline" data-printer-connect-ip><i data-lucide="wifi"></i> Connect IP</button>
+                  <button type="button" class="btn btn-outline" data-printer-connect-com><i data-lucide="bluetooth"></i> Connect COM</button>
                   <button type="button" class="btn btn-outline" data-printer-test><i data-lucide="printer-check"></i> Test Print</button>
                   <button type="button" class="btn btn-ghost text-destructive" data-printer-disconnect><i data-lucide="unlink"></i> Disconnect</button>
                 </div>

@@ -154,9 +154,13 @@
     if (!panel) return;
     const select = panel.querySelector("[data-printer-select]");
     const connect = panel.querySelector("[data-printer-connect]");
+    const connectIp = panel.querySelector("[data-printer-connect-ip]");
+    const connectCom = panel.querySelector("[data-printer-connect-com]");
     const scan = panel.querySelector("[data-printer-scan]");
     const disconnect = panel.querySelector("[data-printer-disconnect]");
     const test = panel.querySelector("[data-printer-test]");
+    const ipInput = panel.querySelector("[data-printer-ip]");
+    const comInput = panel.querySelector("[data-printer-com]");
     const settings = readSettings();
     updateConnectionUi(panel, settings.connection);
 
@@ -203,6 +207,71 @@
         setText(panel, "[data-printer-status]", error.message);
       } finally {
         connect.disabled = false;
+      }
+    });
+    connectIp?.addEventListener("click", async () => {
+      const host = (ipInput?.value || "").trim();
+      if (!host) {
+        setText(panel, "[data-printer-status]", "Enter the Wi-Fi printer IP address first.");
+        return;
+      }
+      connectIp.disabled = true;
+      setText(panel, "[data-printer-status]", "Connecting directly to Wi-Fi ESC/POS printer...");
+      const label = `${host}:9100 (Wi-Fi ESC/POS)`;
+      try {
+        const payload = await bridgeFetch("/connect", {
+          method: "POST",
+          body: JSON.stringify({
+            target: {
+              id: `network:${host}:9100`,
+              kind: "network",
+              host,
+              port: 9100,
+              label,
+              name: host,
+            },
+            label,
+          }),
+        });
+        updateConnectionUi(panel, payload.connection);
+        saveSettings({ connection: payload.connection || null });
+        setText(panel, "[data-printer-status]", "Wi-Fi printer connected. Send a test print.");
+      } catch (error) {
+        setText(panel, "[data-printer-status]", error.message || "Could not connect to Wi-Fi printer.");
+      } finally {
+        connectIp.disabled = false;
+      }
+    });
+    connectCom?.addEventListener("click", async () => {
+      const port = (comInput?.value || "").trim().toUpperCase();
+      if (!/^COM\d+$/.test(port)) {
+        setText(panel, "[data-printer-status]", "Enter a Bluetooth COM port like COM3.");
+        return;
+      }
+      connectCom.disabled = true;
+      setText(panel, "[data-printer-status]", "Connecting directly to Bluetooth COM printer...");
+      const label = `${port} (Bluetooth ESC/POS)`;
+      try {
+        const payload = await bridgeFetch("/connect", {
+          method: "POST",
+          body: JSON.stringify({
+            target: {
+              id: `serial:${port}`,
+              kind: "serial",
+              port,
+              label,
+              name: port,
+            },
+            label,
+          }),
+        });
+        updateConnectionUi(panel, payload.connection);
+        saveSettings({ connection: payload.connection || null });
+        setText(panel, "[data-printer-status]", "Bluetooth COM printer connected. Send a test print.");
+      } catch (error) {
+        setText(panel, "[data-printer-status]", error.message || "Could not connect to Bluetooth COM printer.");
+      } finally {
+        connectCom.disabled = false;
       }
     });
     disconnect?.addEventListener("click", async () => {
