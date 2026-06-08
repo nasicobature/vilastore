@@ -955,6 +955,24 @@
                   <i data-lucide="zap"></i>
                   <span>Driver unavailable? Use direct ESC/POS connection below: Wi-Fi printer IP or paired Bluetooth COM port.</span>
                 </div>
+                <div class="settings-note" style="grid-column:1/-1;">
+                  <i data-lucide="radio"></i>
+                  <span>For Chrome or Edge, try browser-direct printing first. It can connect to USB serial, Bluetooth serial, or BLE thermal printers without a Windows printer driver.</span>
+                </div>
+                <div class="form-group">
+                  <label>Serial baud rate</label>
+                  <select class="input" data-browser-serial-baud>
+                    <option value="9600">9600</option>
+                    <option value="19200">19200</option>
+                    <option value="38400">38400</option>
+                    <option value="57600">57600</option>
+                    <option value="115200">115200</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Browser direct mode</label>
+                  <input type="text" class="input" value="Chrome / Edge only" disabled>
+                </div>
                 <div class="form-group">
                   <label>Wi-Fi printer IP</label>
                   <input type="text" class="input" data-printer-ip placeholder="Example: 192.168.1.50">
@@ -968,6 +986,8 @@
                   <span data-printer-status>Start VilaPrintBridge, then scan for Windows, paired Bluetooth, and Wi-Fi printers.</span>
                 </div>
                 <div class="settings-section-actions" style="grid-column:1/-1;">
+                  <button type="button" class="btn btn-primary" data-browser-serial-connect><i data-lucide="usb"></i> Connect Browser Serial/USB</button>
+                  <button type="button" class="btn btn-primary" data-browser-bluetooth-connect><i data-lucide="bluetooth-connected"></i> Connect Browser Bluetooth</button>
                   <button type="button" class="btn btn-outline" data-printer-scan><i data-lucide="search"></i> Scan Printers</button>
                   <button type="button" class="btn btn-primary" data-printer-connect><i data-lucide="plug"></i> Connect Printer</button>
                   <button type="button" class="btn btn-outline" data-printer-connect-ip><i data-lucide="wifi"></i> Connect IP</button>

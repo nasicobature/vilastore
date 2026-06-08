@@ -2,6 +2,21 @@
   const BRIDGE_URLS = ["http://127.0.0.1:8787", "http://localhost:8787"];
   const SETTINGS_KEY = "vilastore_thermal_printer_settings_v2";
   const BRIDGE_OFFLINE_MESSAGE = "VilaPrintBridge is not running or the browser blocked it. Start start-vila-print-bridge.bat, keep its window open, then try again.";
+  const LINE_WIDTH = 32;
+  const BLE_SERVICES = [
+    "0000ff00-0000-1000-8000-00805f9b34fb",
+    "000018f0-0000-1000-8000-00805f9b34fb",
+    "49535343-fe7d-4ae5-8fa9-9fafd205e455",
+  ];
+  const BLE_CHARACTERISTICS = [
+    "0000ff01-0000-1000-8000-00805f9b34fb",
+    "0000ff02-0000-1000-8000-00805f9b34fb",
+    "00002af1-0000-1000-8000-00805f9b34fb",
+    "49535343-8841-43f4-a8d4-ecbe34729bb3",
+  ];
+  let browserSerialPort = null;
+  let browserBluetoothDevice = null;
+  let browserBluetoothCharacteristic = null;
 
   function readSettings() {
     try {
@@ -13,6 +28,177 @@
 
   function saveSettings(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings || {}));
+  }
+
+  function cleanText(value) {
+    return String(value || "")
+      .replace(/\r|\n/g, " ")
+      .replace(/₦/g, "NGN ")
+      .replace(/[–—]/g, "-")
+      .replace(/•/g, "*")
+      .trim();
+  }
+
+  function fit(text, width, align = "left") {
+    let value = cleanText(text);
+    if (value.length > width) value = `${value.slice(0, Math.max(0, width - 1))}.`;
+    if (align === "right") return value.padStart(width, " ");
+    if (align === "center") {
+      const left = Math.floor((width - value.length) / 2);
+      return `${" ".repeat(Math.max(0, left))}${value}`.padEnd(width, " ");
+    }
+    return value.padEnd(width, " ");
+  }
+
+  function wrap(text, width) {
+    const words = cleanText(text).split(/\s+/).filter(Boolean);
+    const lines = [];
+    let current = "";
+    words.forEach((word) => {
+      const candidate = current ? `${current} ${word}` : word;
+      if (candidate.length <= width) {
+        current = candidate;
+      } else {
+        if (current) lines.push(current);
+        while (word.length > width) {
+          lines.push(word.slice(0, width));
+          word = word.slice(width);
+        }
+        current = word;
+      }
+    });
+    if (current) lines.push(current);
+    return lines.length ? lines : [""];
+  }
+
+  function money(value, currency = "NGN") {
+    const number = Number(value || 0);
+    if (Number.isFinite(number)) return `${currency} ${number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currency} ${cleanText(value)}`;
+  }
+
+  function row(left, right, width = LINE_WIDTH) {
+    const cleanLeft = cleanText(left);
+    const cleanRight = cleanText(right);
+    const spaces = Math.max(1, width - cleanLeft.length - cleanRight.length);
+    return `${cleanLeft.slice(0, Math.max(0, width - cleanRight.length - 1))}${" ".repeat(spaces)}${cleanRight}`;
+  }
+
+  function asciiBytes(text) {
+    return Array.from(cleanText(text), (char) => {
+      const code = char.charCodeAt(0);
+      return code > 127 ? 63 : code;
+    });
+  }
+
+  function receiptToEscpos(receipt, test = false) {
+    const currency = receipt.currency || "NGN";
+    const bytes = [];
+    const push = (...items) => bytes.push(...items);
+    const text = (value) => push(...asciiBytes(value));
+    push(0x1b, 0x40, 0x1b, 0x74, 0x00, 0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01);
+    text(`${fit(receipt.shop_name || "VilaStore", LINE_WIDTH, "center")}\n`);
+    push(0x1b, 0x45, 0x00);
+    ["address", "phone"].forEach((field) => {
+      if (receipt[field]) wrap(receipt[field], LINE_WIDTH).forEach((line) => text(`${fit(line, LINE_WIDTH, "center")}\n`));
+    });
+    push(0x1b, 0x61, 0x00);
+    text(`${"-".repeat(LINE_WIDTH)}\n`);
+    text(`${row("Receipt:", receipt.receipt_no || "TEST")}\n`);
+    text(`${row("Date:", receipt.date || "Test print")}\n`);
+    if (receipt.handled_by) text(`${row("By:", receipt.handled_by)}\n`);
+    if (receipt.customer) text(`${row("Customer:", receipt.customer)}\n`);
+    text(`${"-".repeat(LINE_WIDTH)}\n`);
+    text(`${fit("ITEM", 16)}${fit("QTY", 4, "right")}${fit("AMOUNT", 12, "right")}\n`);
+    text(`${"-".repeat(LINE_WIDTH)}\n`);
+    const items = receipt.items?.length ? receipt.items : test ? [{ name: "Printer test", quantity: "1", total: "0.00" }] : [];
+    items.forEach((item) => {
+      const lines = wrap(item.name || "Item", 16);
+      text(`${fit(lines[0], 16)}${fit(item.quantity || "1", 4, "right")}${fit(money(item.total, currency), 12, "right")}\n`);
+      lines.slice(1).forEach((line) => text(`${fit(line, LINE_WIDTH)}\n`));
+    });
+    text(`${"-".repeat(LINE_WIDTH)}\n`);
+    push(0x1b, 0x45, 0x01);
+    text(`${row("TOTAL", money(receipt.total, currency))}\n`);
+    push(0x1b, 0x45, 0x00);
+    if (receipt.amount_paid) text(`${row("Paid", money(receipt.amount_paid, currency))}\n`);
+    if (receipt.balance) text(`${row("Balance", money(receipt.balance, currency))}\n`);
+    text(`${"-".repeat(LINE_WIDTH)}\n`);
+    push(0x1b, 0x61, 0x01);
+    text("Thank you for shopping\nVilaStore\n\n\n");
+    push(0x1d, 0x56, 0x42, 0x00);
+    return new Uint8Array(bytes);
+  }
+
+  async function writeSerialBytes(bytes, baudRate = 9600) {
+    if (!("serial" in navigator)) throw new Error("Browser Serial is not supported. Use Chrome or Edge on desktop.");
+    if (!browserSerialPort) {
+      const ports = await navigator.serial.getPorts();
+      browserSerialPort = ports[0] || null;
+    }
+    if (!browserSerialPort) throw new Error("Connect Browser Serial/USB in Settings first.");
+    if (!browserSerialPort.writable) {
+      await browserSerialPort.open({ baudRate });
+    }
+    const writer = browserSerialPort.writable.getWriter();
+    try {
+      await writer.write(bytes);
+    } finally {
+      writer.releaseLock();
+    }
+  }
+
+  async function findBluetoothCharacteristic(server) {
+    for (const serviceUuid of BLE_SERVICES) {
+      try {
+        const service = await server.getPrimaryService(serviceUuid);
+        for (const characteristicUuid of BLE_CHARACTERISTICS) {
+          try {
+            const characteristic = await service.getCharacteristic(characteristicUuid);
+            if (characteristic.properties.write || characteristic.properties.writeWithoutResponse) return characteristic;
+          } catch (error) {}
+        }
+        const characteristics = await service.getCharacteristics();
+        const writable = characteristics.find((item) => item.properties.write || item.properties.writeWithoutResponse);
+        if (writable) return writable;
+      } catch (error) {}
+    }
+    throw new Error("Bluetooth printer connected, but no writable ESC/POS service was found.");
+  }
+
+  async function writeBluetoothBytes(bytes) {
+    if (!("bluetooth" in navigator)) throw new Error("Browser Bluetooth is not supported. Use Chrome or Edge on desktop/Android.");
+    if (!browserBluetoothDevice && navigator.bluetooth.getDevices) {
+      const devices = await navigator.bluetooth.getDevices();
+      browserBluetoothDevice = devices[0] || null;
+    }
+    if (!browserBluetoothDevice) throw new Error("Connect Browser Bluetooth in Settings first.");
+    if (!browserBluetoothDevice.gatt.connected || !browserBluetoothCharacteristic) {
+      const server = await browserBluetoothDevice.gatt.connect();
+      browserBluetoothCharacteristic = await findBluetoothCharacteristic(server);
+    }
+    for (let index = 0; index < bytes.length; index += 20) {
+      const chunk = bytes.slice(index, index + 20);
+      if (browserBluetoothCharacteristic.writeValueWithoutResponse) {
+        await browserBluetoothCharacteristic.writeValueWithoutResponse(chunk);
+      } else {
+        await browserBluetoothCharacteristic.writeValue(chunk);
+      }
+    }
+  }
+
+  async function printBrowserDirect(receipt) {
+    const settings = readSettings();
+    const bytes = receiptToEscpos(receipt);
+    if (settings.browserMode === "serial") {
+      await writeSerialBytes(bytes, Number(settings.serialBaud || 9600));
+      return true;
+    }
+    if (settings.browserMode === "bluetooth") {
+      await writeBluetoothBytes(bytes);
+      return true;
+    }
+    return false;
   }
 
   async function bridgeFetch(path, options = {}) {
@@ -74,6 +260,7 @@
   }
 
   async function printReceipt(receipt) {
+    if (await printBrowserDirect(receipt)) return { ok: true, direct: true };
     return bridgeFetch("/print", {
       method: "POST",
       body: JSON.stringify({ receipt, paper_width: "58mm" }),
@@ -81,6 +268,18 @@
   }
 
   async function testPrint() {
+    const receipt = {
+      shop_name: document.body.dataset.shopName || "VilaStore",
+      address: document.body.dataset.shopAddress || "",
+      receipt_no: "TEST",
+      date: "Test print",
+      items: [{ name: "Printer test", quantity: "1", total: "0.00" }],
+      total: "0.00",
+      amount_paid: "0.00",
+      balance: "0.00",
+      currency: "NGN",
+    };
+    if (await printBrowserDirect(receipt)) return { ok: true, direct: true };
     return bridgeFetch("/test-print", {
       method: "POST",
       body: JSON.stringify({
@@ -159,6 +358,9 @@
     const scan = panel.querySelector("[data-printer-scan]");
     const disconnect = panel.querySelector("[data-printer-disconnect]");
     const test = panel.querySelector("[data-printer-test]");
+    const browserSerialConnect = panel.querySelector("[data-browser-serial-connect]");
+    const browserBluetoothConnect = panel.querySelector("[data-browser-bluetooth-connect]");
+    const browserSerialBaud = panel.querySelector("[data-browser-serial-baud]");
     const ipInput = panel.querySelector("[data-printer-ip]");
     const comInput = panel.querySelector("[data-printer-com]");
     const settings = readSettings();
@@ -182,6 +384,65 @@
     };
 
     scan?.addEventListener("click", scanPrinters);
+    browserSerialConnect?.addEventListener("click", async () => {
+      if (!("serial" in navigator)) {
+        setText(panel, "[data-printer-status]", "Browser Serial is not supported. Use Chrome or Edge on desktop.");
+        return;
+      }
+      browserSerialConnect.disabled = true;
+      setText(panel, "[data-printer-status]", "Choose the USB/Bluetooth serial printer in the browser popup...");
+      try {
+        browserSerialPort = await navigator.serial.requestPort();
+        const serialBaud = Number(browserSerialBaud?.value || 9600);
+        saveSettings({
+          ...readSettings(),
+          browserMode: "serial",
+          serialBaud,
+          connection: {
+            connected: true,
+            status: "Connected",
+            target: { label: `Browser Serial/USB (${serialBaud})`, id: "browser:serial" },
+          },
+        });
+        updateConnectionUi(panel, readSettings().connection);
+        setText(panel, "[data-printer-status]", "Browser Serial/USB connected. Click Test Print.");
+      } catch (error) {
+        setText(panel, "[data-printer-status]", error.message || "Serial connection was cancelled.");
+      } finally {
+        browserSerialConnect.disabled = false;
+      }
+    });
+    browserBluetoothConnect?.addEventListener("click", async () => {
+      if (!("bluetooth" in navigator)) {
+        setText(panel, "[data-printer-status]", "Browser Bluetooth is not supported. Use Chrome or Edge on desktop/Android.");
+        return;
+      }
+      browserBluetoothConnect.disabled = true;
+      setText(panel, "[data-printer-status]", "Choose the Bluetooth printer in the browser popup...");
+      try {
+        browserBluetoothDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: BLE_SERVICES,
+        });
+        const server = await browserBluetoothDevice.gatt.connect();
+        browserBluetoothCharacteristic = await findBluetoothCharacteristic(server);
+        saveSettings({
+          ...readSettings(),
+          browserMode: "bluetooth",
+          connection: {
+            connected: true,
+            status: "Connected",
+            target: { label: `${browserBluetoothDevice.name || "Browser Bluetooth printer"}`, id: "browser:bluetooth" },
+          },
+        });
+        updateConnectionUi(panel, readSettings().connection);
+        setText(panel, "[data-printer-status]", "Browser Bluetooth connected. Click Test Print.");
+      } catch (error) {
+        setText(panel, "[data-printer-status]", error.message || "Bluetooth connection was cancelled.");
+      } finally {
+        browserBluetoothConnect.disabled = false;
+      }
+    });
     connect?.addEventListener("click", async () => {
       if (!select?.value) {
         setText(panel, "[data-printer-status]", "Select a printer first.");
@@ -201,7 +462,7 @@
           }),
         });
         updateConnectionUi(panel, payload.connection);
-        saveSettings({ connection: payload.connection || null });
+        saveSettings({ connection: payload.connection || null, browserMode: "" });
         setText(panel, "[data-printer-status]", "Printer connected and saved.");
       } catch (error) {
         setText(panel, "[data-printer-status]", error.message);
@@ -234,7 +495,7 @@
           }),
         });
         updateConnectionUi(panel, payload.connection);
-        saveSettings({ connection: payload.connection || null });
+        saveSettings({ connection: payload.connection || null, browserMode: "" });
         setText(panel, "[data-printer-status]", "Wi-Fi printer connected. Send a test print.");
       } catch (error) {
         setText(panel, "[data-printer-status]", error.message || "Could not connect to Wi-Fi printer.");
@@ -266,7 +527,7 @@
           }),
         });
         updateConnectionUi(panel, payload.connection);
-        saveSettings({ connection: payload.connection || null });
+        saveSettings({ connection: payload.connection || null, browserMode: "" });
         setText(panel, "[data-printer-status]", "Bluetooth COM printer connected. Send a test print.");
       } catch (error) {
         setText(panel, "[data-printer-status]", error.message || "Could not connect to Bluetooth COM printer.");
@@ -278,12 +539,27 @@
       disconnect.disabled = true;
       setText(panel, "[data-printer-status]", "Disconnecting printer...");
       try {
+        const settings = readSettings();
+        if (settings.browserMode === "serial" && browserSerialPort?.readable) {
+          await browserSerialPort.close().catch(() => {});
+        }
+        if (settings.browserMode === "bluetooth" && browserBluetoothDevice?.gatt?.connected) {
+          browserBluetoothDevice.gatt.disconnect();
+        }
+        browserSerialPort = null;
+        browserBluetoothDevice = null;
+        browserBluetoothCharacteristic = null;
         const payload = await bridgeFetch("/disconnect", { method: "POST", body: "{}" });
         updateConnectionUi(panel, payload.connection);
-        saveSettings({ connection: payload.connection || null });
+        saveSettings({ connection: payload.connection || null, browserMode: "" });
         setText(panel, "[data-printer-status]", "Printer disconnected.");
       } catch (error) {
-        setText(panel, "[data-printer-status]", error.message);
+        browserSerialPort = null;
+        browserBluetoothDevice = null;
+        browserBluetoothCharacteristic = null;
+        saveSettings({ connection: null, browserMode: "" });
+        updateConnectionUi(panel, null);
+        setText(panel, "[data-printer-status]", "Printer disconnected locally.");
       } finally {
         disconnect.disabled = false;
       }
