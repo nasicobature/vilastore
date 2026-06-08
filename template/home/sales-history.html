@@ -115,6 +115,13 @@
         </form>
       </div>
     </header>
+    {% if messages %}
+    <section style="margin-bottom: 1rem;">
+      {% for message in messages %}
+        <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
+      {% endfor %}
+    </section>
+    {% endif %}
 
     <!-- SUMMARY CARDS -->
     <div class="stats-grid" style="margin-bottom: 1.5rem;">
@@ -168,7 +175,7 @@
             <th>Balance</th>
             <th>Total Profit</th>
             <th>VAT</th>
-            <th>Receipt</th>
+            <th>Actions</th>
           </tr>
         </thead>
 
@@ -215,10 +222,20 @@
                 {{ item.product.name }}: {{ item.vat_display }}<br>
               {% endfor %}
             </td>
-            <td data-label="Receipt">
+            <td data-label="Actions">
               <a class="btn btn-primary btn-sm" href="{% url 'sale_receipt' sale.id %}" target="_blank" rel="noopener">
                 <i data-lucide="receipt"></i> Print Slip
               </a>
+              <form method="POST" action="{% url 'delete_sale' sale.id %}" style="display:inline;" onsubmit="return confirm('Delete this sale history record? This cannot be undone.')">
+                {% csrf_token %}
+                {% if selected_branch %}<input type="hidden" name="branch" value="{{ selected_branch.id }}">{% endif %}
+                {% if start_date %}<input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}">{% endif %}
+                {% if end_date %}<input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}">{% endif %}
+                {% if search_query %}<input type="hidden" name="q" value="{{ search_query }}">{% endif %}
+                <button type="submit" class="btn btn-danger btn-sm">
+                  <i data-lucide="trash-2"></i> Delete
+                </button>
+              </form>
             </td>
           </tr>
         {% empty %}

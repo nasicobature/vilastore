@@ -62,28 +62,37 @@
     <div class="products-layout">
       <div class="products-section">
         <div class="filters-section">
-          <div class="search-box">
+          <form method="GET" action="{% url 'shopboy_dashboard' %}" class="search-box" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
             <i data-lucide="search"></i>
-            <input type="text" class="input" placeholder="Search products..." id="productSearch" oninput="filterProducts()">
-          </div>
+            <input type="text" name="q" class="input" placeholder="Search products by name, code, or category" id="productSearch" value="{{ search_query }}" oninput="filterProducts()" style="flex:1;min-width:220px;">
+            {% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
+            <button type="submit" class="btn btn-outline">Search</button>
+            {% if search_query %}
+              <a href="{% url 'shopboy_dashboard' %}{% if selected_category %}?category={{ selected_category }}{% endif %}" class="btn btn-ghost">Clear</a>
+            {% endif %}
+          </form>
         </div>
 
         <div class="card" style="padding:1rem;margin-bottom:1rem;">
           <h4 style="margin:0 0 0.75rem 0;">Categories</h4>
-          <div class="filter-list">
-            <a href="{% url 'shopboy_dashboard' %}" class="filter-btn {% if not selected_category %}active{% endif %}">All</a>
+          <form method="GET" action="{% url 'shopboy_dashboard' %}" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            {% if search_query %}<input type="hidden" name="q" value="{{ search_query }}">{% endif %}
+            <input type="search" class="input" data-category-filter="shopboyCategoryFilter" placeholder="Search categories" style="flex:1;min-width:180px;">
+            <select name="category" id="shopboyCategoryFilter" class="input" style="flex:1;min-width:220px;">
+              <option value="">All categories</option>
             {% for category in categories %}
-              <a href="{% url 'shopboy_dashboard' %}?category={{ category.id }}" class="filter-btn {% if selected_category == category.id|stringformat:'s' %}active{% endif %}">
-                {{ category.name }}
-              </a>
+              <option value="{{ category.id }}" {% if selected_category == category.id|stringformat:'s' %}selected{% endif %}>{{ category.name }}</option>
             {% endfor %}
-          </div>
+            </select>
+            <button type="submit" class="btn btn-outline">Filter</button>
+          </form>
         </div>
 
         <div class="products-grid" id="productsGrid">
           {% for product in products %}
           <div class="product-card product-item"
             data-name="{{ product.name|lower }}"
+            data-search="{{ product.name|lower }} {{ product.code|default:''|lower }} {{ product.category.name|default:''|lower }}"
             data-offline-product
             data-product-id="{{ product.id }}"
             data-product-name="{{ product.name|escape }}"
@@ -223,6 +232,17 @@
       let scanning = false;
       let lookupTimer;
 
+      document.querySelectorAll('[data-category-filter]').forEach(function (input) {
+        const select = document.getElementById(input.dataset.categoryFilter);
+        if (!select) return;
+        input.addEventListener('input', function () {
+          const q = input.value.trim().toLowerCase();
+          Array.from(select.options).forEach(function (option, index) {
+            option.hidden = index > 0 && q && !option.textContent.toLowerCase().includes(q);
+          });
+        });
+      });
+
       function setPreview(text) {
         if (!preview) return;
         preview.textContent = text || '';
@@ -326,8 +346,8 @@
     function filterProducts() {
       const q = (document.getElementById('productSearch').value || '').toLowerCase().trim();
       document.querySelectorAll('.product-item').forEach(function (item) {
-        const name = item.getAttribute('data-name') || '';
-        item.style.display = name.includes(q) ? '' : 'none';
+        const text = item.getAttribute('data-search') || item.getAttribute('data-name') || '';
+        item.style.display = text.includes(q) ? '' : 'none';
       });
     }
   </script>

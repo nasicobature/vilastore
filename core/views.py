@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.conf import settings as django_settings
 import requests
 import os
+from urllib.parse import quote as urlquote
 from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -1381,6 +1382,18 @@ def add_category(request):
 
 @login_required
 @require_POST
+def delete_category(request, pk):
+    category = get_object_or_404(Category, pk=pk, user=request.user)
+    branch_id = category.branch_id
+    category_name = category.name
+    category.delete()
+    messages.success(request, f"Category '{category_name}' deleted. Products in it are now uncategorized.")
+    if branch_id:
+        return redirect(f"{reverse('inventory')}?branch={branch_id}")
+    return redirect('inventory')
+
+@login_required
+@require_POST
 def adjust_stock(request, pk):
     product = get_object_or_404(Product, pk=pk, user=request.user)
     branch_id = (request.POST.get("branch") or "").strip()
@@ -1572,8 +1585,10 @@ def sales_history(request):
     if search_query:
         search_filters = (
             Q(items__product__name__icontains=search_query) |
+            Q(items__product__code__icontains=search_query) |
             Q(handled_by_shopboy__full_name__icontains=search_query) |
             Q(handled_by_shopboy__username__icontains=search_query) |
+            Q(customer_name__icontains=search_query) |
             Q(customer__first_name__icontains=search_query) |
             Q(customer__last_name__icontains=search_query) |
             Q(sales_channel__icontains=search_query)
@@ -1625,6 +1640,24 @@ def sales_history(request):
     }
 
     return render(request, 'home/sales-history.html', context)
+
+
+@login_required
+@require_POST
+def delete_sale(request, sale_id):
+    sale = get_object_or_404(Sale, id=sale_id, user=request.user)
+    sale.delete()
+    messages.success(request, "Sale history record deleted.")
+
+    params = []
+    for key in ("branch", "start_date", "end_date", "q"):
+        value = (request.POST.get(key) or "").strip()
+        if value:
+            params.append(f"{key}={urlquote(value)}")
+    redirect_url = reverse("sales-history")
+    if params:
+        redirect_url = f"{redirect_url}?{'&'.join(params)}"
+    return redirect(redirect_url)
 
 
 @login_required
@@ -5253,10 +5286,17 @@ def shopboy_dashboard(request):
 
     shopboy = get_object_or_404(ShopBoy.objects.select_related("user"), id=shopboy_id, is_active=True)
     category_id = (request.GET.get("category") or "").strip()
+    search_query = (request.GET.get("q") or "").strip()
     branch = shopboy.branch
     products = _branch_scoped_products(shopboy.user, branch).order_by("name")
     if category_id:
         products = products.filter(category_id=category_id)
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(code__icontains=search_query) |
+            Q(category__name__icontains=search_query)
+        )
     products = _attach_branch_inventory(products, branch)
     for product in products:
         product.display_stock = _effective_product_stock(product, branch)
@@ -5282,6 +5322,7 @@ def shopboy_dashboard(request):
         "products": products,
         "categories": categories,
         "selected_category": category_id,
+        "search_query": search_query,
         "cart": cart,
         "cart_total": total.quantize(Decimal("0.01")),
         "last_sale": last_sale,

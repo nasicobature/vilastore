@@ -92,16 +92,23 @@
           </div>
         </form>
 
-        <div class="filters-section" style="margin-bottom:1rem;">
-          <div class="filter-list">
-            <a href="{% url 'product' %}?{% if selected_branch %}branch={{ selected_branch.id }}{% endif %}" class="filter-btn {% if not selected_category %}active{% endif %}">All</a>
-            {% for category in categories %}
-              <a href="{% url 'product' %}?{% if selected_branch %}branch={{ selected_branch.id }}&{% endif %}category={{ category.id }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="filter-btn {% if selected_category == category.id|stringformat:'s' %}active{% endif %}">
-                {{ category.name }}
-              </a>
-            {% endfor %}
+        <form method="GET" action="{% url 'product' %}" style="margin-bottom:1rem;">
+          {% if selected_branch %}<input type="hidden" name="branch" value="{{ selected_branch.id }}">{% endif %}
+          {% if search_query %}<input type="hidden" name="q" value="{{ search_query }}">{% endif %}
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <input type="search" class="input" data-category-filter="productCategoryFilter" placeholder="Search categories" style="flex:1;min-width:200px;">
+            <select name="category" id="productCategoryFilter" class="input" style="flex:1;min-width:220px;">
+              <option value="">All categories</option>
+              {% for category in categories %}
+                <option value="{{ category.id }}" {% if selected_category == category.id|stringformat:'s' %}selected{% endif %}>{{ category.name }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline">Filter Category</button>
+            {% if selected_category %}
+              <a href="{% url 'product' %}?{% if selected_branch %}branch={{ selected_branch.id }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-ghost">Clear Category</a>
+            {% endif %}
           </div>
-        </div>
+        </form>
 
         <div class="products-grid">
           {% for product in products %}
@@ -278,6 +285,17 @@ document.addEventListener('DOMContentLoaded', function () {
     let scanStream = null;
     let scanning = false;
     let lookupTimer;
+
+    document.querySelectorAll('[data-category-filter]').forEach(function (input) {
+      const select = document.getElementById(input.dataset.categoryFilter);
+      if (!select) return;
+      input.addEventListener('input', function () {
+        const q = input.value.trim().toLowerCase();
+        Array.from(select.options).forEach(function (option, index) {
+          option.hidden = index > 0 && q && !option.textContent.toLowerCase().includes(q);
+        });
+      });
+    });
 
     const paymentSelect = document.getElementById('paymentStatusSelect');
     const loanBlock = document.getElementById('loanPaymentBlock');

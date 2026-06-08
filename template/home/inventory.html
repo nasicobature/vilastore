@@ -349,6 +349,7 @@
       </div>
       {% endif %}
 
+      <input type="search" class="input" data-category-filter="newProductCategory" placeholder="Search categories">
       <select name="category" id="newProductCategory" class="input">
         <option value="">No category</option>
         {% for category in categories %}
@@ -423,6 +424,7 @@
       <input type="hidden" name="code" id="editProductCode" value="">
       {% endif %}
 
+      <input type="search" class="input" data-category-filter="editProductCategory" placeholder="Search categories">
       <select name="category" id="editProductCategory" class="input">
         <option value="">No category</option>
         {% for category in categories %}
@@ -523,6 +525,24 @@
         <button type="submit" class="btn btn-primary">Save Category</button>
       </div>
     </form>
+
+    <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px;">
+      <h4 style="margin-bottom:8px;">Existing Categories</h4>
+      <input type="search" class="input" id="categoryManageSearch" placeholder="Search categories to delete" style="margin-bottom:10px;">
+      <div id="categoryManageList" style="display:grid;gap:8px;max-height:260px;overflow:auto;">
+        {% for category in categories %}
+          <div class="category-manage-row" data-category-name="{{ category.name|lower }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:8px;padding:8px 10px;">
+            <span>{{ category.name }}</span>
+            <form method="POST" action="{% url 'delete_category' category.id %}" onsubmit="return confirm('Delete category {{ category.name }}? Products in it will become uncategorized.')" style="margin:0;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </div>
+        {% empty %}
+          <p style="color:var(--muted-foreground);">No categories yet</p>
+        {% endfor %}
+      </div>
+    </div>
 
   </div>
 </div>
@@ -716,6 +736,29 @@ function applyProductAi() {
 document.addEventListener('DOMContentLoaded', function () {
     lucide.createIcons();
     setupTablePagination('inventoryTable');
+
+    document.querySelectorAll('[data-category-filter]').forEach(function (input) {
+        const select = document.getElementById(input.dataset.categoryFilter);
+        if (!select) {
+            return;
+        }
+        input.addEventListener('input', function () {
+            const q = input.value.trim().toLowerCase();
+            Array.from(select.options).forEach(function (option, index) {
+                option.hidden = index > 0 && q && !option.textContent.toLowerCase().includes(q);
+            });
+        });
+    });
+
+    const categoryManageSearch = document.getElementById('categoryManageSearch');
+    if (categoryManageSearch) {
+        categoryManageSearch.addEventListener('input', function () {
+            const q = categoryManageSearch.value.trim().toLowerCase();
+            document.querySelectorAll('.category-manage-row').forEach(function (row) {
+                row.style.display = !q || row.dataset.categoryName.includes(q) ? 'flex' : 'none';
+            });
+        });
+    }
 
     const editImageInput = document.getElementById('editProductImageInput');
     if (editImageInput) {

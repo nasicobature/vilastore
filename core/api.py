@@ -2174,7 +2174,11 @@ def api_owner_categories(request):
             return _json_error("Branch not found.", status=404)
 
     if request.method == "GET":
-        categories = _branch_scoped_categories(owner, branch).order_by("name")
+        q = (request.GET.get("q") or "").strip()
+        categories = _branch_scoped_categories(owner, branch)
+        if q:
+            categories = categories.filter(name__icontains=q)
+        categories = categories.order_by("name")
         return _json_success({
             "categories": [_serialize_category(cat) for cat in categories],
         })
@@ -2191,6 +2195,18 @@ def api_owner_categories(request):
 
     category = Category.objects.create(user=owner, branch=branch, name=name)
     return _json_success({"category": _serialize_category(category)}, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE", "POST"])
+def api_owner_category_detail(request, category_id):
+    owner = _require_owner(request)
+    if not owner:
+        return _json_error("Unauthorized.", status=401)
+
+    category = get_object_or_404(Category, id=category_id, user=owner)
+    category.delete()
+    return _json_success({"deleted": True})
 
 
 @csrf_exempt
@@ -2218,6 +2234,8 @@ def api_owner_products(request):
                 Q(code__icontains=q) |
                 Q(category__name__icontains=q)
             )
+            if q.isdigit():
+                products = products | _branch_scoped_products(owner, branch).filter(id=int(q))
         products = products.select_related("category").order_by("name")
         return _json_success({
             "products": [_serialize_owner_product(request, product) for product in products],
@@ -3529,11 +3547,19 @@ def api_owner_product_labels(request):
 
 
 @csrf_exempt
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "DELETE"])
 def api_owner_sales_history(request):
     owner = _require_owner(request)
     if not owner:
         return _json_error("Unauthorized.", status=401)
+
+    if request.method == "DELETE":
+        sale_id = (request.GET.get("sale_id") or "").strip()
+        if not sale_id:
+            return _json_error("Sale ID is required.")
+        sale = get_object_or_404(Sale, id=sale_id, user=owner)
+        sale.delete()
+        return _json_success({"deleted": True})
 
     start_date = parse_date((request.GET.get("start_date") or "").strip()) if request.GET.get("start_date") else None
     end_date = parse_date((request.GET.get("end_date") or "").strip()) if request.GET.get("end_date") else None
@@ -3544,7 +3570,7 @@ def api_owner_sales_history(request):
 
     sales = (
         Sale.objects.filter(user=owner)
-        .select_related("handled_by_shopboy", "branch")
+        .select_related("handled_by_shopboy", "branch", "customer")
         .prefetch_related("items__product")
         .order_by("-created_at")
     )
@@ -3555,13 +3581,19 @@ def api_owner_sales_history(request):
     if end_date:
         sales = sales.filter(created_at__date__lte=end_date)
     if q:
-        sales = sales.filter(
+        search_filters = (
             Q(items__product__name__icontains=q) |
+            Q(items__product__code__icontains=q) |
             Q(handled_by_shopboy__full_name__icontains=q) |
             Q(handled_by_shopboy__username__icontains=q) |
-            Q(sales_channel__icontains=q) |
-            Q(id__iexact=q)
-        ).distinct()
+            Q(customer_name__icontains=q) |
+            Q(customer__first_name__icontains=q) |
+            Q(customer__last_name__icontains=q) |
+            Q(sales_channel__icontains=q)
+        )
+        if q.isdigit():
+            search_filters = search_filters | Q(id=int(q))
+        sales = sales.filter(search_filters).distinct()
 
     total_sales = sales.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
     total_profit = sales.aggregate(total=Sum("total_profit"))["total"] or Decimal("0.00")
@@ -3632,7 +3664,7 @@ def api_owner_sales_history(request):
 
 
 @csrf_exempt
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "DELETE"])
 def api_owner_sale_detail(request, sale_id):
     owner = _require_owner(request)
     if not owner:
@@ -3643,6 +3675,10 @@ def api_owner_sale_detail(request, sale_id):
         id=sale_id,
         user=owner,
     )
+
+    if request.method == "DELETE":
+        sale.delete()
+        return _json_success({"deleted": True})
 
     return _json_success({
         "sale": _serialize_sale(sale),
