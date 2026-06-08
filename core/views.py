@@ -1729,10 +1729,13 @@ def sale_receipt(request, sale_id):
             "total": line_total,
         })
 
+    receipt_payload = _sale_receipt_payload(request.user, sale, line_items)
+
     return render(request, "home/sale-receipt.html", {
         "sale": sale,
         "line_items": line_items,
         "business": request.user,
+        "receipt_payload": receipt_payload,
     })
 
 
@@ -1757,11 +1760,44 @@ def shopboy_sale_receipt(request, sale_id):
             "total": line_total,
         })
 
+    receipt_payload = _sale_receipt_payload(shopboy.user, sale, line_items)
+
     return render(request, "home/sale-receipt.html", {
         "sale": sale,
         "line_items": line_items,
         "business": shopboy.user,
+        "receipt_payload": receipt_payload,
     })
+
+
+def _sale_receipt_payload(business, sale, line_items):
+    created_at = timezone.localtime(sale.created_at)
+    customer_name = sale.display_customer_name
+    handled_by = sale.handled_by_shopboy.full_name if sale.handled_by_shopboy else "Owner"
+    return {
+        "shop_name": business.business_name or business.username or "VilaStore",
+        "address": business.address or "",
+        "phone": business.phone or "",
+        "receipt_no": str(sale.id),
+        "date": created_at.strftime("%b %d, %Y %H:%M"),
+        "channel": sale.get_sales_channel_display(),
+        "status": sale.get_payment_status_display(),
+        "handled_by": handled_by,
+        "customer": customer_name,
+        "items": [
+            {
+                "name": item["name"],
+                "quantity": str(item["quantity"]),
+                "price": f"{Decimal(item['price'] or Decimal('0.00')):.2f}",
+                "total": f"{Decimal(item['total'] or Decimal('0.00')):.2f}",
+            }
+            for item in line_items
+        ],
+        "amount_paid": f"{Decimal(sale.amount_paid or Decimal('0.00')):.2f}",
+        "balance": f"{Decimal(sale.remaining_balance or Decimal('0.00')):.2f}",
+        "total": f"{Decimal(sale.total_amount or Decimal('0.00')):.2f}",
+        "currency": "NGN",
+    }
 
 
 

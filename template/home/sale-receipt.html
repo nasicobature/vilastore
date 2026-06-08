@@ -17,12 +17,12 @@
       color: #111827;
     }
     .receipt {
-      max-width: 360px;
+      max-width: 58mm;
       margin: 2rem auto;
       background: #ffffff;
       border: 1px solid #e5e7eb;
       border-radius: 12px;
-      padding: 1.5rem;
+      padding: 4mm;
       box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
     }
     .receipt-header {
@@ -40,9 +40,9 @@
     }
     .receipt-meta {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 0.5rem 1rem;
-      font-size: 0.8rem;
+      font-size: 0.72rem;
       color: #374151;
       margin-bottom: 1rem;
     }
@@ -54,7 +54,8 @@
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.85rem;
+      font-size: 0.72rem;
+      table-layout: fixed;
     }
     .items-table th {
       text-align: left;
@@ -63,12 +64,29 @@
       color: #6b7280;
       font-size: 0.7rem;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0;
     }
     .items-table td {
       padding: 0.45rem 0;
       border-bottom: 1px dashed #e5e7eb;
       vertical-align: top;
+      word-break: break-word;
+    }
+    .items-table th:nth-child(1),
+    .items-table td:nth-child(1) {
+      width: 44%;
+    }
+    .items-table th:nth-child(2),
+    .items-table td:nth-child(2) {
+      width: 13%;
+      text-align: center;
+    }
+    .items-table th:nth-child(3),
+    .items-table td:nth-child(3),
+    .items-table th:nth-child(4),
+    .items-table td:nth-child(4) {
+      width: 21.5%;
+      text-align: right;
     }
     .items-table td:last-child,
     .items-table th:last-child {
@@ -98,23 +116,33 @@
       border-color: #16a34a;
       color: #ffffff;
     }
+    .print-status {
+      text-align: center;
+      min-height: 1.2rem;
+      margin: -0.9rem 0 1.1rem;
+      color: #6b7280;
+      font-size: 0.75rem;
+    }
     @media print {
       @page {
-        size: 80mm auto;
-        margin: 4mm;
+        size: 58mm auto;
+        margin: 2mm;
       }
       body {
         background: #ffffff;
-        width: 80mm;
+        width: 58mm;
       }
       .actions {
+        display: none;
+      }
+      .print-status {
         display: none;
       }
       .receipt {
         box-shadow: none;
         border: none;
         margin: 0;
-        max-width: 80mm;
+        max-width: 58mm;
         border-radius: 0;
         padding: 0;
       }
@@ -126,12 +154,16 @@
       }
     }
   </style>
+  <script src="{% static 'js/thermal-printer.js' %}" defer></script>
 </head>
 <body>
   <div class="actions">
-    <button class="btn btn-primary" onclick="window.print()">Print Receipt</button>
+    <button class="btn btn-primary" type="button" data-thermal-print>Print Receipt</button>
+    <button class="btn" type="button" data-browser-print>Browser Print</button>
     <button class="btn" onclick="window.close()">Close</button>
   </div>
+  <div class="print-status" data-print-status></div>
+  {{ receipt_payload|json_script:"receipt-payload" }}
 
   <div class="receipt">
     <div class="receipt-header">

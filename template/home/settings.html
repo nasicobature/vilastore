@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="{% static 'js/app.js' %}" defer></script>
+  <script src="{% static 'js/thermal-printer.js' %}" defer></script>
   <style>
     .settings-shell {
       display: flex;
@@ -634,7 +635,7 @@
     }
   </style>
 </head>
-<body>
+<body data-shop-name="{{ request.user.business_name|default:request.user.username }}" data-shop-address="{{ request.user.address|default:'' }}">
   <div class="app-container">
     <aside class="sidebar">
       <div class="sidebar-logo"><div class="sidebar-logo-icon"><i data-lucide="store"></i></div><h1>VilaStore</h1></div>
@@ -920,6 +921,48 @@
 
                 <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Profile</button>
               </form>
+            </section>
+
+            <section class="card settings-card" data-printer-settings>
+              <div class="settings-card-header">
+                <div>
+                  <h3>Thermal receipt printer</h3>
+                  <p>Select a local ESC/POS 58mm printer for one-click receipt printing in this browser.</p>
+                </div>
+                <span class="badge badge-primary">58mm</span>
+              </div>
+              <div class="settings-section-list">
+                <div class="settings-list-item">
+                  <div>
+                    <strong>Current printer</strong>
+                    <p>Saved per browser so each counter can use its own connected thermal printer.</p>
+                  </div>
+                  <div class="settings-value" data-printer-current>Not selected</div>
+                </div>
+              </div>
+              <div class="settings-form-grid" style="margin-top:1rem;">
+                <div class="form-group">
+                  <label>Preferred printer</label>
+                  <select class="input" data-printer-select>
+                    <option value="">Start bridge to load printers</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Paper width</label>
+                  <select class="input" data-paper-width>
+                    <option value="58mm">58mm thermal paper</option>
+                  </select>
+                </div>
+                <div class="settings-note" style="grid-column:1/-1;">
+                  <i data-lucide="printer"></i>
+                  <span data-printer-status>Start VilaPrintBridge on this computer to enable automatic ESC/POS printing.</span>
+                </div>
+                <div class="settings-section-actions" style="grid-column:1/-1;">
+                  <button type="button" class="btn btn-outline" data-printer-refresh><i data-lucide="refresh-ccw"></i> Refresh Printers</button>
+                  <button type="button" class="btn btn-outline" data-printer-test><i data-lucide="printer-check"></i> Test Print</button>
+                  <button type="button" class="btn btn-primary" data-printer-save><i data-lucide="save"></i> Save Printer</button>
+                </div>
+              </div>
             </section>
 
             <section class="card settings-card">
