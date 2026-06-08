@@ -1,6 +1,5 @@
 import ctypes
 import json
-import subprocess
 from ctypes import wintypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -8,6 +7,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = "127.0.0.1"
 PORT = 8787
 CHARS_PER_LINE_58MM = 32
+PRINTER_ENUM_LOCAL = 0x00000002
+PRINTER_ENUM_CONNECTIONS = 0x00000004
 
 
 class DOC_INFO_1(ctypes.Structure):
@@ -15,6 +16,14 @@ class DOC_INFO_1(ctypes.Structure):
         ("pDocName", wintypes.LPWSTR),
         ("pOutputFile", wintypes.LPWSTR),
         ("pDatatype", wintypes.LPWSTR),
+    ]
+
+
+class PRINTER_INFO_4(ctypes.Structure):
+    _fields_ = [
+        ("pPrinterName", wintypes.LPWSTR),
+        ("pServerName", wintypes.LPWSTR),
+        ("Attributes", wintypes.DWORD),
     ]
 
 
@@ -40,6 +49,20 @@ EndPagePrinter.restype = wintypes.BOOL
 WritePrinter = winspool.WritePrinter
 WritePrinter.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
 WritePrinter.restype = wintypes.BOOL
+EnumPrinters = winspool.EnumPrintersW
+EnumPrinters.argtypes = [
+    wintypes.DWORD,
+    wintypes.LPWSTR,
+    wintypes.DWORD,
+    wintypes.LPBYTE,
+    wintypes.DWORD,
+    ctypes.POINTER(wintypes.DWORD),
+    ctypes.POINTER(wintypes.DWORD),
+]
+EnumPrinters.restype = wintypes.BOOL
+GetDefaultPrinter = winspool.GetDefaultPrinterW
+GetDefaultPrinter.argtypes = [wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+GetDefaultPrinter.restype = wintypes.BOOL
 
 
 def as_text(value):
@@ -190,23 +213,47 @@ def raw_print(printer_name, data):
         ClosePrinter(handle)
 
 
+def default_printer_name():
+    needed = wintypes.DWORD(0)
+    GetDefaultPrinter(None, ctypes.byref(needed))
+    if needed.value <= 0:
+        return ""
+    buffer = ctypes.create_unicode_buffer(needed.value)
+    if not GetDefaultPrinter(buffer, ctypes.byref(needed)):
+        return ""
+    return buffer.value
+
+
 def list_printers():
-    command = [
-        "powershell",
-        "-NoProfile",
-        "-Command",
-        "Get-Printer | Select-Object Name,Default | ConvertTo-Json -Compress",
-    ]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=10)
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "Unable to list printers.")
-    raw = result.stdout.strip()
-    if not raw:
+    flags = PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS
+    needed = wintypes.DWORD(0)
+    returned = wintypes.DWORD(0)
+    EnumPrinters(flags, None, 4, None, 0, ctypes.byref(needed), ctypes.byref(returned))
+    if needed.value <= 0:
         return []
-    data = json.loads(raw)
-    if isinstance(data, dict):
-        data = [data]
-    return [{"name": item.get("Name"), "is_default": bool(item.get("Default"))} for item in data if item.get("Name")]
+
+    buffer = ctypes.create_string_buffer(needed.value)
+    if not EnumPrinters(
+        flags,
+        None,
+        4,
+        ctypes.cast(buffer, wintypes.LPBYTE),
+        needed,
+        ctypes.byref(needed),
+        ctypes.byref(returned),
+    ):
+        raise OSError("Unable to list Windows printers.")
+
+    default_name = default_printer_name()
+    printers = ctypes.cast(buffer, ctypes.POINTER(PRINTER_INFO_4))
+    return [
+        {
+            "name": printers[index].pPrinterName,
+            "is_default": printers[index].pPrinterName == default_name,
+        }
+        for index in range(returned.value)
+        if printers[index].pPrinterName
+    ]
 
 
 class BridgeHandler(BaseHTTPRequestHandler):
@@ -221,6 +268,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
         self.wfile.write(body)
 
