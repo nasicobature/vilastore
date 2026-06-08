@@ -35,8 +35,8 @@ class InstitutionDocumentVerificationInline(admin.TabularInline):
 
 @admin.register(Institution)
 class InstitutionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'institution_type', 'city', 'country', 'verification_status', 'registration_payment_status', 'verified_at')
-    list_filter = ('institution_type', 'verification_status', 'registration_payment_status')
+    list_display = ('name', 'institution_type', 'city', 'country', 'subscription_billing_cycle', 'registration_payment_status', 'subscription_active_until', 'verification_status', 'verified_at')
+    list_filter = ('institution_type', 'verification_status', 'registration_payment_status', 'subscription_billing_cycle')
     search_fields = ('name', 'school_code', 'email', 'admin_email')
     readonly_fields = ('created_at', 'verified_at')
     inlines = (InstitutionDocumentVerificationInline,)
@@ -62,8 +62,9 @@ class InstitutionAdmin(admin.ModelAdmin):
         }),
         ('Registration Payment', {
             'fields': (
-                'registration_payment_status', 'registration_payment_amount',
+                'subscription_billing_cycle', 'registration_payment_status', 'registration_payment_amount',
                 'registration_payment_reference', 'registration_payment_paid_at',
+                'subscription_active_until', 'subscription_last_payment_reference', 'subscription_last_paid_at',
             )
         }),
         ('Branding', {

@@ -18,14 +18,64 @@ from .verification import create_document_verifications
 from core.utils.notifications import send_email
 
 
-def _edu_registration_fee():
-    try:
-        return Decimal(os.getenv('EDU_REGISTRATION_FEE', '25000.00'))
-    except Exception:
-        return Decimal('25000.00')
+EDU_MONTHLY_PRICE = Decimal('250000.00')
+EDU_TERMLY_STANDARD_PRICE = Decimal('75000.00')
+EDU_TERMLY_DISCOUNT = Decimal('5000.00')
+EDU_TERMLY_PRICE = EDU_TERMLY_STANDARD_PRICE - EDU_TERMLY_DISCOUNT
+EDU_DEFAULT_BILLING_CYCLE = 'termly'
 
 
-EDU_REGISTRATION_FEE = _edu_registration_fee()
+def _format_edu_price(amount):
+    return f'{Decimal(amount):,.0f}'
+
+
+def _edu_subscription_plans():
+    return {
+        'monthly': {
+            'cycle': 'monthly',
+            'name': 'Monthly Plan',
+            'duration_label': '1 month',
+            'duration_days': 30,
+            'amount': EDU_MONTHLY_PRICE,
+            'amount_display': _format_edu_price(EDU_MONTHLY_PRICE),
+            'standard_amount': EDU_MONTHLY_PRICE,
+            'standard_amount_display': _format_edu_price(EDU_MONTHLY_PRICE),
+            'discount': Decimal('0.00'),
+            'discount_display': _format_edu_price(Decimal('0.00')),
+            'summary': 'Pay monthly per school.',
+        },
+        'termly': {
+            'cycle': 'termly',
+            'name': 'Termly Plan',
+            'duration_label': '3 months',
+            'duration_days': 90,
+            'amount': EDU_TERMLY_PRICE,
+            'amount_display': _format_edu_price(EDU_TERMLY_PRICE),
+            'standard_amount': EDU_TERMLY_STANDARD_PRICE,
+            'standard_amount_display': _format_edu_price(EDU_TERMLY_STANDARD_PRICE),
+            'discount': EDU_TERMLY_DISCOUNT,
+            'discount_display': _format_edu_price(EDU_TERMLY_DISCOUNT),
+            'summary': 'Pay once per term and save NGN 5,000.',
+        },
+    }
+
+
+def _normalize_edu_billing_cycle(value):
+    cycle = (value or '').strip().lower()
+    if cycle in _edu_subscription_plans():
+        return cycle
+    return EDU_DEFAULT_BILLING_CYCLE
+
+
+def _edu_subscription_plan(cycle):
+    return _edu_subscription_plans()[_normalize_edu_billing_cycle(cycle)]
+
+
+def _edu_subscription_amount(cycle):
+    return _edu_subscription_plan(cycle)['amount']
+
+
+EDU_REGISTRATION_FEE = EDU_TERMLY_PRICE
 
 
 EMAIL_TOKEN_HOURS = 48
@@ -420,7 +470,7 @@ def _login_for_institution(request, institution_type, template_name):
                     auth_logout(request)
                     if profile.institution and profile.institution.registration_payment_status != 'paid':
                         payment_url = f"/edu/{profile.institution_type}/register/{profile.institution.school_code}/payment/"
-                        messages.error(request, f'Registration payment is required before portal access. Complete payment here: {payment_url}')
+                        messages.error(request, f'EduPortal subscription payment is required before portal access. Complete payment here: {payment_url}')
                     elif profile.institution and profile.institution.verification_status == 'pending':
                         messages.error(request, 'School verification is still pending. VilaStore must approve the submitted documents before portal access is granted.')
                     elif profile.institution and profile.institution.verification_status == 'rejected':
@@ -945,6 +995,7 @@ def secondary_school_register(request):
         admin_full_name = request.POST.get('admin_full_name', '').strip()
         admin_password = request.POST.get('admin_password', '').strip()
         admin_email = request.POST.get('admin_email', '').strip()
+        billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
         missing_verification, verification_uploads = _missing_verification_requirements(request)
 
         if not all([institution_name, admin_full_name, admin_password, admin_email]):
@@ -981,7 +1032,8 @@ def secondary_school_register(request):
                     payment_public_key=request.POST.get('payment_public_key', '').strip(),
                     payment_secret_key=request.POST.get('payment_secret_key', '').strip(),
                     allow_online_payment=bool(request.POST.get('allow_online_payment')),
-                    registration_payment_amount=EDU_REGISTRATION_FEE,
+                    subscription_billing_cycle=billing_cycle,
+                    registration_payment_amount=_edu_subscription_amount(billing_cycle),
                     registration_payment_status='pending',
                     admin_email=admin_email,
                     admin_phone=request.POST.get('admin_phone', '').strip(),
@@ -1023,7 +1075,7 @@ def secondary_school_register(request):
                     department='',
                 )
 
-                messages.success(request, f'School registration submitted. Complete the onboarding payment now. School code: {institution.school_code}. Admin ID: {admin_username}')
+                messages.success(request, f'School registration submitted. Complete the EduPortal subscription payment now. School code: {institution.school_code}. Admin ID: {admin_username}')
                 return redirect('edu:secondary_registration_payment', school_code=institution.school_code)
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
@@ -1031,21 +1083,51 @@ def secondary_school_register(request):
     return render(request, 'edu/secondary_register.html', {
         'ownership_choices': Institution.OWNERSHIP_CHOICES,
         'grading_choices': Institution.GRADING_CHOICES,
+        'subscription_plans': _edu_subscription_plans(),
+        'default_subscription_cycle': EDU_DEFAULT_BILLING_CYCLE,
     })
 
 
-def _registration_payment(request, institution_type, school_code, login_route_name, login_url):
-    institution = get_object_or_404(Institution, institution_type=institution_type, school_code__iexact=school_code)
-    payment_route_name = f'edu:{institution_type}_registration_payment'
+def _extend_subscription_until(institution, billing_cycle):
+    plan = _edu_subscription_plan(billing_cycle)
+    today = timezone.localdate()
+    start_date = institution.subscription_active_until if institution.subscription_active_until and institution.subscription_active_until > today else today
+    return start_date + timedelta(days=plan['duration_days'])
+
+
+def _edu_payment_context(institution, login_url, mode='registration'):
+    cycle = _normalize_edu_billing_cycle(institution.subscription_billing_cycle)
+    plan = _edu_subscription_plan(cycle)
+    amount = Decimal(plan['amount'])
+    return {
+        'institution': institution,
+        'amount': amount,
+        'amount_display': _format_edu_price(amount),
+        'selected_plan': plan,
+        'subscription_plans': _edu_subscription_plans(),
+        'currency': institution.currency or 'NGN',
+        'flutterwave_public_key': _flutterwave_public_key(),
+        'login_url': login_url,
+        'payment_mode': mode,
+        'allow_payment_form': mode == 'renewal' or institution.registration_payment_status != 'paid',
+    }
+
+
+def _confirm_edu_subscription_payment(request, institution, payment_route_name, redirect_kwargs, login_route_name, success_message, mark_registration_paid=True):
     if request.method == 'POST':
+        billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle') or institution.subscription_billing_cycle)
+        plan = _edu_subscription_plan(billing_cycle)
         payment_reference = request.POST.get('payment_reference', '').strip()
         payload, error = _verify_flutterwave_reference(payment_reference)
         if error:
-            institution.registration_payment_status = 'failed'
+            update_fields = ['registration_payment_reference']
             institution.registration_payment_reference = payment_reference
-            institution.save(update_fields=['registration_payment_status', 'registration_payment_reference'])
+            if mark_registration_paid:
+                institution.registration_payment_status = 'failed'
+                update_fields.append('registration_payment_status')
+            institution.save(update_fields=update_fields)
             messages.error(request, error)
-            return redirect(payment_route_name, school_code=institution.school_code)
+            return redirect(payment_route_name, **redirect_kwargs)
 
         data = (payload or {}).get('data') or {}
         status = str(data.get('status') or '').lower()
@@ -1054,42 +1136,102 @@ def _registration_payment(request, institution_type, school_code, login_route_na
         except Exception:
             amount = Decimal('0')
         currency = str(data.get('currency') or '').upper()
-        expected_amount = Decimal(institution.registration_payment_amount or EDU_REGISTRATION_FEE)
+        expected_amount = Decimal(plan['amount'])
         expected_currency = (institution.currency or 'NGN').upper()
         if status != 'successful':
             messages.error(request, 'Payment was not successful.')
-            return redirect(payment_route_name, school_code=institution.school_code)
+            return redirect(payment_route_name, **redirect_kwargs)
         if currency and currency != expected_currency:
             messages.error(request, 'Payment currency does not match registration currency.')
-            return redirect(payment_route_name, school_code=institution.school_code)
+            return redirect(payment_route_name, **redirect_kwargs)
         if amount < expected_amount:
-            messages.error(request, 'Paid amount is lower than the required onboarding fee.')
-            return redirect(payment_route_name, school_code=institution.school_code)
+            messages.error(request, 'Paid amount is lower than the selected Edu Portal subscription plan.')
+            return redirect(payment_route_name, **redirect_kwargs)
 
-        institution.registration_payment_status = 'paid'
+        paid_at = timezone.now()
+        institution.subscription_billing_cycle = billing_cycle
+        institution.registration_payment_amount = expected_amount
         institution.registration_payment_reference = payment_reference
-        institution.registration_payment_paid_at = timezone.now()
-        institution.save(update_fields=[
-            'registration_payment_status',
+        institution.registration_payment_paid_at = paid_at
+        institution.subscription_active_until = _extend_subscription_until(institution, billing_cycle)
+        institution.subscription_last_payment_reference = payment_reference
+        institution.subscription_last_paid_at = paid_at
+        update_fields = [
+            'subscription_billing_cycle',
+            'registration_payment_amount',
             'registration_payment_reference',
             'registration_payment_paid_at',
-        ])
+            'subscription_active_until',
+            'subscription_last_payment_reference',
+            'subscription_last_paid_at',
+        ]
+        if mark_registration_paid:
+            institution.registration_payment_status = 'paid'
+            update_fields.append('registration_payment_status')
+        institution.save(update_fields=update_fields)
         if institution.verification_status == 'approved':
             Profile.objects.filter(
                 institution=institution,
                 created_via='school-register',
                 is_approved=False,
             ).update(is_approved=True, approved_at=timezone.now())
-        messages.success(request, 'Payment confirmed. VilaStore will now review your submitted school documents.')
+        messages.success(request, success_message)
         return redirect(login_route_name)
 
-    return render(request, 'edu/registration_payment.html', {
-        'institution': institution,
-        'amount': institution.registration_payment_amount or EDU_REGISTRATION_FEE,
-        'currency': institution.currency or 'NGN',
-        'flutterwave_public_key': _flutterwave_public_key(),
-        'login_url': login_url,
-    })
+    return None
+
+
+def _registration_payment(request, institution_type, school_code, login_route_name, login_url):
+    institution = get_object_or_404(Institution, institution_type=institution_type, school_code__iexact=school_code)
+    payment_route_name = f'edu:{institution_type}_registration_payment'
+    if request.method == 'POST':
+        response = _confirm_edu_subscription_payment(
+            request,
+            institution,
+            payment_route_name,
+            {'school_code': institution.school_code},
+            login_route_name,
+            'Payment confirmed. VilaStore will now review your submitted school documents.',
+            mark_registration_paid=True,
+        )
+        if response:
+            return response
+
+    if not institution.registration_payment_amount:
+        cycle = _normalize_edu_billing_cycle(institution.subscription_billing_cycle)
+        institution.registration_payment_amount = _edu_subscription_amount(cycle)
+        institution.save(update_fields=['registration_payment_amount'])
+
+    return render(request, 'edu/registration_payment.html', _edu_payment_context(institution, login_url, mode='registration'))
+
+
+@login_required
+def edu_subscription_renewal(request):
+    profile = getattr(request.user, 'profile', None)
+    if not profile or not profile.institution:
+        messages.error(request, 'School profile is required before renewal.')
+        return redirect('edu:index')
+
+    institution = profile.institution
+    if profile.role not in {'admin', 'vc', 'provost'}:
+        messages.error(request, 'Only school administrators can renew Edu Portal subscription.')
+        return redirect('edu:secondary_dashboard' if profile.institution_type == 'secondary' else 'edu:tertiary_dashboard', role=profile.role)
+
+    if request.method == 'POST':
+        response = _confirm_edu_subscription_payment(
+            request,
+            institution,
+            'edu:subscription_renewal',
+            {},
+            'edu:subscription_renewal',
+            'Subscription renewed successfully.',
+            mark_registration_paid=False,
+        )
+        if response:
+            return response
+
+    login_url = '/edu/tertiary/login/' if profile.institution_type == 'tertiary' else '/edu/secondary/login/'
+    return render(request, 'edu/registration_payment.html', _edu_payment_context(institution, login_url, mode='renewal'))
 
 
 def secondary_registration_payment(request, school_code):
@@ -2396,6 +2538,7 @@ def tertiary_school_register(request):
         vc_password = request.POST.get('vc_password', '').strip()
         admin_email = request.POST.get('admin_email', '').strip()
         vc_role = request.POST.get('vc_role', 'vc')
+        billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
         missing_verification, verification_uploads = _missing_verification_requirements(request)
 
         if not all([institution_name, vc_full_name, vc_password, admin_email]):
@@ -2434,7 +2577,8 @@ def tertiary_school_register(request):
                     payment_public_key=request.POST.get('payment_public_key', '').strip(),
                     payment_secret_key=request.POST.get('payment_secret_key', '').strip(),
                     allow_online_payment=bool(request.POST.get('allow_online_payment')),
-                    registration_payment_amount=EDU_REGISTRATION_FEE,
+                    subscription_billing_cycle=billing_cycle,
+                    registration_payment_amount=_edu_subscription_amount(billing_cycle),
                     registration_payment_status='pending',
                     admin_email=admin_email,
                     admin_phone=request.POST.get('admin_phone', '').strip(),
@@ -2475,7 +2619,7 @@ def tertiary_school_register(request):
                     department='',
                 )
 
-                messages.success(request, f'Institution registration submitted. Complete the onboarding payment now. School code: {institution.school_code}. ID: {vc_username}')
+                messages.success(request, f'Institution registration submitted. Complete the EduPortal subscription payment now. School code: {institution.school_code}. ID: {vc_username}')
                 return redirect('edu:tertiary_registration_payment', school_code=institution.school_code)
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
@@ -2483,6 +2627,8 @@ def tertiary_school_register(request):
     return render(request, 'edu/tertiary_register.html', {
         'ownership_choices': Institution.OWNERSHIP_CHOICES,
         'grading_choices': Institution.GRADING_CHOICES,
+        'subscription_plans': _edu_subscription_plans(),
+        'default_subscription_cycle': EDU_DEFAULT_BILLING_CYCLE,
     })
 
 

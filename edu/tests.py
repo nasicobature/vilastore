@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.test import TestCase, override_settings
@@ -42,14 +43,12 @@ class EduPortalRoutingTests(TestCase):
     def test_index_shows_launch_pricing_and_coming_soon_modules(self):
         response = self.client.get(reverse("edu:index"))
 
-        self.assertContains(response, "Starter School")
-        self.assertContains(response, "₦50,000")
-        self.assertContains(response, "Up to 250 students")
-        self.assertContains(response, "Growth School")
-        self.assertContains(response, "Up to 700 students")
-        self.assertContains(response, "Professional School")
-        self.assertContains(response, "Up to 1,500 students")
-        self.assertContains(response, "Enterprise / Tertiary")
+        self.assertContains(response, "Monthly Plan")
+        self.assertContains(response, "NGN 250,000")
+        self.assertContains(response, "Termly Plan")
+        self.assertContains(response, "NGN 70,000")
+        self.assertContains(response, "Standard 3-month cost: NGN 75,000")
+        self.assertContains(response, "Termly discount: NGN 5,000")
         self.assertContains(response, "Coming Soon Modules")
 
     def test_edu_login_pages_exist(self):
@@ -67,6 +66,9 @@ class EduPortalRoutingTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, 'class="wizard-form"')
             self.assertContains(response, "Verification Documents")
+            self.assertContains(response, "Subscription Plan")
+            self.assertContains(response, "NGN 250,000")
+            self.assertContains(response, "NGN 70,000")
             self.assertContains(response, "Submit & Pay")
 
 
@@ -122,6 +124,8 @@ class EduPortalVerificationRegistrationTests(TestCase):
         profile = Profile.objects.get(institution=institution, role="admin")
         self.assertEqual(institution.verification_status, "pending")
         self.assertEqual(institution.registration_payment_status, "pending")
+        self.assertEqual(institution.subscription_billing_cycle, "termly")
+        self.assertEqual(institution.registration_payment_amount, Decimal("70000.00"))
         self.assertEqual(profile.user.email, "admin@example.com")
         self.assertFalse(profile.is_approved)
         self.assertTrue(institution.cac_certificate)
@@ -141,6 +145,33 @@ class EduPortalVerificationRegistrationTests(TestCase):
             "12345678901",
         )
         self.assertTrue(documents.filter(status="manual_review").exists())
+
+    def test_secondary_registration_can_choose_monthly_subscription(self):
+        data = {
+            "institution_name": "Monthly Academy",
+            "admin_full_name": "School Admin",
+            "admin_password": "StrongPass123!",
+            "admin_email": "monthly-admin@example.com",
+            "admin_phone": "08000000002",
+            "subscription_billing_cycle": "monthly",
+        }
+        data.update(self._verification_files())
+
+        response = self.client.post(reverse("edu:secondary_register"), data)
+
+        institution = Institution.objects.get(name="Monthly Academy")
+        self.assertRedirects(
+            response,
+            reverse("edu:secondary_registration_payment", kwargs={"school_code": institution.school_code}),
+        )
+        self.assertEqual(institution.subscription_billing_cycle, "monthly")
+        self.assertEqual(institution.registration_payment_amount, Decimal("250000.00"))
+
+        payment_page = self.client.get(
+            reverse("edu:secondary_registration_payment", kwargs={"school_code": institution.school_code})
+        )
+        self.assertContains(payment_page, "Monthly Plan")
+        self.assertContains(payment_page, "NGN 250,000")
 
     @override_settings(EDU_CAC_VERIFICATION_URL="https://verify.example.test/cac")
     @patch("edu.verification.requests.post")
@@ -193,7 +224,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         })
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Registration payment is required")
+        self.assertContains(response, "EduPortal subscription payment is required")
         self.assertFalse("_auth_user_id" in self.client.session)
 
         email_response = self.client.post(reverse("edu:secondary_login"), {
@@ -202,7 +233,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
             "password": "StrongPass123!",
         })
         self.assertEqual(email_response.status_code, 200)
-        self.assertContains(email_response, "Registration payment is required")
+        self.assertContains(email_response, "EduPortal subscription payment is required")
 
         phone_response = self.client.post(reverse("edu:secondary_login"), {
             "school_code": institution.school_code,
@@ -210,7 +241,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
             "password": "StrongPass123!",
         })
         self.assertEqual(phone_response.status_code, 200)
-        self.assertContains(phone_response, "Registration payment is required")
+        self.assertContains(phone_response, "EduPortal subscription payment is required")
 
     def test_login_repairs_missing_profile_from_staff_record(self):
         institution = Institution.objects.create(

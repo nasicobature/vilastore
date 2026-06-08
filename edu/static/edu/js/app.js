@@ -82,7 +82,20 @@
     const buildReview = () => {
       if (!reviewOutput) return;
       const fields = Array.from(form.querySelectorAll('[data-review-label]'));
+      const seenRadioGroups = new Set();
       reviewOutput.innerHTML = fields.map((field) => {
+        if (field.type === 'radio') {
+          if (seenRadioGroups.has(field.name)) return '';
+          seenRadioGroups.add(field.name);
+          const checked = form.querySelector(`input[type="radio"][name="${field.name}"]:checked`);
+          const label = checked ? checked.closest('label') : null;
+          const title = label ? label.querySelector('.plan-card-title') : null;
+          const amount = label ? label.querySelector('strong') : null;
+          const display = [title ? title.textContent.trim() : checked?.value, amount ? amount.textContent.trim() : '']
+            .filter(Boolean)
+            .join(' - ');
+          return `<div class="review-item"><span>${field.dataset.reviewLabel}</span><strong>${display || 'Not selected'}</strong></div>`;
+        }
         let value = 'Not provided';
         if (field.type === 'file') {
           value = field.files.length ? field.files[0].name : 'Not uploaded';

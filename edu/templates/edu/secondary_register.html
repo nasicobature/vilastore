@@ -24,7 +24,8 @@
         <li class="wizard-step" data-step-indicator="1"><span>2</span><strong>Address</strong></li>
         <li class="wizard-step" data-step-indicator="2"><span>3</span><strong>Documents</strong></li>
         <li class="wizard-step" data-step-indicator="3"><span>4</span><strong>Admin</strong></li>
-        <li class="wizard-step" data-step-indicator="4"><span>5</span><strong>Review</strong></li>
+        <li class="wizard-step" data-step-indicator="4"><span>5</span><strong>Plan</strong></li>
+        <li class="wizard-step" data-step-indicator="5"><span>6</span><strong>Review</strong></li>
       </ol>
 
       <form method="post" enctype="multipart/form-data" class="wizard-form" data-registration-wizard novalidate>
@@ -101,6 +102,32 @@
 
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
+            <h2>Subscription Plan</h2>
+            <p>Choose how this school will pay for EduPortal access.</p>
+          </div>
+          <div class="subscription-plan-grid">
+            {% for key, plan in subscription_plans.items %}
+              <label class="subscription-plan-card">
+                <input
+                  type="radio"
+                  name="subscription_billing_cycle"
+                  value="{{ plan.cycle }}"
+                  data-review-label="Subscription Plan"
+                  {% if plan.cycle == default_subscription_cycle %}checked{% endif %}
+                />
+                <span class="plan-card-title">{{ plan.name }}</span>
+                <strong>NGN {{ plan.amount_display }}</strong>
+                <small>{{ plan.duration_label }}. {{ plan.summary }}</small>
+                {% if plan.discount > 0 %}
+                  <em>Standard NGN {{ plan.standard_amount_display }} minus NGN {{ plan.discount_display }} discount.</em>
+                {% endif %}
+              </label>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-wizard-panel>
+          <div class="section-heading">
             <h2>Review and Submit</h2>
             <p>Confirm the summary, then submit the school for VilaStore verification.</p>
           </div>
@@ -109,7 +136,7 @@
             <i data-lucide="shield-check"></i>
             <div>
               <strong>Verification notice</strong>
-              <p>After submission, you will pay the one-time onboarding fee. Portal access will still only be granted after VilaStore reviews and approves the submitted documents.</p>
+              <p>After submission, you will pay the selected EduPortal subscription. Portal access will still only be granted after VilaStore reviews and approves the submitted documents.</p>
             </div>
           </div>
         </section>

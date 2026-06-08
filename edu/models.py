@@ -29,6 +29,10 @@ class Institution(models.Model):
         ('paid', 'Paid'),
         ('failed', 'Failed'),
     ]
+    SUBSCRIPTION_BILLING_CHOICES = [
+        ('monthly', 'Monthly Plan'),
+        ('termly', 'Termly Plan'),
+    ]
 
     name = models.CharField(max_length=200)
     school_code = models.CharField(max_length=20, unique=True, null=True, blank=True)
@@ -66,9 +70,13 @@ class Institution(models.Model):
     verification_review_note = models.TextField(blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
     registration_payment_status = models.CharField(max_length=20, choices=REGISTRATION_PAYMENT_STATUS_CHOICES, default='pending')
-    registration_payment_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('25000.00'))
+    registration_payment_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('70000.00'))
     registration_payment_reference = models.CharField(max_length=120, blank=True)
     registration_payment_paid_at = models.DateTimeField(null=True, blank=True)
+    subscription_billing_cycle = models.CharField(max_length=20, choices=SUBSCRIPTION_BILLING_CHOICES, default='termly')
+    subscription_active_until = models.DateField(null=True, blank=True)
+    subscription_last_payment_reference = models.CharField(max_length=120, blank=True)
+    subscription_last_paid_at = models.DateTimeField(null=True, blank=True)
     cac_certificate = models.FileField(upload_to='institutions/verification/cac_certificates/', blank=True, null=True)
     cac_status_report = models.FileField(upload_to='institutions/verification/cac_status_reports/', blank=True, null=True)
     ministry_approval = models.FileField(upload_to='institutions/verification/ministry_approvals/', blank=True, null=True)
