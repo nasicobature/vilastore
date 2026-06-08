@@ -450,7 +450,7 @@
     scan?.addEventListener("click", scanPrinters);
     browserAutoConnect?.addEventListener("click", async () => {
       browserAutoConnect.disabled = true;
-      showPrinterStatus(panel, `Auto Connect clicked. ${browserDirectHelp()} (${browserFeatureReport()})`, true);
+      showPrinterStatus(panel, `Auto Connect clicked. ${browserDirectHelp()} (${browserFeatureReport()})`);
       try {
         if ("serial" in navigator) {
           await connectBrowserSerial();
@@ -461,16 +461,8 @@
           return;
         }
         showPrinterStatus(panel, browserDirectHelp(), true);
-      } catch (serialError) {
-        try {
-          if ("bluetooth" in navigator) {
-            await connectBrowserBluetooth();
-            return;
-          }
-          showPrinterStatus(panel, serialError.message || browserDirectHelp(), true);
-        } catch (bluetoothError) {
-          showPrinterStatus(panel, bluetoothError.message || serialError.message || browserDirectHelp(), true);
-        }
+      } catch (error) {
+        showPrinterStatus(panel, `${error.message || browserDirectHelp()} If you need Bluetooth, click Connect Browser Bluetooth directly.`, true);
       } finally {
         browserAutoConnect.disabled = false;
       }
