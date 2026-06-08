@@ -21,5 +21,7 @@ http://127.0.0.1:8787
 ## Notes
 
 - Supports 58mm ESC/POS receipts.
-- Use the Windows printer name shown in Settings.
+- Finds installed Windows printers, paired Bluetooth/serial COM printers, and Wi-Fi/LAN ESC/POS printers with raw port `9100` on the same local network.
+- Bluetooth thermal printers must be paired in Windows first so they appear as a printer or COM port.
+- Use VilaStore Settings > Connect printer to scan, connect, test print, disconnect, and reconnect.
 - If the bridge is not running, VilaStore falls back to the browser print dialog with 58mm formatting.

@@ -926,41 +926,40 @@
             <section class="card settings-card" data-printer-settings>
               <div class="settings-card-header">
                 <div>
-                  <h3>Thermal receipt printer</h3>
-                  <p>Select a local ESC/POS 58mm printer for one-click receipt printing in this browser.</p>
+                  <h3>Connect printer</h3>
+                  <p>Connect a Windows, paired Bluetooth/COM, or Wi-Fi ESC/POS printer for one-click 58mm receipts.</p>
                 </div>
-                <span class="badge badge-primary">58mm</span>
+                <span class="badge badge-warning" data-printer-connection>Disconnected</span>
               </div>
               <div class="settings-section-list">
                 <div class="settings-list-item">
                   <div>
-                    <strong>Current printer</strong>
-                    <p>Saved per browser so each counter can use its own connected thermal printer.</p>
+                    <strong>Connected printer</strong>
+                    <p>Saved on this computer by VilaPrintBridge so future receipts print with one click.</p>
                   </div>
-                  <div class="settings-value" data-printer-current>Not selected</div>
+                  <div class="settings-value" data-printer-current>No printer connected</div>
                 </div>
               </div>
               <div class="settings-form-grid" style="margin-top:1rem;">
                 <div class="form-group">
-                  <label>Preferred printer</label>
+                  <label>Available printers</label>
                   <select class="input" data-printer-select>
-                    <option value="">Start bridge to load printers</option>
+                    <option value="">Click Scan Printers</option>
                   </select>
                 </div>
                 <div class="form-group">
                   <label>Paper width</label>
-                  <select class="input" data-paper-width>
-                    <option value="58mm">58mm thermal paper</option>
-                  </select>
+                  <input type="text" class="input" value="58mm ESC/POS thermal receipt" disabled>
                 </div>
                 <div class="settings-note" style="grid-column:1/-1;">
                   <i data-lucide="printer"></i>
-                  <span data-printer-status>Start VilaPrintBridge on this computer to enable automatic ESC/POS printing.</span>
+                  <span data-printer-status>Start VilaPrintBridge, then scan for Windows, paired Bluetooth, and Wi-Fi printers.</span>
                 </div>
                 <div class="settings-section-actions" style="grid-column:1/-1;">
-                  <button type="button" class="btn btn-outline" data-printer-refresh><i data-lucide="refresh-ccw"></i> Refresh Printers</button>
+                  <button type="button" class="btn btn-outline" data-printer-scan><i data-lucide="search"></i> Scan Printers</button>
+                  <button type="button" class="btn btn-primary" data-printer-connect><i data-lucide="plug"></i> Connect Printer</button>
                   <button type="button" class="btn btn-outline" data-printer-test><i data-lucide="printer-check"></i> Test Print</button>
-                  <button type="button" class="btn btn-primary" data-printer-save><i data-lucide="save"></i> Save Printer</button>
+                  <button type="button" class="btn btn-ghost text-destructive" data-printer-disconnect><i data-lucide="unlink"></i> Disconnect</button>
                 </div>
               </div>
             </section>

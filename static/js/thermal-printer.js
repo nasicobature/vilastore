@@ -1,6 +1,6 @@
 (function () {
   const BRIDGE_URL = "http://127.0.0.1:8787";
-  const SETTINGS_KEY = "vilastore_thermal_printer_settings_v1";
+  const SETTINGS_KEY = "vilastore_thermal_printer_settings_v2";
 
   function readSettings() {
     try {
@@ -14,12 +14,12 @@
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings || {}));
   }
 
-  async function bridgeFetch(path, options) {
+  async function bridgeFetch(path, options = {}) {
     const response = await fetch(`${BRIDGE_URL}${path}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
-        ...(options && options.headers ? options.headers : {}),
+        ...(options.headers || {}),
       },
     });
     const payload = await response.json().catch(() => ({}));
@@ -39,50 +39,61 @@
     }
   }
 
-  function setText(selector, text) {
-    const element = document.querySelector(selector);
+  function setText(root, selector, text) {
+    const element = root.querySelector(selector);
     if (element) element.textContent = text;
   }
 
-  async function printReceipt(receipt) {
-    const settings = readSettings();
-    if (!settings.printerName) {
-      throw new Error("Choose a thermal printer in Settings first.");
+  function connectionLabel(connection) {
+    if (!connection || !connection.target) return "No printer connected";
+    return connection.target.label || connection.target.id || "Selected printer";
+  }
+
+  function updateConnectionUi(panel, connection) {
+    const connected = Boolean(connection && connection.connected);
+    setText(panel, "[data-printer-current]", connectionLabel(connection));
+    setText(panel, "[data-printer-connection]", connected ? "Connected" : "Disconnected");
+    const indicator = panel.querySelector("[data-printer-connection]");
+    if (indicator) {
+      indicator.classList.toggle("badge-success", connected);
+      indicator.classList.toggle("badge-warning", !connected);
+      indicator.classList.toggle("badge-primary", false);
     }
+  }
+
+  async function printReceipt(receipt) {
     return bridgeFetch("/print", {
       method: "POST",
-      body: JSON.stringify({
-        printer_name: settings.printerName,
-        paper_width: settings.paperWidth || "58mm",
-        receipt,
-      }),
+      body: JSON.stringify({ receipt, paper_width: "58mm" }),
     });
   }
 
   async function testPrint() {
-    const settings = readSettings();
-    if (!settings.printerName) {
-      throw new Error("Select a printer before test printing.");
-    }
     return bridgeFetch("/test-print", {
       method: "POST",
       body: JSON.stringify({
-        printer_name: settings.printerName,
-        paper_width: settings.paperWidth || "58mm",
+        paper_width: "58mm",
         shop_name: document.body.dataset.shopName || "VilaStore",
         address: document.body.dataset.shopAddress || "",
       }),
     });
   }
 
-  async function loadPrinters(select) {
-    const payload = await bridgeFetch("/printers", { method: "GET" });
+  function optionLabel(printer) {
+    const selected = printer.selected ? " - connected" : "";
+    const defaultText = printer.is_default ? " - default" : "";
+    return `${printer.label || printer.name}${defaultText}${selected}`;
+  }
+
+  function fillPrinterSelect(select, printers) {
     select.innerHTML = "";
-    (payload.printers || []).forEach((printer) => {
+    (printers || []).forEach((printer) => {
       const option = document.createElement("option");
-      option.value = printer.name;
-      option.textContent = printer.is_default ? `${printer.name} (default)` : printer.name;
+      option.value = printer.id;
+      option.textContent = optionLabel(printer);
+      option.dataset.printer = JSON.stringify(printer);
       select.appendChild(option);
+      if (printer.selected) select.value = printer.id;
     });
     if (!select.options.length) {
       const option = document.createElement("option");
@@ -90,10 +101,13 @@
       option.textContent = "No printers found";
       select.appendChild(option);
     }
-    const settings = readSettings();
-    if (settings.printerName) select.value = settings.printerName;
-    if (!select.value && select.options.length) select.selectedIndex = 0;
-    return payload;
+  }
+
+  async function loadStatus(panel) {
+    const payload = await bridgeFetch("/status");
+    updateConnectionUi(panel, payload.connection);
+    saveSettings({ connection: payload.connection || null });
+    return payload.connection;
   }
 
   function initReceiptPage() {
@@ -108,13 +122,12 @@
         return;
       }
       button.disabled = true;
-      if (status) status.textContent = "Sending receipt to thermal printer...";
+      if (status) status.textContent = "Sending receipt to connected printer...";
       try {
         await printReceipt(receipt);
-        if (status) status.textContent = "Receipt sent to thermal printer.";
+        if (status) status.textContent = "Receipt sent to connected printer.";
       } catch (error) {
-        if (status) status.textContent = `${error.message} Using browser print instead.`;
-        window.print();
+        if (status) status.textContent = `${error.message} Use Browser Print or reconnect the printer.`;
       } finally {
         button.disabled = false;
       }
@@ -128,47 +141,89 @@
     const panel = document.querySelector("[data-printer-settings]");
     if (!panel) return;
     const select = panel.querySelector("[data-printer-select]");
-    const refresh = panel.querySelector("[data-printer-refresh]");
-    const save = panel.querySelector("[data-printer-save]");
+    const connect = panel.querySelector("[data-printer-connect]");
+    const scan = panel.querySelector("[data-printer-scan]");
+    const disconnect = panel.querySelector("[data-printer-disconnect]");
     const test = panel.querySelector("[data-printer-test]");
-    const width = panel.querySelector("[data-paper-width]");
     const settings = readSettings();
-    if (width) width.value = settings.paperWidth || "58mm";
-    setText("[data-printer-current]", settings.printerName || "Not selected");
+    updateConnectionUi(panel, settings.connection);
 
-    const refreshPrinters = async () => {
+    const scanPrinters = async () => {
       if (!select) return;
-      setText("[data-printer-status]", "Looking for local printer bridge...");
+      setText(panel, "[data-printer-status]", "Scanning Windows, paired Bluetooth/COM, and Wi-Fi printers...");
+      scan.disabled = true;
       try {
-        await loadPrinters(select);
-        setText("[data-printer-status]", "Printer bridge connected.");
+        const payload = await bridgeFetch("/discover");
+        fillPrinterSelect(select, payload.printers || []);
+        updateConnectionUi(panel, payload.connection);
+        saveSettings({ connection: payload.connection || null });
+        setText(panel, "[data-printer-status]", payload.printers?.length ? "Select a printer, then connect." : "No available printers found.");
       } catch (error) {
-        setText("[data-printer-status]", "Start VilaPrintBridge, then refresh printers.");
+        setText(panel, "[data-printer-status]", "Start VilaPrintBridge, then scan again.");
+      } finally {
+        scan.disabled = false;
       }
     };
 
-    refresh?.addEventListener("click", refreshPrinters);
-    save?.addEventListener("click", () => {
-      saveSettings({
-        printerName: select?.value || "",
-        paperWidth: width?.value || "58mm",
-      });
-      setText("[data-printer-current]", select?.value || "Not selected");
-      setText("[data-printer-status]", "Printer settings saved in this browser.");
+    scan?.addEventListener("click", scanPrinters);
+    connect?.addEventListener("click", async () => {
+      if (!select?.value) {
+        setText(panel, "[data-printer-status]", "Select a printer first.");
+        return;
+      }
+      const selectedOption = select.options[select.selectedIndex];
+      const printer = JSON.parse(selectedOption.dataset.printer || "{}");
+      connect.disabled = true;
+      setText(panel, "[data-printer-status]", "Connecting printer...");
+      try {
+        const payload = await bridgeFetch("/connect", {
+          method: "POST",
+          body: JSON.stringify({
+            target_id: printer.id,
+            target: printer,
+            label: printer.label,
+          }),
+        });
+        updateConnectionUi(panel, payload.connection);
+        saveSettings({ connection: payload.connection || null });
+        setText(panel, "[data-printer-status]", "Printer connected and saved.");
+      } catch (error) {
+        setText(panel, "[data-printer-status]", error.message);
+      } finally {
+        connect.disabled = false;
+      }
+    });
+    disconnect?.addEventListener("click", async () => {
+      disconnect.disabled = true;
+      setText(panel, "[data-printer-status]", "Disconnecting printer...");
+      try {
+        const payload = await bridgeFetch("/disconnect", { method: "POST", body: "{}" });
+        updateConnectionUi(panel, payload.connection);
+        saveSettings({ connection: payload.connection || null });
+        setText(panel, "[data-printer-status]", "Printer disconnected.");
+      } catch (error) {
+        setText(panel, "[data-printer-status]", error.message);
+      } finally {
+        disconnect.disabled = false;
+      }
     });
     test?.addEventListener("click", async () => {
       test.disabled = true;
-      setText("[data-printer-status]", "Sending test receipt...");
+      setText(panel, "[data-printer-status]", "Sending test receipt...");
       try {
-        await testPrint();
-        setText("[data-printer-status]", "Test receipt sent.");
+        const payload = await testPrint();
+        updateConnectionUi(panel, payload.connection);
+        setText(panel, "[data-printer-status]", "Test receipt sent.");
       } catch (error) {
-        setText("[data-printer-status]", error.message);
+        setText(panel, "[data-printer-status]", error.message);
       } finally {
         test.disabled = false;
       }
     });
-    refreshPrinters();
+
+    loadStatus(panel).catch(() => {
+      setText(panel, "[data-printer-status]", "Start VilaPrintBridge to connect printers.");
+    });
   }
 
   document.addEventListener("DOMContentLoaded", () => {
