@@ -16,8 +16,105 @@
   <title>VilaStore - Staff Dashboard</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'js/thermal-printer.js' %}?v=20260609-shopboy-printer" defer></script>
+  <style>
+    .shopboy-printer-card {
+      margin-bottom: 1rem;
+      padding: 1rem;
+    }
+
+    .shopboy-printer-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .shopboy-printer-header h3 {
+      margin: 0 0 0.2rem;
+      font-size: 1rem;
+    }
+
+    .shopboy-printer-header p,
+    .shopboy-printer-note,
+    .shopboy-printer-current p {
+      color: var(--muted-foreground);
+      font-size: 0.84rem;
+      margin: 0;
+    }
+
+    .shopboy-printer-current {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 0.8rem;
+      margin-bottom: 1rem;
+      background: #ffffff;
+    }
+
+    .shopboy-printer-current strong {
+      display: block;
+      margin-bottom: 0.15rem;
+    }
+
+    .shopboy-printer-value {
+      color: var(--accent-foreground);
+      font-size: 0.84rem;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .shopboy-printer-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+
+    .shopboy-printer-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      grid-column: 1 / -1;
+      border: 1px solid rgba(176, 110, 33, 0.18);
+      border-radius: 0.75rem;
+      background: #fff8ee;
+      color: #7b5421;
+      padding: 0.75rem;
+    }
+
+    .shopboy-printer-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    @media (max-width: 760px) {
+      .shopboy-printer-header,
+      .shopboy-printer-current {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .shopboy-printer-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .shopboy-printer-value {
+        text-align: left;
+      }
+
+      .shopboy-printer-actions .btn {
+        width: 100%;
+      }
+    }
+  </style>
 </head>
-<body>
+<body data-shop-name="{{ owner.business_name|default:owner.username }}" data-shop-address="{{ owner.address|default:'' }}">
   <header class="marketplace-header">
     <div class="marketplace-header-inner">
       <div style="display:flex;align-items:center;gap:0.75rem;">
@@ -45,6 +142,65 @@
       {% endfor %}
     </section>
     {% endif %}
+    <section class="card shopboy-printer-card" data-printer-settings>
+      <div class="shopboy-printer-header">
+        <div>
+          <h3>Connect Receipt Printer</h3>
+          <p>Connect Bluetooth, USB/serial, Windows, or Wi-Fi thermal printers for staff receipts.</p>
+        </div>
+        <span class="badge badge-warning" data-printer-connection>Disconnected</span>
+      </div>
+
+      <div class="shopboy-printer-current">
+        <div>
+          <strong>Connected printer</strong>
+          <p>Saved on this device for shopboy receipt printing.</p>
+        </div>
+        <div class="shopboy-printer-value" data-printer-current>No printer connected</div>
+      </div>
+
+      <div class="shopboy-printer-grid">
+        <div class="form-group">
+          <label>Available printers</label>
+          <select class="input" data-printer-select>
+            <option value="">Click Scan Printers</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Serial baud rate</label>
+          <select class="input" data-browser-serial-baud>
+            <option value="9600">9600</option>
+            <option value="19200">19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200">115200</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Wi-Fi printer IP</label>
+          <input type="text" class="input" data-printer-ip placeholder="Example: 192.168.1.50">
+        </div>
+        <div class="form-group">
+          <label>Bluetooth COM port</label>
+          <input type="text" class="input" data-printer-com placeholder="Example: COM3">
+        </div>
+        <div class="shopboy-printer-note">
+          <i data-lucide="printer"></i>
+          <span data-printer-status>Start VilaPrintBridge, then scan for Windows, paired Bluetooth, and Wi-Fi printers.</span>
+        </div>
+        <div class="shopboy-printer-actions">
+          <button type="button" class="btn btn-primary" data-browser-auto-connect><i data-lucide="wand-sparkles"></i> Auto Connect Printer</button>
+          <button type="button" class="btn btn-primary" data-browser-serial-connect><i data-lucide="usb"></i> Browser Serial/USB</button>
+          <button type="button" class="btn btn-primary" data-browser-bluetooth-connect><i data-lucide="bluetooth-connected"></i> Browser Bluetooth</button>
+          <button type="button" class="btn btn-outline" data-printer-scan><i data-lucide="search"></i> Scan Printers</button>
+          <button type="button" class="btn btn-primary" data-printer-connect><i data-lucide="plug"></i> Connect Printer</button>
+          <button type="button" class="btn btn-outline" data-printer-connect-ip><i data-lucide="wifi"></i> Connect IP</button>
+          <button type="button" class="btn btn-outline" data-printer-connect-com><i data-lucide="bluetooth"></i> Connect COM</button>
+          <button type="button" class="btn btn-outline" data-printer-test><i data-lucide="printer-check"></i> Test Print</button>
+          <button type="button" class="btn btn-ghost text-destructive" data-printer-disconnect><i data-lucide="unlink"></i> Disconnect</button>
+        </div>
+      </div>
+    </section>
     {% if last_sale %}
     <section style="margin-bottom: 1rem;">
       <div class="card" style="padding:0.75rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">

@@ -146,7 +146,7 @@
       const ports = await navigator.serial.getPorts();
       browserSerialPort = ports[0] || null;
     }
-    if (!browserSerialPort) throw new Error("Connect Browser Serial/USB in Settings first.");
+    if (!browserSerialPort) throw new Error("Connect Browser Serial/USB in the printer panel first.");
     if (!browserSerialPort.writable) {
       await browserSerialPort.open({ baudRate });
     }
@@ -182,7 +182,7 @@
       const devices = await navigator.bluetooth.getDevices();
       browserBluetoothDevice = devices[0] || null;
     }
-    if (!browserBluetoothDevice) throw new Error("Connect Browser Bluetooth in Settings first.");
+    if (!browserBluetoothDevice) throw new Error("Connect Browser Bluetooth in the printer panel first.");
     if (!browserBluetoothDevice.gatt.connected || !browserBluetoothCharacteristic) {
       const server = await browserBluetoothDevice.gatt.connect();
       browserBluetoothCharacteristic = await findBluetoothCharacteristic(server);
