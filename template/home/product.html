@@ -279,11 +279,12 @@
 </div>
 <button
   type="button"
-  class="floating-cart-button"
+  class="floating-cart-button{% if not cart %} floating-cart-button-empty{% endif %}"
   data-floating-cart-open
   aria-controls="floatingCartPanel"
   aria-expanded="false"
   aria-label="Open cart"
+  {% if not cart %}hidden{% endif %}
 >
   <i data-lucide="shopping-cart"></i>
   <span class="floating-cart-badge">{% if cart %}{{ cart|length }}{% else %}0{% endif %}</span>

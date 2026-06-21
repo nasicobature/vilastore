@@ -1304,6 +1304,11 @@ button {
   transform: translateY(-2px);
 }
 
+.floating-cart-button-empty,
+.floating-cart-button[hidden] {
+  display: none;
+}
+
 .floating-cart-button i,
 .floating-cart-button svg {
   width: 27px;
