@@ -160,9 +160,14 @@
       </div>
 
       <!-- CART PANEL -->
-      <div class="cart-panel">
+      <div class="cart-panel" id="floatingCartPanel" aria-label="Shopping cart">
 
-        <h3>Shopping Cart</h3>
+        <div class="floating-cart-panel-header">
+          <h3>Shopping Cart</h3>
+          <button type="button" class="floating-cart-close" data-floating-cart-close aria-label="Close cart">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
         <div id="offlineCartMirror"></div>
         <form method="POST" action="{% url 'add_to_cart_by_code' %}" style="margin-bottom:0.75rem;">
           {% csrf_token %}
@@ -272,6 +277,18 @@
 
   </main>
 </div>
+<button
+  type="button"
+  class="floating-cart-button"
+  data-floating-cart-open
+  aria-controls="floatingCartPanel"
+  aria-expanded="false"
+  aria-label="Open cart"
+>
+  <i data-lucide="shopping-cart"></i>
+  <span class="floating-cart-badge">{% if cart %}{{ cart|length }}{% else %}0{% endif %}</span>
+</button>
+<button type="button" class="floating-cart-backdrop" data-floating-cart-close aria-label="Close cart"></button>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     lucide.createIcons();

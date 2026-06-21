@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
   initMobileDashboardNav();
+  initFloatingCart();
   lucide.createIcons();
 });
 
@@ -109,6 +110,39 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function initFloatingCart() {
+  const openButton = document.querySelector('[data-floating-cart-open]');
+  const panel = document.getElementById('floatingCartPanel');
+  const closeControls = document.querySelectorAll('[data-floating-cart-close]');
+
+  if (!openButton || !panel) {
+    return;
+  }
+
+  function openCart() {
+    document.body.classList.add('floating-cart-open');
+    openButton.setAttribute('aria-expanded', 'true');
+    panel.setAttribute('tabindex', '-1');
+    panel.focus({ preventScroll: true });
+  }
+
+  function closeCart() {
+    document.body.classList.remove('floating-cart-open');
+    openButton.setAttribute('aria-expanded', 'false');
+  }
+
+  openButton.addEventListener('click', openCart);
+  closeControls.forEach(function(control) {
+    control.addEventListener('click', closeCart);
+  });
+
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+      closeCart();
+    }
+  });
 }
 
 let currentProductId = null;

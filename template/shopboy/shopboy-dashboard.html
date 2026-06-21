@@ -16,6 +16,7 @@
   <title>VilaStore - Staff Dashboard</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
   <script src="{% static 'js/thermal-printer.js' %}?v=20260609-shopboy-printer" defer></script>
   <style>
     .shopboy-printer-card {
@@ -114,7 +115,7 @@
     }
   </style>
 </head>
-<body data-shop-name="{{ owner.business_name|default:owner.username }}" data-shop-address="{{ owner.address|default:'' }}">
+<body class="has-cart-panel" data-shop-name="{{ owner.business_name|default:owner.username }}" data-shop-address="{{ owner.address|default:'' }}">
   <header class="marketplace-header">
     <div class="marketplace-header-inner">
       <div style="display:flex;align-items:center;gap:0.75rem;">
@@ -294,8 +295,13 @@
         </div>
       </div>
 
-      <div class="cart-panel">
-        <h3>Customer Cart</h3>
+      <div class="cart-panel" id="floatingCartPanel" aria-label="Customer cart">
+        <div class="floating-cart-panel-header">
+          <h3>Customer Cart</h3>
+          <button type="button" class="floating-cart-close" data-floating-cart-close aria-label="Close cart">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
         <form method="POST" action="{% url 'shopboy_add_to_cart_by_code' %}" style="margin-bottom:0.75rem;">
           {% csrf_token %}
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -373,6 +379,18 @@
       </div>
     </div>
   </main>
+  <button
+    type="button"
+    class="floating-cart-button"
+    data-floating-cart-open
+    aria-controls="floatingCartPanel"
+    aria-expanded="false"
+    aria-label="Open cart"
+  >
+    <i data-lucide="shopping-cart"></i>
+    <span class="floating-cart-badge">{% if cart %}{{ cart|length }}{% else %}0{% endif %}</span>
+  </button>
+  <button type="button" class="floating-cart-backdrop" data-floating-cart-close aria-label="Close cart"></button>
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {
