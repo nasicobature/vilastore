@@ -110,16 +110,26 @@
           </div>
         </form>
 
+        <section class="price-search-panel" data-price-search>
+          <div class="price-search-field">
+            <i data-lucide="search"></i>
+            <input type="search" class="input" data-price-search-input placeholder="Search exact price, e.g. ₦500 or 1,000">
+          </div>
+          <div class="price-search-results" data-price-search-results aria-live="polite"></div>
+        </section>
+
         <div class="products-grid">
           {% for product in products %}
             <div
               class="product-card"
               data-offline-product
               data-product-id="{{ product.id }}"
-              data-product-name="{{ product.name|escapejs }}"
-              data-product-code="{{ product.code|default:''|escapejs }}"
+              data-product-name="{{ product.name|escape }}"
+              data-product-code="{{ product.code|default:''|escape }}"
               data-product-price="{{ product.display_price }}"
               data-product-stock="{{ product.display_stock }}"
+              data-product-category="{{ product.category.name|default:'Uncategorized'|escape }}"
+              data-product-image="{% if product.image %}{{ product.image.url }}{% endif %}"
             >
 
               <form method="POST" action="{% url 'add_to_cart' product.id %}">

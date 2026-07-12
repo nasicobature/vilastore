@@ -5343,6 +5343,7 @@ def shopboy_dashboard(request):
         (Decimal(str(item["price"])) * _cart_quantity(item) for item in cart.values()),
         Decimal("0.00"),
     )
+    cart_count = sum((_cart_quantity(item) for item in cart.values()), Decimal("0.00"))
 
     last_sale_id = request.session.get("shopboy_last_sale_id")
     last_sale = None
@@ -5360,6 +5361,7 @@ def shopboy_dashboard(request):
         "selected_category": category_id,
         "search_query": search_query,
         "cart": cart,
+        "cart_count": cart_count,
         "cart_total": total.quantize(Decimal("0.01")),
         "last_sale": last_sale,
     })

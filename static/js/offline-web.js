@@ -898,6 +898,9 @@
     const cart = getCart();
     if (!cart.items.length) {
       host.innerHTML = "";
+      if (window.VilaStoreCart && typeof window.VilaStoreCart.sync === "function") {
+        window.VilaStoreCart.sync(0);
+      }
       return;
     }
     const checkoutPath = window.location.pathname.includes("/shopboy/") ? "/shopboy/cart/checkout/" : "/checkout/";
@@ -908,7 +911,10 @@
         <p style="margin:0.25rem 0;color:var(--muted-foreground);font-size:0.85rem;">This cart is saved on this browser and will sync when internet returns.</p>
         <ul style="padding-left:1.1rem;margin:0.5rem 0;">
           ${cart.items
-            .map((item) => `<li>${item.name} - ${item.quantity} x NGN ${item.price}</li>`)
+            .map(
+              (item) =>
+                `<li data-offline-cart-row data-product-quantity="${escapeHtml(item.quantity)}">${item.name} - ${item.quantity} x NGN ${item.price}</li>`
+            )
             .join("")}
         </ul>
         <strong>Total: NGN ${cart.total}</strong>
@@ -924,6 +930,11 @@
         </form>
       </div>
     `;
+    if (window.VilaStoreCart && typeof window.VilaStoreCart.sync === "function") {
+      window.VilaStoreCart.sync(
+        (cart.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+      );
+    }
   }
 
   function addToOfflineCart(product, quantity) {

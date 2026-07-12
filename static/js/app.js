@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
   initMobileDashboardNav();
   initFloatingCart();
+  initPriceSearch();
   lucide.createIcons();
 });
 
@@ -122,6 +123,10 @@ function initFloatingCart() {
   }
 
   function openCart() {
+    syncFloatingCartState();
+    if (openButton.hidden) {
+      return;
+    }
     document.body.classList.add('floating-cart-open');
     openButton.setAttribute('aria-expanded', 'true');
     panel.setAttribute('tabindex', '-1');
@@ -134,14 +139,180 @@ function initFloatingCart() {
   }
 
   openButton.addEventListener('click', openCart);
+  window.addEventListener('vilastore:cart-updated', function(event) {
+    const count = event && event.detail ? event.detail.count : undefined;
+    syncFloatingCartState(count);
+  });
   closeControls.forEach(function(control) {
     control.addEventListener('click', closeCart);
   });
+
+  const cartObserver = new MutationObserver(function() {
+    syncFloatingCartState();
+  });
+  cartObserver.observe(panel, { childList: true, subtree: true });
 
   document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
       closeCart();
     }
+  });
+
+  syncFloatingCartState();
+}
+
+function cartQuantityFromNode(node) {
+  if (!node) return 0;
+  const quantity = Number(node.dataset.productQuantity || node.getAttribute('data-product-quantity') || 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
+function syncFloatingCartState(overrideCount) {
+  const openButton = document.querySelector('[data-floating-cart-open]');
+  const panel = document.getElementById('floatingCartPanel');
+  if (!openButton || !panel) return;
+
+  const badge = openButton.querySelector('.floating-cart-badge');
+  let count = Number(overrideCount);
+
+  if (!Number.isFinite(count)) {
+    const serverCount = Array.from(panel.querySelectorAll('[data-offline-cart-item]'))
+      .reduce((sum, item) => sum + cartQuantityFromNode(item), 0);
+    const offlineCount = Array.from(panel.querySelectorAll('[data-offline-cart-row]'))
+      .reduce((sum, item) => sum + cartQuantityFromNode(item), 0);
+    count = Math.max(serverCount, offlineCount);
+  }
+
+  count = Math.max(0, count);
+
+  if (badge) {
+    badge.textContent = count % 1 === 0 ? String(count) : String(Number(count.toFixed(2)));
+  }
+
+  openButton.hidden = count <= 0;
+  openButton.classList.toggle('floating-cart-button-empty', count <= 0);
+
+  if (count <= 0 && document.body.classList.contains('floating-cart-open')) {
+    document.body.classList.remove('floating-cart-open');
+    openButton.setAttribute('aria-expanded', 'false');
+  }
+}
+
+window.VilaStoreCart = {
+  sync: syncFloatingCartState
+};
+
+function normalizePriceToCents(value) {
+  const cleaned = String(value || '').replace(/[^\d.]/g, '');
+  if (!cleaned) return null;
+  const parts = cleaned.split('.');
+  const normalized = parts.length > 1 ? `${parts[0]}.${parts.slice(1).join('')}` : parts[0];
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount)) return null;
+  return Math.round(amount * 100);
+}
+
+function formatPrice(value) {
+  const amount = Number(String(value || '').replace(/[^\d.-]/g, ''));
+  if (!Number.isFinite(amount)) return String(value || '0');
+  return amount.toLocaleString(undefined, {
+    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function productImageMarkup(product) {
+  if (product.image) {
+    return `<img src="${escapeHtml(product.image)}" alt="">`;
+  }
+  return '<div class="price-search-placeholder"><i data-lucide="package"></i></div>';
+}
+
+function renderPriceSearchResults(panel, products, query) {
+  const results = panel.querySelector('[data-price-search-results]');
+  if (!results) return;
+
+  if (!query.trim()) {
+    results.innerHTML = '';
+    panel.classList.remove('price-search-active');
+    return;
+  }
+
+  panel.classList.add('price-search-active');
+
+  if (!products.length) {
+    results.innerHTML = '<div class="price-search-empty">No products found at this price.</div>';
+    return;
+  }
+
+  results.innerHTML = products.map(function(product) {
+    const disabled = product.stock <= 0 ? ' disabled aria-disabled="true"' : '';
+    const stockText = product.stock % 1 === 0 ? String(product.stock) : String(Number(product.stock.toFixed(2)));
+    return `
+      <button type="button" class="price-search-result" data-price-search-product-id="${escapeHtml(product.id)}"${disabled}>
+        <span class="price-search-thumb">${productImageMarkup(product)}</span>
+        <span class="price-search-copy">
+          <strong>${escapeHtml(product.name)}</strong>
+          <span>${escapeHtml(product.category)}</span>
+          <small>${escapeHtml(stockText)} in stock</small>
+        </span>
+        <span class="price-search-price">₦${escapeHtml(formatPrice(product.price))}</span>
+      </button>
+    `;
+  }).join('');
+
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+}
+
+function initPriceSearch() {
+  document.querySelectorAll('[data-price-search]').forEach(function(panel) {
+    const input = panel.querySelector('[data-price-search-input]');
+    if (!input) return;
+
+    const products = Array.from(document.querySelectorAll('[data-offline-product]')).map(function(card) {
+      return {
+        id: card.dataset.productId || '',
+        name: card.dataset.productName || 'Product',
+        price: card.dataset.productPrice || '0',
+        priceCents: normalizePriceToCents(card.dataset.productPrice),
+        stock: Number(card.dataset.productStock || 0),
+        category: card.dataset.productCategory || 'Uncategorized',
+        image: card.dataset.productImage || '',
+        card: card
+      };
+    }).filter(function(product) {
+      return product.id && product.priceCents !== null;
+    });
+
+    input.addEventListener('input', function() {
+      const targetPrice = normalizePriceToCents(input.value);
+      if (targetPrice === null) {
+        renderPriceSearchResults(panel, [], input.value);
+        return;
+      }
+      renderPriceSearchResults(panel, products.filter(function(product) {
+        return product.priceCents === targetPrice;
+      }), input.value);
+    });
+
+    panel.addEventListener('click', function(event) {
+      const result = event.target.closest('[data-price-search-product-id]');
+      if (!result || result.disabled) return;
+      const product = products.find(function(item) {
+        return item.id === result.dataset.priceSearchProductId;
+      });
+      if (!product || !product.card) return;
+      const form = product.card.querySelector('form');
+      const submitButton = form ? form.querySelector('button[type="submit"]') : null;
+      if (!form || (submitButton && submitButton.disabled)) return;
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit(submitButton || undefined);
+      } else {
+        form.submit();
+      }
+    });
   });
 }
 

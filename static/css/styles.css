@@ -419,6 +419,132 @@ button {
   color: var(--muted-foreground);
 }
 
+.price-search-panel {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.price-search-field {
+  position: relative;
+}
+
+.price-search-field i,
+.price-search-field svg {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  color: var(--muted-foreground);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.price-search-field .input {
+  width: 100%;
+  padding-left: 2.6rem;
+}
+
+.price-search-results {
+  display: none;
+  gap: 0.5rem;
+}
+
+.price-search-active .price-search-results {
+  display: grid;
+}
+
+.price-search-result {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  color: var(--foreground);
+  text-align: left;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.price-search-result:not(:disabled):hover {
+  border-color: rgba(176, 110, 33, 0.45);
+  background: var(--primary-soft);
+}
+
+.price-search-result:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.price-search-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 0.65rem;
+  overflow: hidden;
+  background: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.price-search-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.price-search-placeholder {
+  color: var(--muted-foreground);
+}
+
+.price-search-placeholder i,
+.price-search-placeholder svg {
+  width: 22px;
+  height: 22px;
+}
+
+.price-search-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.price-search-copy strong,
+.price-search-copy span,
+.price-search-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.price-search-copy strong {
+  font-size: 0.92rem;
+}
+
+.price-search-copy span,
+.price-search-copy small,
+.price-search-empty {
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+}
+
+.price-search-price {
+  font-weight: 800;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.price-search-empty {
+  border: 1px dashed var(--border);
+  border-radius: 0.75rem;
+  padding: 0.85rem;
+  background: var(--card);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -6705,6 +6831,174 @@ body.mobile-nav-open {
   }
 }
 
+/* App-wide responsive hardening */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+.main-content,
+main,
+.card,
+.modal,
+.table-container,
+.table-scroll,
+.products-section,
+.cart-panel,
+.product-card,
+.marketplace-header-inner {
+  min-width: 0;
+}
+
+.card,
+.modal,
+.product-card,
+.cart-panel,
+.table-container {
+  overflow-wrap: anywhere;
+}
+
+.btn,
+.input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+.modal-overlay {
+  padding: 1rem;
+}
+
+.modal {
+  width: min(100%, 520px);
+}
+
+.products-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.products-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+}
+
+.product-card form > div:last-child,
+.cart-panel form > div,
+.filters-section form,
+.table-search,
+.housing-filter-bar,
+.housing-inline-form,
+.marketplace-header-inner {
+  min-width: 0;
+}
+
+.product-card .btn,
+.cart-panel .btn,
+.filters-section .btn {
+  white-space: normal;
+}
+
+@media (max-width: 900px) {
+  .marketplace-header {
+    position: static;
+  }
+
+  .marketplace-header-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+  }
+
+  .marketplace-header-inner > div {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .marketplace-header-inner .btn,
+  main > .card .btn,
+  .shopboy-printer-actions .btn {
+    flex: 1 1 150px;
+  }
+
+  .table-container {
+    border-radius: var(--radius);
+  }
+
+  .table:not(.table--responsive) {
+    min-width: 720px;
+  }
+}
+
+@media (max-width: 640px) {
+  main,
+  .main-content {
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
+  }
+
+  .card,
+  .cart-panel {
+    padding: 1rem;
+  }
+
+  .products-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-card form > div:last-child,
+  .cart-panel form > div,
+  .filters-section form,
+  .table-search,
+  .pagination-controls,
+  .housing-filter-bar,
+  .housing-inline-form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .product-card form > div:last-child .input,
+  .product-card form > div:last-child .btn,
+  .cart-panel form > div .input,
+  .cart-panel form > div .btn,
+  .filters-section .input,
+  .filters-section .btn,
+  .filters-section a.btn {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .price-search-result {
+    grid-template-columns: 48px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .price-search-thumb {
+    width: 48px;
+    height: 48px;
+  }
+
+  .price-search-price {
+    grid-column: 2;
+  }
+
+  .floating-cart-button {
+    right: calc(0.85rem + env(safe-area-inset-right, 0px));
+    bottom: calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* Floating cart drawer: keep after mobile nav overrides. */
 body.has-cart-panel .products-layout {
   grid-template-columns: minmax(0, 1fr);
@@ -6745,5 +7039,59 @@ body.floating-cart-open .cart-panel {
     bottom: 1rem;
     width: 58px;
     height: 58px;
+  }
+}
+
+/* Final responsive safeguards for dense app surfaces. */
+@media (max-width: 760px) {
+  .table-container,
+  .table-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: visible;
+  }
+
+  .table {
+    width: 100%;
+    min-width: 0 !important;
+    table-layout: auto;
+  }
+
+  .table th,
+  .table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .table:not(.table--responsive) th,
+  .table:not(.table--responsive) td {
+    padding: 0.55rem;
+    font-size: 0.78rem;
+  }
+
+  .modal-overlay {
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+
+  .modal {
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-header h1 {
+    font-size: 1.45rem;
+  }
+
+  .card,
+  .modal,
+  .cart-panel {
+    border-radius: 0.75rem;
   }
 }

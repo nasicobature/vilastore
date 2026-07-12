@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="{% static 'js/app.js' %}" defer></script>
+  <script src="{% static 'js/offline-web.js' %}" defer></script>
   <script src="{% static 'js/thermal-printer.js' %}?v=20260609-shopboy-printer" defer></script>
   <style>
     .shopboy-printer-card {
@@ -245,6 +246,14 @@
           </form>
         </div>
 
+        <section class="price-search-panel" data-price-search>
+          <div class="price-search-field">
+            <i data-lucide="search"></i>
+            <input type="search" class="input" data-price-search-input placeholder="Search exact price, e.g. ₦500 or 1,000">
+          </div>
+          <div class="price-search-results" data-price-search-results aria-live="polite"></div>
+        </section>
+
         <div class="products-grid" id="productsGrid">
           {% for product in products %}
           <div class="product-card product-item"
@@ -254,8 +263,10 @@
             data-product-id="{{ product.id }}"
             data-product-name="{{ product.name|escape }}"
             data-product-code="{{ product.code|default:''|escape }}"
-            data-product-price="{{ product.selling_price }}"
-            data-product-stock="{{ product.stock }}">
+            data-product-price="{{ product.display_price }}"
+            data-product-stock="{{ product.display_stock }}"
+            data-product-category="{{ product.category.name|default:'Uncategorized'|escape }}"
+            data-product-image="{% if product.image %}{{ product.image.url }}{% endif %}">
             <form method="POST" action="{% url 'shopboy_add_to_cart' product.id %}">
               {% csrf_token %}
               <div class="product-card-image">
@@ -264,23 +275,23 @@
                 {% else %}
                   <i data-lucide="package" class="product-card-placeholder"></i>
                 {% endif %}
-                {% if product.stock == 0 %}
+                {% if product.display_stock <= 0 %}
                 <span class="stock-badge out">Out of Stock</span>
-                {% elif product.stock <= product.low_stock_threshold %}
+                {% elif product.display_stock <= product.low_stock_threshold %}
                 <span class="stock-badge low">Low Stock</span>
                 {% endif %}
               </div>
               <div class="product-card-content">
                 <h3 class="product-card-name">{{ product.name }}</h3>
                 <div class="product-card-details">
-                  <div class="product-card-price">&#8358;{{ product.selling_price|floatformat:2 }}</div>
-                  <div class="product-card-meta"><div class="product-card-stock">{{ product.stock }} left</div></div>
+                  <div class="product-card-price">&#8358;{{ product.display_price|floatformat:2 }}</div>
+                  <div class="product-card-meta"><div class="product-card-stock">{{ product.display_stock }} left</div></div>
                 </div>
                 <small style="color:var(--muted-foreground);">{{ product.category.name|default:"Uncategorized" }}</small>
               </div>
               <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;">
-                <input type="number" name="quantity" min="0.01" step="0.01" max="{{ product.stock }}" value="1" class="input" style="width:80px;" {% if product.stock == 0 %}disabled{% endif %}>
-                <button type="submit" class="btn btn-primary btn-full" {% if product.stock == 0 %}disabled{% endif %}>
+                <input type="number" name="quantity" min="0.01" step="0.01" max="{{ product.display_stock }}" value="1" class="input" style="width:80px;" {% if product.display_stock <= 0 %}disabled{% endif %}>
+                <button type="submit" class="btn btn-primary btn-full" {% if product.display_stock <= 0 %}disabled{% endif %}>
                   Add to Cart
                 </button>
               </div>
@@ -329,7 +340,14 @@
         {% if cart %}
           <ul>
             {% for key, item in cart.items %}
-              <li style="margin-bottom:10px;">
+              <li
+                style="margin-bottom:10px;"
+                data-offline-cart-item
+                data-product-id="{{ key }}"
+                data-product-name="{{ item.name|escapejs }}"
+                data-product-price="{{ item.price }}"
+                data-product-quantity="{{ item.quantity }}"
+              >
                 <strong>{{ item.name }}</strong><br>
                 {{ item.quantity }} × &#8358;{{ item.price }}
 
@@ -389,7 +407,7 @@
     {% if not cart %}hidden{% endif %}
   >
     <i data-lucide="shopping-cart"></i>
-    <span class="floating-cart-badge">{% if cart %}{{ cart|length }}{% else %}0{% endif %}</span>
+    <span class="floating-cart-badge">{% if cart %}{{ cart_count|floatformat:"-2" }}{% else %}0{% endif %}</span>
   </button>
   <button type="button" class="floating-cart-backdrop" data-floating-cart-close aria-label="Close cart"></button>
 
