@@ -2557,6 +2557,14 @@ def api_owner_dashboard(request):
             }
             for product in top_products:
                 product._branch_inventory = inventory_map.get(product.id)
+
+        marketplace_orders_qs = MarketplaceOrder.objects.filter(shop_owner=owner)
+        if selected_branch:
+            marketplace_orders_qs = marketplace_orders_qs.filter(branch=selected_branch)
+        pending_orders = marketplace_orders_qs.exclude(
+            status__in=[MarketplaceOrder.STATUS_DELIVERED, MarketplaceOrder.STATUS_CANCELLED]
+        ).count()
+        recent_marketplace_orders = marketplace_orders_qs.select_related("shop_owner", "branch").order_by("-created_at")[:5]
         branch_analytics = _serialize_business_branch_analytics(owner)
 
         return _json_success({
@@ -2565,6 +2573,7 @@ def api_owner_dashboard(request):
             "today_profit": _money(today_profit),
             "total_products": total_products,
             "low_stock_count": low_stock_count,
+            "pending_orders": pending_orders,
             "inventory_analysis": {
                 "total_stock_units": str(total_stock_units),
                 "stock_value": _money(total_stock_value),
@@ -2604,6 +2613,10 @@ def api_owner_dashboard(request):
                     "image_url": _abs_media_url(request, product.image),
                 }
                 for product in top_products
+            ],
+            "recent_marketplace_orders": [
+                _serialize_order(request, order)
+                for order in recent_marketplace_orders
             ],
         })
     except Exception as exc:
