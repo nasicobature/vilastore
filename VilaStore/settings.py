@@ -188,11 +188,26 @@ if not CORS_ALLOW_ALL_ORIGINS:
         "http://127.0.0.1:19006",
         "http://localhost:8081",
         "http://127.0.0.1:8081",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:8092",
+        "http://127.0.0.1:8092",
     ]
     env_origins = [origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
     for origin in env_origins:
         if origin not in CORS_ALLOWED_ORIGINS:
             CORS_ALLOWED_ORIGINS.append(origin)
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://localhost:\d+$",
+        r"^http://127\.0\.0\.1:\d+$",
+        r"^http://10\.\d+\.\d+\.\d+:\d+$",
+        r"^http://172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+:\d+$",
+        r"^http://192\.168\.\d+\.\d+:\d+$",
+    ]
+    env_origin_regexes = [origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGIN_REGEXES", "").split(",") if origin.strip()]
+    for origin_regex in env_origin_regexes:
+        if origin_regex not in CORS_ALLOWED_ORIGIN_REGEXES:
+            CORS_ALLOWED_ORIGIN_REGEXES.append(origin_regex)
 
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
 default_csrf_origins = [
