@@ -89,6 +89,22 @@
     return value === null || value === "" ? fallback : value;
   }
 
+  function storageScope() {
+    const explicitUser = metaValue("vilastore-offline-user", "");
+    const explicitEmail = metaValue("vilastore-offline-email", "");
+    const session = getOfflineSession();
+    const identity =
+      explicitUser ||
+      explicitEmail ||
+      (session && (session.identity || (session.identities || [])[0])) ||
+      "guest";
+    return simpleHash(normalizeIdentity(identity) || "guest");
+  }
+
+  function scopedKey(baseKey) {
+    return `${baseKey}:${storageScope()}`;
+  }
+
   function numberOrNull(value) {
     if (value === null || value === undefined || value === "") return null;
     const parsed = Number(value);
@@ -847,7 +863,7 @@
   setInterval(flushQueue, 30000);
 
   function cacheProductsFromPage() {
-    const current = read(PRODUCTS_KEY, {});
+    const current = read(scopedKey(PRODUCTS_KEY), {});
     document.querySelectorAll("[data-offline-product]").forEach((el) => {
       const product = {
         id: el.dataset.productId || "",
@@ -859,22 +875,22 @@
       if (product.id) current[`id:${product.id}`] = product;
       if (product.code) current[`code:${product.code.toLowerCase()}`] = product;
     });
-    write(PRODUCTS_KEY, current);
+    write(scopedKey(PRODUCTS_KEY), current);
   }
 
   function findProduct(ref, byCode) {
-    const products = read(PRODUCTS_KEY, {});
+    const products = read(scopedKey(PRODUCTS_KEY), {});
     const key = byCode ? `code:${String(ref || "").toLowerCase()}` : `id:${ref}`;
     return products[key] || null;
   }
 
   function getCart() {
-    return read(CART_KEY, { items: [], total: "0.00" });
+    return read(scopedKey(CART_KEY), { items: [], total: "0.00" });
   }
 
   function setCart(cart) {
     cart.total = money((cart.items || []).reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0));
-    return write(CART_KEY, cart);
+    return write(scopedKey(CART_KEY), cart);
   }
 
   function seedCartFromServer() {
@@ -1175,7 +1191,7 @@
       }
       const receipt = saveOfflineReceipt(fields);
       const saleTotal = receipt.total;
-      write(CART_KEY, { items: [], total: "0.00" });
+      write(scopedKey(CART_KEY), { items: [], total: "0.00" });
       renderCart();
       rememberActivity({ kind: "Sale", label: `${receipt.receipt_no} - NGN ${saleTotal}`, detail: "Offline receipt generated and waiting to sync." });
       notify(`Offline receipt ${receipt.receipt_no} generated. Printing now. It will sync when internet returns.`, true);

@@ -3,7 +3,6 @@ from django.urls import reverse
 from django.conf import settings as django_settings
 import requests
 import os
-from urllib.parse import quote as urlquote
 from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -1640,24 +1639,6 @@ def sales_history(request):
     }
 
     return render(request, 'home/sales-history.html', context)
-
-
-@login_required
-@require_POST
-def delete_sale(request, sale_id):
-    sale = get_object_or_404(Sale, id=sale_id, user=request.user)
-    sale.delete()
-    messages.success(request, "Sale history record deleted.")
-
-    params = []
-    for key in ("branch", "start_date", "end_date", "q"):
-        value = (request.POST.get(key) or "").strip()
-        if value:
-            params.append(f"{key}={urlquote(value)}")
-    redirect_url = reverse("sales-history")
-    if params:
-        redirect_url = f"{redirect_url}?{'&'.join(params)}"
-    return redirect(redirect_url)
 
 
 @login_required

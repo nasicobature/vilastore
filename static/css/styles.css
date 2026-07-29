@@ -1150,13 +1150,16 @@ button {
     border-bottom: none;
   }
 
-  .table--responsive td[data-label="Action"] {
+  .table--responsive td[data-label="Action"],
+  .table--responsive td[data-label="Actions"] {
     align-items: stretch;
     gap: 0.5rem;
   }
 
   .table--responsive td[data-label="Action"] .btn,
-  .table--responsive td[data-label="Action"] button {
+  .table--responsive td[data-label="Action"] button,
+  .table--responsive td[data-label="Actions"] .btn,
+  .table--responsive td[data-label="Actions"] button {
     width: 100%;
   }
 
@@ -1186,6 +1189,10 @@ button {
 }
 
 @media (max-width: 640px) {
+  .shopboy-main {
+    padding: 0.75rem;
+  }
+
   .table--responsive td {
     padding: 0.6rem 0.75rem;
   }
@@ -1339,6 +1346,12 @@ button {
   display: grid;
   grid-template-columns: 1fr 320px;
   gap: 1.5rem;
+}
+
+.shopboy-main {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  padding: 1rem;
 }
 
 .products-section {

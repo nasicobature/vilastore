@@ -205,7 +205,6 @@ urlpatterns = [
     path('ai-insights/chat/', views.ai_chat, name='ai_chat'),
     path('expenses', views.expenses, name='expenses'),
     path('sales-history', views.sales_history, name='sales-history'),
-    path('sales/<int:sale_id>/delete/', views.delete_sale, name='delete_sale'),
     path('loans', views.loans, name='loans'),
     path('loans/<int:sale_id>/update/', views.update_loan_payment, name='update_loan_payment'),
     path('sales/<int:sale_id>/receipt/', views.sale_receipt, name='sale_receipt'),
