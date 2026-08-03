@@ -155,7 +155,7 @@
 
           <article class="investor-card metric-card">
             <div class="metric-head">
-              <div><span class="metric-label">AWS Paid Last Month</span><div class="metric-value" data-money="awsCost">₦178,000</div></div>
+              <div><span class="metric-label">AWS Paid July</span><div class="metric-value" data-money="awsCost">₦178,000</div></div>
               <div class="metric-icon cost"><i data-lucide="cloud"></i></div>
             </div>
             <span class="status-pill"><i data-lucide="check-circle-2"></i> Paid</span>
@@ -239,12 +239,20 @@
       awsCost: 178000,
       payments: [
         {
-          date: "June 2026",
-          period: "Last Month",
+          date: "July 2026",
+          period: "Paid Month",
           description: "AWS Cloud Service Payment",
           amount: 178000,
           status: "Paid",
-          reference: "AWS-2026-06"
+          reference: "AWS-2026-07"
+        },
+        {
+          date: "August 2026",
+          period: "Next Month",
+          description: "AWS Cloud Service Payment",
+          amount: 178000,
+          status: "Next",
+          reference: "AWS-2026-08"
         }
       ]
     };
@@ -277,7 +285,7 @@
           <td>${payment.date}</td>
           <td>${payment.description}<br><span style="color:var(--muted-foreground);">Period: ${payment.period}</span></td>
           <td>${currency.format(payment.amount)}</td>
-          <td><span class="badge badge-success">${payment.status}</span></td>
+          <td><span class="badge ${payment.status === "Paid" ? "badge-success" : "badge-warning"}">${payment.status}</span></td>
           <td>${payment.reference}</td>
         </tr>
       `).join("");
