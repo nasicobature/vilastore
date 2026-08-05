@@ -2747,6 +2747,24 @@ def mobile_subscription_upgrade_checkout(request):
     return redirect("subscription_payment")
 
 
+def mobile_signup_subscription_checkout(request):
+    email = (request.GET.get("email") or "").strip().lower()
+    owner = User.objects.filter(
+        email__iexact=email,
+        account_type=User.ACCOUNT_TYPE_SHOP,
+        is_email_verified=True,
+        is_paid=False,
+    ).order_by("-id").first()
+
+    if not owner:
+        messages.error(request, "Verified signup was not found. Please sign in or complete signup again.")
+        return redirect("login")
+
+    request.session["pending_payment_user_id"] = owner.id
+    messages.info(request, "Complete payment to activate your VilaStore dashboard.")
+    return redirect("subscription_payment")
+
+
 @login_required
 @require_POST
 def update_profile(request):
@@ -3325,7 +3343,6 @@ def _username_is_valid(username):
     return bool(re.fullmatch(r"[A-Za-z0-9._-]{3,30}", username or ""))
 
 
-TRIAL_DAYS = 7
 BASE_FEE = 0
 MONTHLY_SUBSCRIPTION_FEE = 4000
 
@@ -3932,8 +3949,6 @@ def signup(request):
         if plan not in plan_prices:
             plan = "starter"
 
-        trial_end = timezone.now().date() + timedelta(days=TRIAL_DAYS)
-
         signup_user.business_name = business_name
         signup_user.business_type = business_type
         signup_user.account_type = User.ACCOUNT_TYPE_SHOP
@@ -3943,8 +3958,8 @@ def signup(request):
         signup_user.plan = plan
         signup_user.is_paid = False
         signup_user.monthly_fee = plan_prices[plan]
-        signup_user.is_active = True
-        signup_user.subscription_active_until = trial_end
+        signup_user.is_active = False
+        signup_user.subscription_active_until = None
 
         profile_image = request.FILES.get("profile_image")
         if profile_image:
@@ -3967,7 +3982,6 @@ def signup(request):
         marketplace_profile.save()
 
         _ensure_shop_code(signup_user)
-        login(request, signup_user, backend="django.contrib.auth.backends.ModelBackend")
 
         request.session.pop("signup_user_id", None)
         request.session.pop("verified_signup_user_id", None)
@@ -3978,20 +3992,19 @@ def signup(request):
         request.session.pop("agent_ref_code", None)
         request.session.pop("signup_flow", None)
 
-        trial_end_display = trial_end.strftime("%b %d, %Y")
         selected_plan = _plan_for_slug(signup_user.plan)
         registration_fee = _plan_registration_fee(signup_user.plan)
         monthly_fee = selected_plan["monthly_fee"] or Decimal(MONTHLY_SUBSCRIPTION_FEE)
         first_payment_total = registration_fee + monthly_fee
+        request.session["pending_payment_user_id"] = signup_user.id
         messages.success(
             request,
-            "Signup completed successfully. "
-            f"Your free trial runs until {trial_end_display}. "
-            f"First payment due after trial is NGN {first_payment_total:,} "
+            "Signup completed successfully. Complete payment now to activate your dashboard. "
+            f"Amount due is NGN {first_payment_total:,} "
             f"(NGN {monthly_fee:,} {selected_plan['name']} subscription), "
             f"then NGN {monthly_fee:,}/month.",
         )
-        return redirect(_post_login_redirect_name(signup_user))
+        return redirect("subscription_payment")
 
     signup_user = _get_signup_user(request)
     marketplace_profile = None
@@ -4049,14 +4062,14 @@ def signup(request):
         "verify_description": "Verify your email before adding shop information.",
         "setup_step_label": "Shop Setup",
         "setup_heading": "Set Up Your Shop",
-        "setup_description": "Add your business and marketplace details. Start your 1-week free trial once you finish signup.",
+        "setup_description": "Add your business and marketplace details. Payment is required before your dashboard is activated.",
         "business_name_label": "Business Name",
         "business_type_label": "Business Type",
         "shop_category_label": "Marketplace Category",
         "shop_location_label": "Marketplace Location",
         "shop_description_label": "Shop Description",
         "plan_heading": "Shop Owner Plan",
-        "signup_finish_label": "Start Free Trial",
+        "signup_finish_label": "Continue to Payment",
         "setup_form_url": reverse("signup"),
     })
 
@@ -4104,8 +4117,6 @@ def housing_signup(request):
         if plan not in plan_prices:
             plan = "starter"
 
-        trial_end = timezone.now().date() + timedelta(days=TRIAL_DAYS)
-
         signup_user.business_name = business_name
         signup_user.business_type = business_type
         signup_user.account_type = User.ACCOUNT_TYPE_HOUSING
@@ -4115,15 +4126,13 @@ def housing_signup(request):
         signup_user.plan = plan
         signup_user.is_paid = False
         signup_user.monthly_fee = plan_prices[plan]
-        signup_user.is_active = True
-        signup_user.subscription_active_until = trial_end
+        signup_user.is_active = False
+        signup_user.subscription_active_until = None
 
         profile_image = request.FILES.get("profile_image")
         if profile_image:
             signup_user.profile_image = profile_image
         signup_user.save()
-
-        login(request, signup_user, backend="django.contrib.auth.backends.ModelBackend")
 
         request.session.pop("signup_user_id", None)
         request.session.pop("verified_signup_user_id", None)
@@ -4134,20 +4143,19 @@ def housing_signup(request):
         request.session.pop("agent_ref_code", None)
         request.session.pop("signup_flow", None)
 
-        trial_end_display = trial_end.strftime("%b %d, %Y")
         selected_plan = _plan_for_slug(signup_user.plan)
         registration_fee = _plan_registration_fee(signup_user.plan)
         monthly_fee = selected_plan["monthly_fee"] or Decimal(MONTHLY_SUBSCRIPTION_FEE)
         first_payment_total = registration_fee + monthly_fee
+        request.session["pending_payment_user_id"] = signup_user.id
         messages.success(
             request,
-            "Housing signup completed successfully. "
-            f"Your free trial runs until {trial_end_display}. "
-            f"First payment due after trial is NGN {first_payment_total:,} "
+            "Housing signup completed successfully. Complete payment now to activate your dashboard. "
+            f"Amount due is NGN {first_payment_total:,} "
             f"(NGN {monthly_fee:,} {selected_plan['name']} subscription), "
             f"then NGN {monthly_fee:,}/month.",
         )
-        return redirect("housing_management")
+        return redirect("subscription_payment")
 
     signup_user = _get_signup_user(request)
     marketplace_profile = None
@@ -4285,7 +4293,11 @@ def login_view(request):
         if selected_account_type:
             pending_user = pending_user.filter(account_type=selected_account_type)
         pending_user = pending_user.first()
-        if pending_user:
+        if pending_user and check_password(password, pending_user.password):
+            if pending_user.is_email_verified:
+                request.session["pending_payment_user_id"] = pending_user.id
+                messages.error(request, "Payment is required before your dashboard is activated.")
+                return redirect("subscription_payment")
             messages.error(request, "Your account setup is not complete yet. Finish signup and verify your email.")
         else:
             messages.error(request, "Invalid email/username or password")
@@ -4935,11 +4947,12 @@ def subscription_payment(request):
             start_date = user.subscription_active_until
 
         user.is_paid = True
+        user.is_active = True
         if is_upgrade:
             user.plan = upgrade_plan_slug
         user.monthly_fee = monthly_fee
         user.subscription_active_until = start_date + timedelta(days=30)
-        update_fields = ["is_paid", "monthly_fee", "subscription_active_until"]
+        update_fields = ["is_paid", "is_active", "monthly_fee", "subscription_active_until"]
         if is_upgrade:
             update_fields.append("plan")
         user.save(update_fields=update_fields)

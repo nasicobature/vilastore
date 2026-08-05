@@ -156,7 +156,6 @@ from .views import (
     _send_marketplace_verification_code,
     _send_signup_code,
     _plan_for_slug,
-    TRIAL_DAYS,
     _refresh_house_availability,
     _sync_rental_payment_state,
 )
@@ -1974,10 +1973,10 @@ def api_mobile_shop_signup_verify(request):
         return _json_error("Invalid verification code.")
 
     user.is_email_verified = True
-    user.is_active = True
+    user.is_active = False
     user.email_verification_code = ""
     user.email_code_sent_at = None
-    user.subscription_active_until = timezone.localdate() + timedelta(days=TRIAL_DAYS)
+    user.subscription_active_until = None
     user.is_paid = False
     plan = _plan_for_slug(user.plan)
     user.monthly_fee = plan["monthly_fee"] or Decimal("0.00")
@@ -1993,14 +1992,12 @@ def api_mobile_shop_signup_verify(request):
     _ensure_shop_code(user)
     _ensure_marketplace_profiles()
 
-    token_obj = _issue_auth_token(AuthToken.ROLE_OWNER, owner=user)
+    query = urlencode({"email": user.email})
+    checkout_url = request.build_absolute_uri(f"{reverse('mobile_signup_subscription_checkout')}?{query}")
     return _json_success({
-        "message": "Shop registration completed. Your 1-week free trial has started.",
-        "token": token_obj.token,
-        "role": token_obj.role,
+        "message": "Email verified. Complete payment to activate your shop dashboard.",
+        "checkout_url": checkout_url,
         "profile": _serialize_owner(user),
-        "trial_days": TRIAL_DAYS,
-        "expires_at": token_obj.expires_at.isoformat() if token_obj.expires_at else None,
     })
 
 
