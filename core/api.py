@@ -5742,6 +5742,20 @@ def api_shopboy_cart_checkout(request):
     if not shopboy:
         return _json_error("Unauthorized.", status=401)
 
+    data = _get_body_data(request) or {}
+    payment_status = (data.get("payment_status") or Sale.PAYMENT_PAID).strip().lower()
+    valid_statuses = {Sale.PAYMENT_PAID, Sale.PAYMENT_LOAN}
+    if payment_status not in valid_statuses:
+        payment_status = Sale.PAYMENT_PAID
+
+    customer_name = (data.get("customer_name") or "").strip()
+    try:
+        initial_payment = Decimal(str(data.get("initial_payment") or "0"))
+        if initial_payment < 0:
+            raise ValueError
+    except Exception:
+        return _json_error("Initial payment must be 0 or more.")
+
     cart = _get_shopboy_cart(token_obj)
     if not cart.data:
         return _json_error("Cart is empty.", status=400)
@@ -5803,10 +5817,22 @@ def api_shopboy_cart_checkout(request):
             branch=branch,
             sales_channel=Sale.CHANNEL_SHOPBOY_PORTAL,
             handled_by_shopboy=shopboy,
+            customer_name=customer_name,
             total_amount=total_amount.quantize(Decimal("0.01")),
             total_profit=total_profit.quantize(Decimal("0.01")),
-            amount_paid=total_amount.quantize(Decimal("0.01")),
-            payment_status=Sale.PAYMENT_PAID,
+            amount_paid=(
+                total_amount.quantize(Decimal("0.01"))
+                if payment_status == Sale.PAYMENT_PAID
+                else min(initial_payment, total_amount).quantize(Decimal("0.01"))
+            ),
+            payment_status=(
+                Sale.PAYMENT_PAID
+                if payment_status == Sale.PAYMENT_PAID
+                else _derive_payment_status(
+                    total_amount,
+                    min(initial_payment, total_amount).quantize(Decimal("0.01")),
+                )
+            ),
         )
 
         for row in line_items:
