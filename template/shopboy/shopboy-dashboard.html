@@ -254,6 +254,23 @@
           <div class="price-search-results" data-price-search-results aria-live="polite"></div>
         </section>
 
+        {% if cart %}
+        <div class="card" style="padding:1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;">
+          <div>
+            <strong>Cart Ready</strong><br>
+            <span style="font-size:0.85rem;color:var(--muted-foreground);">
+              {{ cart_count|floatformat:"-2" }} item{% if cart_count != 1 %}s{% endif %} · Total &#8358;{{ cart_total }}
+            </span>
+          </div>
+          <form method="POST" action="{% url 'shopboy_checkout' %}" style="margin:0;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary">
+              Complete Sale
+            </button>
+          </form>
+        </div>
+        {% endif %}
+
         <div class="products-grid" id="productsGrid">
           {% for product in products %}
           <div class="product-card product-item"
