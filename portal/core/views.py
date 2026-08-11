@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, get_user_model
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
@@ -30,17 +31,105 @@ TERTIARY_ROLES = [
     {"slug": "student", "label": "Student"},
 ]
 
+PRICING_PACKAGES = [
+    {"slug": "starter", "name": "Starter", "range": "1 - 50 Students", "term_price": 26600},
+    {"slug": "basic", "name": "Basic", "range": "51 - 100 Students", "term_price": 38600},
+    {"slug": "growth", "name": "Growth", "range": "101 - 200 Students", "term_price": 59000},
+    {"slug": "standard", "name": "Standard", "range": "201 - 350 Students", "term_price": 86600},
+    {"slug": "premium", "name": "Premium", "range": "351 - 500 Students", "term_price": 107000},
+    {"slug": "enterprise", "name": "Enterprise", "range": "501 - 750 Students", "term_price": 137000},
+    {"slug": "elite", "name": "Elite", "range": "751 - 1,000 Students", "term_price": 173000},
+    {"slug": "apex", "name": "Apex", "range": "1,001 - 1,500 Students", "term_price": 285000},
+    {"slug": "summit", "name": "Summit", "range": "1,501 - 2,000 Students", "term_price": 385000},
+    {"slug": "exclusive", "name": "Exclusive", "range": "2,001 - 2,500 Students", "term_price": 485000},
+    {"slug": "prestige", "name": "Prestige", "range": "2,501 - 3,000 Students", "term_price": 585000},
+    {"slug": "ultimate", "name": "Ultimate", "range": "3,001+ Students", "term_price": None},
+]
+
+
+def _pricing_packages():
+    packages = []
+    for package in PRICING_PACKAGES:
+        term_price = package["term_price"]
+        session_price = None if term_price is None else int(term_price * 3 * 0.9)
+        packages.append({
+            **package,
+            "term_price_display": f"₦{term_price:,.0f}" if term_price is not None else "Custom Pricing",
+            "session_price": session_price,
+            "session_price_display": f"₦{session_price:,.0f}" if session_price is not None else "Custom Pricing",
+        })
+    return packages
+
+
+def _selected_package_slug(value):
+    slugs = {package["slug"] for package in PRICING_PACKAGES}
+    return value if value in slugs else "starter"
+
+
+def _selected_billing_period(value):
+    return value if value in {"term", "session"} else "term"
+
+
+def _normalize_subdomain(value):
+    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+def _school_slug(institution):
+    return _normalize_subdomain(institution.short_name or institution.school_code or institution.name)
+
+
+def _request_subdomain(request):
+    host = request.get_host().split(":")[0].lower()
+    for root_domain in getattr(settings, "SCHOOL_PORTAL_ROOT_DOMAINS", []):
+        root_domain = root_domain.lower()
+        suffix = f".{root_domain}"
+        if host.endswith(suffix) and host != root_domain:
+            subdomain = host[:-len(suffix)].split(".")[-1]
+            if subdomain not in {"www", "edu"}:
+                return _normalize_subdomain(subdomain)
+    return ""
+
+
+def _institution_from_subdomain(request):
+    subdomain = _request_subdomain(request)
+    if not subdomain:
+        return None
+    for institution in Institution.objects.all():
+        aliases = {
+            _normalize_subdomain(institution.school_code),
+            _normalize_subdomain(institution.short_name),
+            _normalize_subdomain(institution.name),
+        }
+        if subdomain in aliases:
+            return institution
+    return None
 
 
 def index(request):
-    return render(request, 'core/index.html')
+    subdomain_institution = _institution_from_subdomain(request)
+    if subdomain_institution:
+        if subdomain_institution.institution_type == "tertiary":
+            return redirect("tertiary_login")
+        return redirect("secondary_login")
+    return render(request, 'core/index.html', {
+        'pricing_packages': _pricing_packages(),
+    })
 
 
 def _login_for_institution(request, institution_type, template_name):
     roles = SECONDARY_ROLES if institution_type == 'secondary' else TERTIARY_ROLES
+    subdomain_institution = _institution_from_subdomain(request)
+    if subdomain_institution and subdomain_institution.institution_type != institution_type:
+        if subdomain_institution.institution_type == "tertiary":
+            return redirect("tertiary_login")
+        return redirect("secondary_login")
 
     if request.method == 'POST':
-        school_code = request.POST.get('school_code', '').strip().upper()
+        school_code = (
+            subdomain_institution.school_code
+            if subdomain_institution
+            else request.POST.get('school_code', '').strip().upper()
+        )
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
         user = authenticate(request, username=username, password=password)
@@ -74,6 +163,7 @@ def _login_for_institution(request, institution_type, template_name):
     return render(request, template_name, {
         'institution': institution_type,
         'roles': roles,
+        'subdomain_institution': subdomain_institution,
     })
 
 
@@ -305,6 +395,8 @@ def secondary_school_register(request):
         school_code = request.POST.get('school_code', '').strip().upper()
         admin_full_name = request.POST.get('admin_full_name', '').strip()
         admin_password = request.POST.get('admin_password', '').strip()
+        selected_package = _selected_package_slug(request.POST.get('selected_package', '').strip())
+        billing_period = _selected_billing_period(request.POST.get('billing_period', '').strip())
 
         if not all([institution_name, admin_full_name, admin_password]):
             messages.error(request, 'Please fill all required fields.')
@@ -317,8 +409,6 @@ def secondary_school_register(request):
                     institution_type='secondary',
                     ownership_type=request.POST.get('ownership_type', 'private'),
                     year_established=request.POST.get('year_established') or None,
-                    license_number=request.POST.get('license_number', '').strip(),
-                    cac_number=request.POST.get('cac_number', '').strip(),
                     country=request.POST.get('country', 'Nigeria').strip() or 'Nigeria',
                     state=request.POST.get('state', '').strip(),
                     city=request.POST.get('city', '').strip(),
@@ -339,6 +429,8 @@ def secondary_school_register(request):
                     theme_color=request.POST.get('theme_color', '').strip(),
                     logo=request.FILES.get('logo'),
                     favicon=request.FILES.get('favicon'),
+                    selected_package=selected_package,
+                    billing_period=billing_period,
                 )
 
                 User = get_user_model()
@@ -372,8 +464,7 @@ def secondary_school_register(request):
                 messages.error(request, 'School code or username already exists.')
 
     return render(request, 'core/secondary_register.html', {
-        'ownership_choices': Institution.OWNERSHIP_CHOICES,
-        'grading_choices': Institution.GRADING_CHOICES,
+        'pricing_packages': _pricing_packages(),
     })
 
 
@@ -1117,6 +1208,8 @@ def tertiary_school_register(request):
         vc_full_name = request.POST.get('vc_full_name', '').strip()
         vc_password = request.POST.get('vc_password', '').strip()
         vc_role = request.POST.get('vc_role', 'vc')
+        selected_package = _selected_package_slug(request.POST.get('selected_package', '').strip())
+        billing_period = _selected_billing_period(request.POST.get('billing_period', '').strip())
 
         if not all([institution_name, vc_full_name, vc_password]):
             messages.error(request, 'Please fill all required fields.')
@@ -1129,8 +1222,6 @@ def tertiary_school_register(request):
                     institution_type='tertiary',
                     ownership_type=request.POST.get('ownership_type', 'private'),
                     year_established=request.POST.get('year_established') or None,
-                    license_number=request.POST.get('license_number', '').strip(),
-                    cac_number=request.POST.get('cac_number', '').strip(),
                     country=request.POST.get('country', 'Nigeria').strip() or 'Nigeria',
                     state=request.POST.get('state', '').strip(),
                     city=request.POST.get('city', '').strip(),
@@ -1153,6 +1244,8 @@ def tertiary_school_register(request):
                     theme_color=request.POST.get('theme_color', '').strip(),
                     logo=request.FILES.get('logo'),
                     favicon=request.FILES.get('favicon'),
+                    selected_package=selected_package,
+                    billing_period=billing_period,
                 )
 
                 User = get_user_model()
@@ -1186,8 +1279,7 @@ def tertiary_school_register(request):
                 messages.error(request, 'School code or username already exists.')
 
     return render(request, 'core/tertiary_register.html', {
-        'ownership_choices': Institution.OWNERSHIP_CHOICES,
-        'grading_choices': Institution.GRADING_CHOICES,
+        'pricing_packages': _pricing_packages(),
     })
 
 

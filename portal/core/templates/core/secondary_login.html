@@ -20,6 +20,13 @@
         {% csrf_token %}
         <div>
           <label class="block text-sm font-medium mb-1.5">School Code</label>
+          {% if subdomain_institution %}
+          <input type="hidden" name="school_code" value="{{ subdomain_institution.school_code }}" />
+          <div class="w-full px-3 py-2.5 rounded-lg border border-input bg-muted text-sm">
+            <span class="font-medium">{{ subdomain_institution.name }}</span>
+            <span class="text-muted-foreground">({{ subdomain_institution.school_code }})</span>
+          </div>
+          {% else %}
           <input
             type="text"
             name="school_code"
@@ -27,6 +34,7 @@
             class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             required
           />
+          {% endif %}
         </div>
 
         <div>

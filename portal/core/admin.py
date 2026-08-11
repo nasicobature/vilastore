@@ -20,8 +20,8 @@ from .models import (
 
 @admin.register(Institution)
 class InstitutionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'institution_type', 'city', 'country')
-    list_filter = ('institution_type',)
+    list_display = ('name', 'institution_type', 'selected_package', 'billing_period', 'city', 'country')
+    list_filter = ('institution_type', 'selected_package', 'billing_period')
 
 
 @admin.register(Faculty)

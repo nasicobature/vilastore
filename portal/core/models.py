@@ -18,6 +18,10 @@ class Institution(models.Model):
         ('gpa', 'GPA'),
         ('custom', 'Custom'),
     ]
+    BILLING_CHOICES = [
+        ('term', 'Per Term'),
+        ('session', 'Per Session'),
+    ]
 
     name = models.CharField(max_length=200)
     school_code = models.CharField(max_length=20, unique=True, null=True, blank=True)
@@ -49,6 +53,8 @@ class Institution(models.Model):
     logo = models.FileField(upload_to='institutions/logos/', blank=True, null=True)
     favicon = models.FileField(upload_to='institutions/favicons/', blank=True, null=True)
     theme_color = models.CharField(max_length=20, blank=True)
+    selected_package = models.CharField(max_length=50, blank=True)
+    billing_period = models.CharField(max_length=20, choices=BILLING_CHOICES, default='term')
     user_sequence = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(default=timezone.now)
 

@@ -1,8 +1,8 @@
 ﻿{% extends 'core/base.html' %}
 
 {% block content %}
-<div class="min-h-screen bg-background flex flex-col items-center justify-center p-6">
-  <div class="text-center mb-12">
+<div class="min-h-screen bg-background p-6">
+  <div class="text-center mb-12 pt-10">
     <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
       <i data-lucide="graduation-cap" class="text-primary-foreground"></i>
     </div>
@@ -10,7 +10,7 @@
     <p class="text-muted-foreground text-lg">School Management System</p>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl w-full">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl w-full mx-auto">
     <a
       href="/secondary/login/"
       class="group bg-card border-2 border-border rounded-2xl p-8 text-left hover:border-primary hover:shadow-lg transition-all duration-300"
@@ -50,10 +50,98 @@
     </a>
   </div>
 
-  <div class="mt-8 text-sm text-muted-foreground">
+  <div class="mt-8 text-sm text-muted-foreground text-center">
     <a class="hover:text-foreground transition-colors" href="/secondary/register/">Register Secondary School</a>
     <span class="mx-2">•</span>
     <a class="hover:text-foreground transition-colors" href="/tertiary/register/">Register Tertiary Institution</a>
   </div>
+
+  <section class="max-w-4xl mx-auto mt-14">
+    <div class="rounded-2xl border border-border bg-card p-6 md:p-8">
+      <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 md:items-center">
+        <div>
+          <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
+            <i data-lucide="globe-2" class="text-primary"></i>
+          </div>
+          <h2 class="font-display text-2xl font-bold">Your Personal School Portal</h2>
+          <p class="text-muted-foreground mt-2">
+            Every school on IntelS gets their own unique subdomain portal (e.g., yourschool.vilastore.store).
+            Staff, students, and parents log in there with dedicated access.
+          </p>
+        </div>
+        <form class="w-full md:w-[360px]" data-school-portal-form>
+          <label class="block text-sm font-medium mb-2">School Portal</label>
+          <div class="flex rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+            <input
+              type="text"
+              class="min-w-0 flex-1 rounded-l-xl bg-transparent px-3 py-3 text-sm focus:outline-none"
+              placeholder="yourschool"
+              aria-label="School subdomain"
+              data-school-portal-input
+            />
+            <span class="shrink-0 rounded-r-xl border-l border-border px-3 py-3 text-sm text-muted-foreground">.vilastore.store</span>
+          </div>
+          <button type="submit" class="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+            Go to Portal <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section class="max-w-6xl mx-auto mt-16 pb-12">
+    <div class="text-center mb-8">
+      <h2 class="font-display text-3xl font-bold">Simple Pricing. Built for Value.</h2>
+      <p class="text-muted-foreground mt-2">Free features are always free — the only thing that matters is your student range.</p>
+      <div class="mt-5 inline-flex flex-wrap items-center justify-center gap-2 rounded-xl border border-border bg-card p-1.5 text-sm">
+        <span class="rounded-lg bg-primary px-3 py-1.5 text-primary-foreground font-medium">Per Term</span>
+        <span class="rounded-lg px-3 py-1.5 text-muted-foreground">Per Session</span>
+        <span class="rounded-lg bg-success/10 px-3 py-1.5 text-success font-medium">Save 10%</span>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto rounded-2xl border border-border bg-card">
+      <table class="w-full min-w-[760px] text-sm">
+        <thead class="bg-muted/50">
+          <tr>
+            <th class="px-4 py-3 text-left font-semibold">Package</th>
+            <th class="px-4 py-3 text-left font-semibold">Student Range</th>
+            <th class="px-4 py-3 text-left font-semibold">Pricing</th>
+            <th class="px-4 py-3 text-left font-semibold">Zero-Stress Trial</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          {% for package in pricing_packages %}
+          <tr>
+            <td class="px-4 py-4 font-semibold">{{ package.name }}</td>
+            <td class="px-4 py-4 text-muted-foreground">{{ package.range }}</td>
+            <td class="px-4 py-4"><strong>{{ package.term_price_display }}</strong>{% if package.term_price %} <span class="text-muted-foreground">/ term</span>{% endif %}</td>
+            <td class="px-4 py-4">
+              {% if package.slug == 'ultimate' %}
+                <a class="inline-flex items-center justify-center rounded-lg bg-secondary px-3 py-2 text-secondary-foreground font-medium hover:bg-secondary/90" href="https://wa.me/2348136373831?text=Hi%20IntelS,%20I%20would%20like%20to%20discuss%20the%20Ultimate%20package%20for%20our%20school%20of%203000%2B%20students.">Contact Us</a>
+              {% else %}
+                <a class="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-primary-foreground font-medium hover:bg-primary/90" href="https://wa.me/2348136373831?text=Hi%20IntelS,%20I%20want%20to%20start%20a%20Free%20Trial%20on%20the%20{{ package.name }}%20Package%20({{ package.range|cut:' Students'|cut:' '|cut:',' }}%20students).">Start Free</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
 </div>
+<script>
+  document.querySelectorAll('[data-school-portal-form]').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      const input = form.querySelector('[data-school-portal-input]');
+      const slug = (input.value || 'yourschool')
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      window.location.href = 'https://' + (slug || 'yourschool') + '.vilastore.store';
+    });
+  });
+</script>
 {% endblock %}

@@ -25,7 +25,24 @@ SECRET_KEY = 'django-insecure-ja6sjsro9rm8aqssku(+=j=7u#2czodizj$2zw+ki0aq+=p7$y
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "vilastore.store",
+    ".vilastore.store",
+    ".intelps.cloud",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://vilastore.store",
+    "https://*.vilastore.store",
+    "https://*.intelps.cloud",
+]
+
+SCHOOL_PORTAL_ROOT_DOMAINS = [
+    "vilastore.store",
+    "intelps.cloud",
+]
 
 
 # Application definition
