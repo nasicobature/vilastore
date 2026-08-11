@@ -666,6 +666,77 @@ textarea {
   gap: 14px;
 }
 
+.billing-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.billing-switch label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--background));
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.billing-switch span {
+  color: hsl(var(--success));
+  font-size: 12px;
+}
+
+.package-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.package-card {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  min-height: 152px;
+  padding: 14px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--background));
+  cursor: pointer;
+}
+
+.package-card:has(input:checked) {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+}
+
+.package-card.is-custom {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.package-card input {
+  width: 18px;
+  height: 18px;
+}
+
+.package-card strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 19px;
+}
+
+.package-card small,
+.package-card em {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-style: normal;
+}
+
 .subscription-plan-card {
   display: grid;
   gap: 8px;
@@ -911,6 +982,54 @@ textarea {
   margin-bottom: 22px;
 }
 
+.school-portal-section {
+  margin-top: 22px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  background: hsl(var(--card));
+  padding: 22px;
+}
+
+.portal-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.portal-search label span {
+  display: block;
+  margin-bottom: 7px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.subdomain-input {
+  display: flex;
+  align-items: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--background));
+  overflow: hidden;
+}
+
+.subdomain-input input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  padding: 12px;
+  background: transparent;
+  outline: none;
+}
+
+.subdomain-input strong {
+  padding: 0 12px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .portal-option {
   display: flex;
   align-items: center;
@@ -960,6 +1079,62 @@ textarea {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.pricing-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.pricing-toggle span,
+.pricing-toggle strong,
+.pricing-toggle em {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: hsl(var(--background));
+  font-style: normal;
+}
+
+.pricing-table-wrap {
+  overflow-x: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+}
+
+.pricing-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  background: hsl(var(--background));
+}
+
+.pricing-table th,
+.pricing-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid hsl(var(--border));
+  text-align: left;
+  font-size: 13px;
+}
+
+.pricing-table th {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.pricing-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.pricing-table a {
+  color: hsl(var(--primary));
+  font-weight: 800;
 }
 
 .pricing-card {
@@ -1035,9 +1210,14 @@ textarea {
   .edu-hero,
   .portal-options,
   .subscription-plan-grid,
+  .package-grid,
   .pricing-grid,
   .pricing-notes,
   .coming-soon-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-search {
     grid-template-columns: 1fr;
   }
 

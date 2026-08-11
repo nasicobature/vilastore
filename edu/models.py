@@ -30,8 +30,8 @@ class Institution(models.Model):
         ('failed', 'Failed'),
     ]
     SUBSCRIPTION_BILLING_CHOICES = [
-        ('monthly', 'Monthly Plan'),
-        ('termly', 'Termly Plan'),
+        ('termly', 'Per Term'),
+        ('session', 'Per Session'),
     ]
 
     name = models.CharField(max_length=200)
@@ -73,6 +73,7 @@ class Institution(models.Model):
     registration_payment_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('70000.00'))
     registration_payment_reference = models.CharField(max_length=120, blank=True)
     registration_payment_paid_at = models.DateTimeField(null=True, blank=True)
+    subscription_package = models.CharField(max_length=40, default='starter')
     subscription_billing_cycle = models.CharField(max_length=20, choices=SUBSCRIPTION_BILLING_CHOICES, default='termly')
     subscription_active_until = models.DateField(null=True, blank=True)
     subscription_last_payment_reference = models.CharField(max_length=120, blank=True)

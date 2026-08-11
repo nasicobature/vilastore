@@ -56,6 +56,7 @@ default_hosts = [
     "vilastore.onrender.com",
     "vilastore.store",
     "www.vilastore.store",
+    ".vilastore.store",
 ]
 for host in default_hosts:
     if host not in ALLOWED_HOSTS:
@@ -214,6 +215,7 @@ default_csrf_origins = [
     "https://vilastore.onrender.com",
     "https://vilastore.store",
     "https://www.vilastore.store",
+    "https://*.vilastore.store",
 ]
 for origin in default_csrf_origins:
     if origin not in CSRF_TRUSTED_ORIGINS:

@@ -18,44 +18,104 @@ from .verification import create_document_verifications
 from core.utils.notifications import send_email
 
 
-EDU_MONTHLY_PRICE = Decimal('250000.00')
-EDU_TERMLY_STANDARD_PRICE = Decimal('75000.00')
-EDU_TERMLY_DISCOUNT = Decimal('5000.00')
-EDU_TERMLY_PRICE = EDU_TERMLY_STANDARD_PRICE - EDU_TERMLY_DISCOUNT
 EDU_DEFAULT_BILLING_CYCLE = 'termly'
+EDU_DEFAULT_PACKAGE = 'starter'
+EDU_PRICING_PACKAGES = [
+    ('starter', 'Starter', '1 - 50 Students', Decimal('26600.00')),
+    ('basic', 'Basic', '51 - 100 Students', Decimal('38600.00')),
+    ('growth', 'Growth', '101 - 200 Students', Decimal('59000.00')),
+    ('standard', 'Standard', '201 - 350 Students', Decimal('86600.00')),
+    ('premium', 'Premium', '351 - 500 Students', Decimal('107000.00')),
+    ('enterprise', 'Enterprise', '501 - 750 Students', Decimal('137000.00')),
+    ('elite', 'Elite', '751 - 1,000 Students', Decimal('173000.00')),
+    ('apex', 'Apex', '1,001 - 1,500 Students', Decimal('285000.00')),
+    ('summit', 'Summit', '1,501 - 2,000 Students', Decimal('385000.00')),
+    ('exclusive', 'Exclusive', '2,001 - 2,500 Students', Decimal('485000.00')),
+    ('prestige', 'Prestige', '2,501 - 3,000 Students', Decimal('585000.00')),
+    ('ultimate', 'Ultimate', '3,001+ Students', None),
+]
 
 
 def _format_edu_price(amount):
     return f'{Decimal(amount):,.0f}'
 
 
-def _edu_subscription_plans():
+def _session_price(term_amount):
+    return (Decimal(term_amount) * Decimal('3') * Decimal('0.90')).quantize(Decimal('1'))
+
+
+def _normalize_edu_package(value):
+    package = (value or '').strip().lower()
+    valid_packages = {item[0] for item in EDU_PRICING_PACKAGES}
+    if package in valid_packages:
+        return package
+    return EDU_DEFAULT_PACKAGE
+
+
+def _edu_pricing_packages():
+    rows = []
+    for code, name, student_range, term_amount in EDU_PRICING_PACKAGES:
+        is_custom = term_amount is None
+        session_amount = None if is_custom else _session_price(term_amount)
+        whatsapp_text = (
+            f'Hi IntelS, I want to start a Free Trial on the {name} Package ({student_range.lower()}).'
+            if not is_custom
+            else 'Hi IntelS, I would like to discuss the Ultimate package for our school of 3000+ students.'
+        )
+        rows.append({
+            'code': code,
+            'name': name,
+            'student_range': student_range,
+            'term_amount': term_amount,
+            'term_amount_display': 'Custom Pricing' if is_custom else _format_edu_price(term_amount),
+            'session_amount': session_amount,
+            'session_amount_display': 'Custom Pricing' if is_custom else _format_edu_price(session_amount),
+            'is_custom': is_custom,
+            'whatsapp_url': 'https://wa.me/2348136373831?text=' + requests.utils.quote(whatsapp_text),
+        })
+    return rows
+
+
+def _edu_package(package_code):
+    normalized = _normalize_edu_package(package_code)
+    for package in _edu_pricing_packages():
+        if package['code'] == normalized:
+            return package
+    return _edu_pricing_packages()[0]
+
+
+def _edu_subscription_plans(package_code=None):
+    package = _edu_package(package_code)
+    term_amount = package['term_amount'] or Decimal('0.00')
+    session_amount = package['session_amount'] or Decimal('0.00')
     return {
-        'monthly': {
-            'cycle': 'monthly',
-            'name': 'Monthly Plan',
-            'duration_label': '1 month',
-            'duration_days': 30,
-            'amount': EDU_MONTHLY_PRICE,
-            'amount_display': _format_edu_price(EDU_MONTHLY_PRICE),
-            'standard_amount': EDU_MONTHLY_PRICE,
-            'standard_amount_display': _format_edu_price(EDU_MONTHLY_PRICE),
-            'discount': Decimal('0.00'),
-            'discount_display': _format_edu_price(Decimal('0.00')),
-            'summary': 'Pay monthly per school.',
-        },
         'termly': {
             'cycle': 'termly',
-            'name': 'Termly Plan',
-            'duration_label': '3 months',
+            'name': 'Per Term',
+            'duration_label': '1 term',
             'duration_days': 90,
-            'amount': EDU_TERMLY_PRICE,
-            'amount_display': _format_edu_price(EDU_TERMLY_PRICE),
-            'standard_amount': EDU_TERMLY_STANDARD_PRICE,
-            'standard_amount_display': _format_edu_price(EDU_TERMLY_STANDARD_PRICE),
-            'discount': EDU_TERMLY_DISCOUNT,
-            'discount_display': _format_edu_price(EDU_TERMLY_DISCOUNT),
-            'summary': 'Pay once per term and save NGN 5,000.',
+            'amount': term_amount,
+            'amount_display': 'Custom Pricing' if package['is_custom'] else _format_edu_price(term_amount),
+            'standard_amount': term_amount,
+            'standard_amount_display': 'Custom Pricing' if package['is_custom'] else _format_edu_price(term_amount),
+            'discount': Decimal('0.00'),
+            'discount_display': _format_edu_price(Decimal('0.00')),
+            'summary': f"{package['name']} package for {package['student_range']}.",
+            'package': package,
+        },
+        'session': {
+            'cycle': 'session',
+            'name': 'Per Session',
+            'duration_label': '1 session',
+            'duration_days': 270,
+            'amount': session_amount,
+            'amount_display': 'Custom Pricing' if package['is_custom'] else _format_edu_price(session_amount),
+            'standard_amount': term_amount * Decimal('3'),
+            'standard_amount_display': 'Custom Pricing' if package['is_custom'] else _format_edu_price(term_amount * Decimal('3')),
+            'discount': (term_amount * Decimal('3')) - session_amount,
+            'discount_display': '0' if package['is_custom'] else _format_edu_price((term_amount * Decimal('3')) - session_amount),
+            'summary': 'Pay for a full session and save 10%.',
+            'package': package,
         },
     }
 
@@ -71,11 +131,11 @@ def _edu_subscription_plan(cycle):
     return _edu_subscription_plans()[_normalize_edu_billing_cycle(cycle)]
 
 
-def _edu_subscription_amount(cycle):
-    return _edu_subscription_plan(cycle)['amount']
+def _edu_subscription_amount(cycle, package_code=None):
+    return _edu_subscription_plans(package_code)[_normalize_edu_billing_cycle(cycle)]['amount']
 
 
-EDU_REGISTRATION_FEE = EDU_TERMLY_PRICE
+EDU_REGISTRATION_FEE = _edu_subscription_amount(EDU_DEFAULT_BILLING_CYCLE, EDU_DEFAULT_PACKAGE)
 
 
 EMAIL_TOKEN_HOURS = 48
@@ -356,7 +416,9 @@ TERTIARY_ROLES = [
 
 
 def index(request):
-    return render(request, 'edu/index.html')
+    return render(request, 'edu/index.html', {
+        'pricing_packages': _edu_pricing_packages(),
+    })
 
 
 def _resolve_login_user(institution_type, school_code, identifier):
@@ -440,11 +502,35 @@ def _get_or_repair_edu_profile(user, institution_type, school_code):
     return None
 
 
+def _school_code_from_subdomain(request):
+    host = request.get_host().split(':', 1)[0].lower()
+    root_domain = 'vilastore.store'
+    if not host.endswith('.' + root_domain):
+        return ''
+    subdomain = host[:-(len(root_domain) + 1)].strip('.')
+    if not subdomain or subdomain in {'www', 'edu'}:
+        return ''
+    return subdomain.upper()
+
+
+def _institution_from_subdomain(request, institution_type):
+    school_code = _school_code_from_subdomain(request)
+    if not school_code:
+        return None
+    return Institution.objects.filter(
+        institution_type=institution_type,
+        school_code__iexact=school_code,
+    ).first()
+
+
 def _login_for_institution(request, institution_type, template_name):
     roles = SECONDARY_ROLES if institution_type == 'secondary' else TERTIARY_ROLES
+    subdomain_institution = _institution_from_subdomain(request, institution_type)
 
     if request.method == 'POST':
         school_code = request.POST.get('school_code', '').strip().upper()
+        if subdomain_institution:
+            school_code = subdomain_institution.school_code.upper()
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
         resolved_user = _resolve_login_user(institution_type, school_code, username)
@@ -472,7 +558,7 @@ def _login_for_institution(request, institution_type, template_name):
                         payment_url = f"/edu/{profile.institution_type}/register/{profile.institution.school_code}/payment/"
                         messages.error(request, f'EduPortal subscription payment is required before portal access. Complete payment here: {payment_url}')
                     elif profile.institution and profile.institution.verification_status == 'pending':
-                        messages.error(request, 'School verification is still pending. VilaStore must approve the submitted documents before portal access is granted.')
+                        messages.error(request, 'School setup is still pending approval before portal access is granted.')
                     elif profile.institution and profile.institution.verification_status == 'rejected':
                         messages.error(request, 'School verification was rejected. Please contact VilaStore support for review details.')
                     else:
@@ -494,6 +580,8 @@ def _login_for_institution(request, institution_type, template_name):
     return render(request, template_name, {
         'institution': institution_type,
         'roles': roles,
+        'subdomain_institution': subdomain_institution,
+        'resolved_school_code': subdomain_institution.school_code if subdomain_institution else '',
     })
 
 
@@ -628,24 +716,6 @@ def _verification_uploads(request):
 def _missing_verification_requirements(request):
     uploads = _verification_uploads(request)
     missing = []
-
-    required_uploads = {
-        'cac_certificate': 'CAC Certificate',
-        'cac_status_report': 'CAC Status Report',
-        'tin_certificate': 'TIN or Tax Certificate',
-        'school_letterhead': 'Official School Letterhead',
-        'school_stamp': 'School Stamp/Seal',
-        'owner_valid_id': 'Owner/Admin Valid ID',
-    }
-    for field_name, label in required_uploads.items():
-        if not uploads[field_name]:
-            missing.append(label)
-
-    if not uploads['ministry_approval'] and not uploads['operating_license']:
-        missing.append('Ministry of Education approval or school operating license')
-
-    if not uploads['utility_bill'] and not uploads['proof_of_address']:
-        missing.append('Utility bill or proof of address')
 
     if not request.POST.get('admin_email', '').strip():
         missing.append('Owner/Admin email address')
@@ -996,6 +1066,7 @@ def secondary_school_register(request):
         admin_password = request.POST.get('admin_password', '').strip()
         admin_email = request.POST.get('admin_email', '').strip()
         billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
+        subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
         missing_verification, verification_uploads = _missing_verification_requirements(request)
 
         if not all([institution_name, admin_full_name, admin_password, admin_email]):
@@ -1013,10 +1084,6 @@ def secondary_school_register(request):
                     institution_type='secondary',
                     ownership_type=request.POST.get('ownership_type', 'private'),
                     year_established=request.POST.get('year_established') or None,
-                    license_number=request.POST.get('license_number', '').strip(),
-                    cac_number=request.POST.get('cac_number', '').strip(),
-                    tin_number=request.POST.get('tin_number', '').strip(),
-                    owner_id_number=request.POST.get('owner_id_number', '').strip(),
                     country=request.POST.get('country', 'Nigeria').strip() or 'Nigeria',
                     state=request.POST.get('state', '').strip(),
                     city=request.POST.get('city', '').strip(),
@@ -1032,8 +1099,9 @@ def secondary_school_register(request):
                     payment_public_key=request.POST.get('payment_public_key', '').strip(),
                     payment_secret_key=request.POST.get('payment_secret_key', '').strip(),
                     allow_online_payment=bool(request.POST.get('allow_online_payment')),
+                    subscription_package=subscription_package,
                     subscription_billing_cycle=billing_cycle,
-                    registration_payment_amount=_edu_subscription_amount(billing_cycle),
+                    registration_payment_amount=_edu_subscription_amount(billing_cycle, subscription_package),
                     registration_payment_status='pending',
                     admin_email=admin_email,
                     admin_phone=request.POST.get('admin_phone', '').strip(),
@@ -1083,13 +1151,15 @@ def secondary_school_register(request):
     return render(request, 'edu/secondary_register.html', {
         'ownership_choices': Institution.OWNERSHIP_CHOICES,
         'grading_choices': Institution.GRADING_CHOICES,
+        'pricing_packages': _edu_pricing_packages(),
         'subscription_plans': _edu_subscription_plans(),
+        'default_subscription_package': EDU_DEFAULT_PACKAGE,
         'default_subscription_cycle': EDU_DEFAULT_BILLING_CYCLE,
     })
 
 
 def _extend_subscription_until(institution, billing_cycle):
-    plan = _edu_subscription_plan(billing_cycle)
+    plan = _edu_subscription_plans(institution.subscription_package)[_normalize_edu_billing_cycle(billing_cycle)]
     today = timezone.localdate()
     start_date = institution.subscription_active_until if institution.subscription_active_until and institution.subscription_active_until > today else today
     return start_date + timedelta(days=plan['duration_days'])
@@ -1097,14 +1167,17 @@ def _extend_subscription_until(institution, billing_cycle):
 
 def _edu_payment_context(institution, login_url, mode='registration'):
     cycle = _normalize_edu_billing_cycle(institution.subscription_billing_cycle)
-    plan = _edu_subscription_plan(cycle)
+    package_code = _normalize_edu_package(institution.subscription_package)
+    plan = _edu_subscription_plans(package_code)[cycle]
     amount = Decimal(plan['amount'])
     return {
         'institution': institution,
         'amount': amount,
         'amount_display': _format_edu_price(amount),
         'selected_plan': plan,
-        'subscription_plans': _edu_subscription_plans(),
+        'pricing_packages': _edu_pricing_packages(),
+        'selected_package': _edu_package(package_code),
+        'subscription_plans': _edu_subscription_plans(package_code),
         'currency': institution.currency or 'NGN',
         'flutterwave_public_key': _flutterwave_public_key(),
         'login_url': login_url,
@@ -1116,7 +1189,11 @@ def _edu_payment_context(institution, login_url, mode='registration'):
 def _confirm_edu_subscription_payment(request, institution, payment_route_name, redirect_kwargs, login_route_name, success_message, mark_registration_paid=True):
     if request.method == 'POST':
         billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle') or institution.subscription_billing_cycle)
-        plan = _edu_subscription_plan(billing_cycle)
+        package_code = _normalize_edu_package(request.POST.get('subscription_package') or institution.subscription_package)
+        plan = _edu_subscription_plans(package_code)[billing_cycle]
+        if plan['package']['is_custom']:
+            messages.error(request, 'Please contact VilaStore to activate the Ultimate custom package.')
+            return redirect(payment_route_name, **redirect_kwargs)
         payment_reference = request.POST.get('payment_reference', '').strip()
         payload, error = _verify_flutterwave_reference(payment_reference)
         if error:
@@ -1149,6 +1226,7 @@ def _confirm_edu_subscription_payment(request, institution, payment_route_name, 
             return redirect(payment_route_name, **redirect_kwargs)
 
         paid_at = timezone.now()
+        institution.subscription_package = package_code
         institution.subscription_billing_cycle = billing_cycle
         institution.registration_payment_amount = expected_amount
         institution.registration_payment_reference = payment_reference
@@ -1157,6 +1235,7 @@ def _confirm_edu_subscription_payment(request, institution, payment_route_name, 
         institution.subscription_last_payment_reference = payment_reference
         institution.subscription_last_paid_at = paid_at
         update_fields = [
+            'subscription_package',
             'subscription_billing_cycle',
             'registration_payment_amount',
             'registration_payment_reference',
@@ -1191,7 +1270,7 @@ def _registration_payment(request, institution_type, school_code, login_route_na
             payment_route_name,
             {'school_code': institution.school_code},
             login_route_name,
-            'Payment confirmed. VilaStore will now review your submitted school documents.',
+            'Payment confirmed. VilaStore will now complete the portal setup review.',
             mark_registration_paid=True,
         )
         if response:
@@ -1199,7 +1278,7 @@ def _registration_payment(request, institution_type, school_code, login_route_na
 
     if not institution.registration_payment_amount:
         cycle = _normalize_edu_billing_cycle(institution.subscription_billing_cycle)
-        institution.registration_payment_amount = _edu_subscription_amount(cycle)
+        institution.registration_payment_amount = _edu_subscription_amount(cycle, institution.subscription_package)
         institution.save(update_fields=['registration_payment_amount'])
 
     return render(request, 'edu/registration_payment.html', _edu_payment_context(institution, login_url, mode='registration'))
@@ -2539,6 +2618,7 @@ def tertiary_school_register(request):
         admin_email = request.POST.get('admin_email', '').strip()
         vc_role = request.POST.get('vc_role', 'vc')
         billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
+        subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
         missing_verification, verification_uploads = _missing_verification_requirements(request)
 
         if not all([institution_name, vc_full_name, vc_password, admin_email]):
@@ -2556,10 +2636,6 @@ def tertiary_school_register(request):
                     institution_type='tertiary',
                     ownership_type=request.POST.get('ownership_type', 'private'),
                     year_established=request.POST.get('year_established') or None,
-                    license_number=request.POST.get('license_number', '').strip(),
-                    cac_number=request.POST.get('cac_number', '').strip(),
-                    tin_number=request.POST.get('tin_number', '').strip(),
-                    owner_id_number=request.POST.get('owner_id_number', '').strip(),
                     country=request.POST.get('country', 'Nigeria').strip() or 'Nigeria',
                     state=request.POST.get('state', '').strip(),
                     city=request.POST.get('city', '').strip(),
@@ -2577,8 +2653,9 @@ def tertiary_school_register(request):
                     payment_public_key=request.POST.get('payment_public_key', '').strip(),
                     payment_secret_key=request.POST.get('payment_secret_key', '').strip(),
                     allow_online_payment=bool(request.POST.get('allow_online_payment')),
+                    subscription_package=subscription_package,
                     subscription_billing_cycle=billing_cycle,
-                    registration_payment_amount=_edu_subscription_amount(billing_cycle),
+                    registration_payment_amount=_edu_subscription_amount(billing_cycle, subscription_package),
                     registration_payment_status='pending',
                     admin_email=admin_email,
                     admin_phone=request.POST.get('admin_phone', '').strip(),
@@ -2627,7 +2704,9 @@ def tertiary_school_register(request):
     return render(request, 'edu/tertiary_register.html', {
         'ownership_choices': Institution.OWNERSHIP_CHOICES,
         'grading_choices': Institution.GRADING_CHOICES,
+        'pricing_packages': _edu_pricing_packages(),
         'subscription_plans': _edu_subscription_plans(),
+        'default_subscription_package': EDU_DEFAULT_PACKAGE,
         'default_subscription_cycle': EDU_DEFAULT_BILLING_CYCLE,
     })
 

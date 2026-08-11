@@ -14,7 +14,7 @@
       <div>
         <p class="registration-eyebrow">Secondary School Verification</p>
         <h1 class="registration-title">Create a verified school portal</h1>
-        <p class="registration-copy">Complete the details below and submit your documents for VilaStore review.</p>
+        <p class="registration-copy">Complete a simple setup, choose a package, and create the first admin account.</p>
       </div>
     </div>
 
@@ -49,10 +49,6 @@
               </select>
             </label>
             <label class="field-block">Year Established<input type="number" name="year_established" data-review-label="Year Established" /></label>
-            <label class="field-block">CAC Number<input type="text" name="cac_number" data-review-label="CAC Number" /></label>
-            <label class="field-block">TIN Number<input type="text" name="tin_number" data-review-label="TIN Number" /></label>
-            <label class="field-block">Owner/Admin NIN<input type="text" name="owner_id_number" data-review-label="Owner/Admin NIN" /></label>
-            <label class="field-block">License Number<input type="text" name="license_number" data-review-label="License Number" /></label>
           </div>
         </section>
 
@@ -89,7 +85,7 @@
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
             <h2>Admin Account</h2>
-            <p>This account will stay pending until VilaStore approves the school documents.</p>
+            <p>This account will be used to manage the school portal.</p>
           </div>
           <div class="form-grid">
             <label class="field-block">Admin Full Name *<input type="text" name="admin_full_name" required data-review-label="Admin Full Name" /></label>
@@ -102,24 +98,29 @@
 
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
-            <h2>Subscription Plan</h2>
-            <p>Choose how this school will pay for EduPortal access.</p>
+            <h2>Choose Package</h2>
+            <p>Free features stay free. Select the student range and billing period for this school.</p>
           </div>
-          <div class="subscription-plan-grid">
-            {% for key, plan in subscription_plans.items %}
-              <label class="subscription-plan-card">
+          <div class="billing-switch" data-review-label="Billing Period">
+            <label><input type="radio" name="subscription_billing_cycle" value="termly" {% if default_subscription_cycle == 'termly' %}checked{% endif %} /> Per Term</label>
+            <label><input type="radio" name="subscription_billing_cycle" value="session" {% if default_subscription_cycle == 'session' %}checked{% endif %} /> Per Session <span>Save 10%</span></label>
+          </div>
+          <div class="package-grid">
+            {% for package in pricing_packages %}
+              <label class="package-card {% if package.is_custom %}is-custom{% endif %}">
                 <input
                   type="radio"
-                  name="subscription_billing_cycle"
-                  value="{{ plan.cycle }}"
-                  data-review-label="Subscription Plan"
-                  {% if plan.cycle == default_subscription_cycle %}checked{% endif %}
+                  name="subscription_package"
+                  value="{{ package.code }}"
+                  data-review-label="Package"
+                  {% if package.is_custom %}disabled{% endif %}
+                  {% if package.code == default_subscription_package %}checked{% endif %}
                 />
-                <span class="plan-card-title">{{ plan.name }}</span>
-                <strong>NGN {{ plan.amount_display }}</strong>
-                <small>{{ plan.duration_label }}. {{ plan.summary }}</small>
-                {% if plan.discount > 0 %}
-                  <em>Standard NGN {{ plan.standard_amount_display }} minus NGN {{ plan.discount_display }} discount.</em>
+                <span class="plan-card-title">{{ package.name }}</span>
+                <strong>{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }}{% endif %}</strong>
+                <small>{{ package.student_range }}{% if not package.is_custom %} / term{% endif %}</small>
+                {% if not package.is_custom %}
+                  <em>Session: NGN {{ package.session_amount_display }} after 10% saving.</em>
                 {% endif %}
               </label>
             {% endfor %}
@@ -136,7 +137,7 @@
             <i data-lucide="shield-check"></i>
             <div>
               <strong>Verification notice</strong>
-              <p>After submission, you will pay the selected EduPortal subscription. Portal access will still only be granted after VilaStore reviews and approves the submitted documents.</p>
+            <p>After submission, the school will continue to payment for the selected package and billing period.</p>
             </div>
           </div>
         </section>

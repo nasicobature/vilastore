@@ -51,43 +51,62 @@
     </a>
   </section>
 
+  <section class="school-portal-section">
+    <div class="section-heading">
+      <h2>Your Personal School Portal</h2>
+      <p>Every school gets a unique subdomain portal on your domain. Staff, students, and parents log in with dedicated access.</p>
+    </div>
+    <form class="portal-search" onsubmit="event.preventDefault(); const value = this.elements.school.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''); if (value) window.location.href = 'https://' + value + '.vilastore.store/edu/secondary/login/';">
+      <label>
+        <span>School subdomain</span>
+        <div class="subdomain-input">
+          <input type="text" name="school" placeholder="yourschool" aria-label="School subdomain" />
+          <strong>.vilastore.store</strong>
+        </div>
+      </label>
+      <button type="submit" class="wizard-btn wizard-btn-primary">Go to Portal</button>
+    </form>
+  </section>
+
   <section id="pricing" class="pricing-section">
     <div class="section-heading">
-      <h2>EduPortal Pricing</h2>
-      <p>Schools can choose monthly billing or a discounted 3-month termly subscription.</p>
+      <h2>Simple Pricing. Built for Value.</h2>
+      <p>Free features are always free. The only thing that matters is your student range.</p>
     </div>
 
-    <div class="pricing-grid">
-      <article class="pricing-card">
-        <p class="plan-name">Monthly Plan</p>
-        <h3>NGN 250,000 <span>/ month</span></h3>
-        <p class="student-limit">Per school, billed monthly</p>
-        <ul>
-          <li>Full EduPortal access</li>
-          <li>Admin dashboard</li>
-          <li>Students and staff</li>
-          <li>Classes and subjects</li>
-          <li>Fees and result workflow</li>
-        </ul>
-      </article>
-
-      <article class="pricing-card is-featured">
-        <p class="plan-name">Termly Plan</p>
-        <h3>NGN 70,000 <span>/ term</span></h3>
-        <p class="student-limit">3 months per school</p>
-        <ul>
-          <li>Standard 3-month cost: NGN 75,000</li>
-          <li>Termly discount: NGN 5,000</li>
-          <li>Total payable: NGN 70,000</li>
-          <li>Registry, accountant, teacher, examiner roles</li>
-          <li>Result submission, review, and fee tracking</li>
-        </ul>
-      </article>
+    <div class="pricing-toggle">
+      <span>Per Term</span>
+      <strong>Per Session</strong>
+      <em>Save 10%</em>
     </div>
 
+    <div class="pricing-table-wrap">
+      <table class="pricing-table">
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Student Range</th>
+            <th>Per Term</th>
+            <th>Per Session</th>
+            <th>Zero-Stress Trial</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for package in pricing_packages %}
+            <tr>
+              <td><strong>{{ package.name }}</strong></td>
+              <td>{{ package.student_range }}</td>
+              <td>{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }}{% endif %}</td>
+              <td>{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.session_amount_display }}{% endif %}</td>
+              <td><a href="{{ package.whatsapp_url }}" target="_blank" rel="noopener">{% if package.is_custom %}Contact Us{% else %}Start Free{% endif %}</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     <div class="pricing-notes">
-      <span>Choose Monthly or Termly during subscription and renewal</span>
-      <span>Document verification remains required before portal approval</span>
+      <span>Choose Per Term or Per Session during registration</span>
+      <span>Documents are kept simple during registration</span>
       <span>SMS, WhatsApp, and online payment charges billed separately</span>
     </div>
   </section>

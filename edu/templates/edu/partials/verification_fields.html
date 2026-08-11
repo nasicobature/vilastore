@@ -1,82 +1,25 @@
 <div class="section-heading">
-  <h2>Verification Documents</h2>
-  <p>Upload clear PDF, JPG, or PNG files. CAC, TIN, and NIN details will be checked automatically when API access is configured, then VilaStore will complete the final review.</p>
+  <h2>Documents</h2>
+  <p>Add simple portal branding files now. Legal documents are not required during registration.</p>
 </div>
 
 <div class="document-rules">
-  <div><strong>Required:</strong> CAC certificate, CAC status report, tax document, letterhead, stamp/seal, owner ID.</div>
-  <div><strong>One required:</strong> Ministry approval or operating license.</div>
-  <div><strong>One required:</strong> Utility bill or proof of address.</div>
+  <div><strong>Optional:</strong> Upload a school logo and browser favicon to personalize the portal.</div>
+  <div><strong>Allowed files:</strong> PNG, JPG, JPEG, SVG, or ICO.</div>
 </div>
 
 <div class="upload-grid">
   <label class="upload-card">
-    <span class="upload-icon"><i data-lucide="file-badge"></i></span>
-    <strong>CAC Certificate <em>Required</em></strong>
-    <small>Certificate of Registration.</small>
-    <input type="file" name="cac_certificate" required accept=".pdf,.jpg,.jpeg,.png" data-review-label="CAC Certificate" />
+    <span class="upload-icon"><i data-lucide="image"></i></span>
+    <strong>School Logo <em>Optional</em></strong>
+    <small>Shown in the portal header and school profile.</small>
+    <input type="file" name="logo" accept=".png,.jpg,.jpeg,.svg" data-review-label="School Logo" />
   </label>
 
   <label class="upload-card">
-    <span class="upload-icon"><i data-lucide="file-check-2"></i></span>
-    <strong>CAC Status Report <em>Required</em></strong>
-    <small>Confirms legal registration in Nigeria.</small>
-    <input type="file" name="cac_status_report" required accept=".pdf,.jpg,.jpeg,.png" data-review-label="CAC Status Report" />
-  </label>
-
-  <label class="upload-card">
-    <span class="upload-icon"><i data-lucide="landmark"></i></span>
-    <strong>Ministry Approval <em>One required</em></strong>
-    <small>State or Federal Ministry of Education approval.</small>
-    <input type="file" name="ministry_approval" accept=".pdf,.jpg,.jpeg,.png" data-review-label="Ministry Approval" data-required-group="license" />
-  </label>
-
-  <label class="upload-card">
-    <span class="upload-icon"><i data-lucide="badge-check"></i></span>
-    <strong>Operating License <em>One required</em></strong>
-    <small>Upload this if Ministry approval is unavailable.</small>
-    <input type="file" name="operating_license" accept=".pdf,.jpg,.jpeg,.png" data-review-label="Operating License" data-required-group="license" />
-  </label>
-
-  <label class="upload-card">
-    <span class="upload-icon"><i data-lucide="receipt-text"></i></span>
-    <strong>TIN or Tax Certificate <em>Required</em></strong>
-    <small>Confirms tax compliance.</small>
-    <input type="file" name="tin_certificate" required accept=".pdf,.jpg,.jpeg,.png" data-review-label="TIN or Tax Certificate" />
-  </label>
-
-  <label class="upload-card">
-    <span class="upload-icon"><i data-lucide="file-text"></i></span>
-    <strong>School Letterhead <em>Required</em></strong>
-    <small>Official letterhead showing institution identity.</small>
-    <input type="file" name="school_letterhead" required accept=".pdf,.jpg,.jpeg,.png" data-review-label="School Letterhead" />
-  </label>
-
-  <label class="upload-card">
-    <span class="upload-icon"><i data-lucide="stamp"></i></span>
-    <strong>School Stamp/Seal <em>Required</em></strong>
-    <small>Confirms authenticity of the institution.</small>
-    <input type="file" name="school_stamp" required accept=".pdf,.jpg,.jpeg,.png" data-review-label="School Stamp/Seal" />
-  </label>
-
-  <label class="upload-card">
-    <span class="upload-icon"><i data-lucide="id-card"></i></span>
-    <strong>Owner/Admin Valid ID <em>Required</em></strong>
-    <small>NIN slip, National ID, Driver's License, or Passport.</small>
-    <input type="file" name="owner_valid_id" required accept=".pdf,.jpg,.jpeg,.png" data-review-label="Owner/Admin Valid ID" />
-  </label>
-
-  <label class="upload-card">
-    <span class="upload-icon"><i data-lucide="home"></i></span>
-    <strong>Utility Bill <em>One required</em></strong>
-    <small>Electricity, water, or another recent utility bill.</small>
-    <input type="file" name="utility_bill" accept=".pdf,.jpg,.jpeg,.png" data-review-label="Utility Bill" data-required-group="address" />
-  </label>
-
-  <label class="upload-card">
-    <span class="upload-icon"><i data-lucide="map-pinned"></i></span>
-    <strong>Proof of Address <em>One required</em></strong>
-    <small>Document confirming the physical school location.</small>
-    <input type="file" name="proof_of_address" accept=".pdf,.jpg,.jpeg,.png" data-review-label="Proof of Address" data-required-group="address" />
+    <span class="upload-icon"><i data-lucide="badge"></i></span>
+    <strong>Favicon <em>Optional</em></strong>
+    <small>Used as the small browser tab icon.</small>
+    <input type="file" name="favicon" accept=".png,.jpg,.jpeg,.ico,.svg" data-review-label="Favicon" />
   </label>
 </div>

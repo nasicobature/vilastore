@@ -15,8 +15,7 @@
           {% if payment_mode == 'renewal' %}
             Choose a billing cycle and renew access for your school.
           {% else %}
-            Your school registration has been submitted. Choose a billing cycle and pay the EduPortal subscription now.
-            VilaStore will still review your CAC, license, TIN, NIN, and address documents before portal access is approved.
+            Your school registration has been submitted. Confirm the selected billing period and pay the EduPortal subscription now.
           {% endif %}
         </p>
       </div>
@@ -24,7 +23,7 @@
         <p class="text-xs text-muted-foreground">Amount due</p>
         <p class="text-3xl font-display font-bold mt-1"><span id="eduAmountDisplay">{{ currency }} {{ amount_display }}</span></p>
         <p class="text-xs text-muted-foreground mt-2">{{ institution.name }}</p>
-        <p class="text-xs text-muted-foreground mt-1" id="eduPlanDisplay">{{ selected_plan.name }} - {{ selected_plan.duration_label }}</p>
+        <p class="text-xs text-muted-foreground mt-1" id="eduPlanDisplay">{{ selected_package.name }} - {{ selected_plan.name }}</p>
       </div>
     </div>
 
@@ -36,8 +35,8 @@
       </div>
       <div class="rounded-xl border border-border bg-background p-4">
         <i data-lucide="shield-check" class="w-5 h-5 text-primary"></i>
-        <h3 class="font-semibold mt-3">Document Review</h3>
-        <p class="text-sm text-muted-foreground mt-1">{{ institution.get_verification_status_display }}</p>
+        <h3 class="font-semibold mt-3">Package</h3>
+        <p class="text-sm text-muted-foreground mt-1">{{ selected_package.name }} - {{ selected_package.student_range }}</p>
       </div>
       <div class="rounded-xl border border-border bg-background p-4">
         <i data-lucide="credit-card" class="w-5 h-5 text-primary"></i>
@@ -54,7 +53,7 @@
 
     {% if institution.registration_payment_status == 'paid' and payment_mode != 'renewal' %}
       <div class="mt-8 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm">
-        Payment has been confirmed. VilaStore will review your documents and approve the portal when verification is complete.
+        Payment has been confirmed. VilaStore will approve the portal when setup is complete.
       </div>
       <a href="{{ login_url }}" class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-5 py-3 text-sm font-semibold hover:bg-primary/90">
         Open Login
@@ -68,7 +67,8 @@
       <form method="post" id="eduRegistrationPaymentForm" class="mt-8 space-y-5">
         {% csrf_token %}
         <div>
-          <p class="text-sm font-semibold mb-3">Choose subscription plan</p>
+          <p class="text-sm font-semibold mb-3">Choose billing period</p>
+          <input type="hidden" name="subscription_package" value="{{ selected_package.code }}">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             {% for key, plan in subscription_plans.items %}
               <label class="rounded-xl border border-border bg-background p-4 cursor-pointer hover:border-primary/50 {% if selected_plan.cycle == plan.cycle %}ring-2 ring-primary/40{% endif %}">

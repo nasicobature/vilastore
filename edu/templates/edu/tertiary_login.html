@@ -13,21 +13,29 @@
           <i data-lucide="graduation-cap" class="text-secondary-foreground"></i>
         </div>
         <h2 class="font-display text-2xl font-bold">Sign In</h2>
-        <p class="text-sm text-muted-foreground mt-1">Tertiary Institution Portal</p>
+        <p class="text-sm text-muted-foreground mt-1">{% if subdomain_institution %}{{ subdomain_institution.name }}{% else %}Tertiary Institution Portal{% endif %}</p>
       </div>
 
       <form method="post" class="space-y-4">
         {% csrf_token %}
-        <div>
-          <label class="block text-sm font-medium mb-1.5">School Code</label>
-          <input
-            type="text"
-            name="school_code"
-            placeholder="e.g. CSU"
-            class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            required
-          />
-        </div>
+        {% if subdomain_institution %}
+          <input type="hidden" name="school_code" value="{{ resolved_school_code }}" />
+          <div class="rounded-xl border border-border bg-background px-4 py-3 text-sm">
+            <span class="block text-muted-foreground">School Portal</span>
+            <strong>{{ resolved_school_code }}</strong>
+          </div>
+        {% else %}
+          <div>
+            <label class="block text-sm font-medium mb-1.5">School Code</label>
+            <input
+              type="text"
+              name="school_code"
+              placeholder="e.g. CSU"
+              class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              required
+            />
+          </div>
+        {% endif %}
 
         <div>
           <label class="block text-sm font-medium mb-1.5">User ID, Email, or Phone</label>
