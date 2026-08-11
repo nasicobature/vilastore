@@ -1,0 +1,982 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Inventory</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
+  <script src="{% static 'js/offline-web.js' %}" defer></script>
+  <style>
+    .ai-assistant-panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      background: color-mix(in srgb, var(--muted) 42%, transparent);
+      display: grid;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .ai-assistant-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      color: var(--foreground);
+    }
+    .ai-preview-card {
+      display: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      padding: 12px;
+      color: var(--foreground);
+    }
+    .ai-preview-card.active {
+      display: block;
+    }
+    .ai-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .ai-preview-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      background: var(--background);
+      min-height: 58px;
+    }
+    .ai-preview-item small {
+      display: block;
+      color: var(--muted-foreground);
+      margin-bottom: 4px;
+    }
+    .ai-warning {
+      color: #b45309;
+      font-size: 0.9rem;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+
+<body>
+<div class="app-container">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <i data-lucide="store"></i>
+      </div>
+      <h1>VilaStore</h1>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="{% url 'index' %}" class="nav-link">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="{% url 'product' %}" class="nav-link">
+        <i data-lucide="package"></i>
+        <span>Products</span>
+      </a>
+      <a href="{% url 'inventory' %}" class="nav-link active">
+        <i data-lucide="boxes"></i>
+        <span>Inventory</span>
+      </a>
+      <a href="{% url 'sales-history' %}" class="nav-link">
+        <i data-lucide="receipt"></i>
+        <span>Sales History</span>
+      </a>
+      <a href="{% url 'loans' %}" class="nav-link">
+        <i data-lucide="credit-card"></i>
+        <span>Credit</span>
+      </a>
+      <a href="{% url 'expenses' %}" class="nav-link">
+        <i data-lucide="wallet"></i>
+        <span>Expenses</span>
+      </a>
+      <a href="{% url 'reports' %}" class="nav-link">
+        <i data-lucide="bar-chart-3"></i>
+        <span>Reports</span>
+      </a>
+      <a href="{% url 'customer' %}" class="nav-link">
+        <i data-lucide="users"></i>
+        <span>Customers</span>
+      </a>
+      <a href="{% url 'settings' %}" class="nav-link">
+        <i data-lucide="settings"></i>
+        <span>Settings</span>
+      </a>
+    </nav>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <header class="page-header">
+      <div>
+        <h1>Inventory Management</h1>
+        <p>Manage your products and stock</p>
+      </div>
+
+      <div style="display:flex; gap:10px;">
+        {% if entitlements.barcode.allowed %}
+        <a href="{% url 'product_labels' %}" class="btn btn-outline">
+          <i data-lucide="printer"></i>
+          Print Labels
+        </a>
+        {% else %}
+        <button class="btn btn-outline" type="button" disabled title="{{ entitlements.barcode.message }}">
+          <i data-lucide="lock"></i>
+          Labels locked
+        </button>
+        {% endif %}
+        <button class="btn btn-outline" onclick="openCategoryModal()">
+          <i data-lucide="folder-plus"></i>
+          Add Category
+        </button>
+
+        <button class="btn btn-primary" onclick="openProductModal()">
+          <i data-lucide="plus"></i>
+          Add Product
+        </button>
+      </div>
+    </header>
+
+    <form method="GET" action="{% url 'inventory' %}" style="margin-bottom:1rem;">
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+        <select name="branch" class="input" style="min-width:220px;" {% if not entitlements.multi_branch.allowed %}disabled title="{{ entitlements.multi_branch.message }}"{% endif %}>
+          <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+          {% for branch in branches %}
+            <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}{% if branch.is_default %} (Default){% endif %}</option>
+          {% endfor %}
+        </select>
+        <input type="text" name="q" class="input" placeholder="Search products by name, code, or category" value="{{ search_query }}" style="flex:1;min-width:220px;">
+        <button type="submit" class="btn btn-outline">Search</button>
+        {% if search_query %}
+          <a href="{% url 'inventory' %}{% if selected_branch %}?branch={{ selected_branch.id }}{% endif %}" class="btn btn-ghost">Clear</a>
+        {% endif %}
+      </div>
+    </form>
+    {% if messages %}
+    <section style="margin-bottom: 1rem;">
+      {% for message in messages %}
+      <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    <!-- STATS -->
+    <section class="stats-grid">
+      <div class="card stat-card">
+        <span>Total Products</span>
+        <h2>{{ total_products }}</h2>
+      </div>
+
+      <div class="card stat-card">
+        <span>Total Stock Value</span>
+        <h2>₦{{ total_value }}</h2>
+      </div>
+
+      <div class="card stat-card">
+        <span>Low Stock</span>
+        <h2>{{ low_stock }}</h2>
+      </div>
+
+      <div class="card stat-card">
+        <span>Out of Stock</span>
+        <h2>{{ out_of_stock }}</h2>
+      </div>
+    </section>
+
+    <!-- PRODUCT TABLE -->
+    <section class="table-container">
+      <div class="table-scroll">
+        <table class="table table--responsive" id="inventoryTable" data-page-size="8">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Code</th>
+            <th>Category</th>
+            <th>Cost</th>
+            <th>Selling</th>
+            <th>Stock</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+        {% for product in products %}
+          <tr
+            data-offline-product
+            data-product-id="{{ product.id }}"
+            data-product-name="{{ product.name|escapejs }}"
+            data-product-code="{{ product.code|default:''|escapejs }}"
+            data-product-price="{{ product.display_price }}"
+            data-product-stock="{{ product.display_stock }}"
+          >
+            <td data-label="Name">{{ product.name }}</td>
+            <td data-label="Code">{{ product.code|default:"-" }}</td>
+            <td data-label="Category">{{ product.category.name|default:"-" }}</td>
+            <td data-label="Cost">₦{{ product.cost_price }}</td>
+            <td data-label="Selling">₦{{ product.display_price }}</td>
+            <td data-label="Stock">
+              {{ product.display_stock }}
+              {% if selected_branch and product.branch_inventory_row %}
+                <br><small>{{ selected_branch.name }}</small>
+              {% endif %}
+            </td>
+            <td data-label="Status">
+              {% if product.display_stock == 0 %}
+                <span class="badge badge-destructive">Out of Stock</span>
+              {% elif product.display_stock <= product.low_stock_threshold %}
+                <span class="badge badge-warning">Low Stock</span>
+              {% else %}
+                <span class="badge badge-success">In Stock</span>
+              {% endif %}
+            </td>
+            <td data-label="Action">
+              <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline"
+                  onclick="openEditProductModal(this)"
+                  data-product-id="{{ product.id }}"
+                  data-name="{{ product.name }}"
+                  data-code="{{ product.code }}"
+                  data-category-id="{{ product.category_id|default:'' }}"
+                  data-cost-price="{{ product.cost_price }}"
+                  data-selling-price="{{ product.display_price }}"
+                  data-stock="{{ product.display_stock }}"
+                  data-low-stock-threshold="{{ product.low_stock_threshold }}"
+                  data-vat-status="{{ product.vat_status|default:'standard' }}"
+                  data-image-url="{% if product.image %}{{ product.image.url }}{% endif %}"
+                  data-branch-id="{% if selected_branch %}{{ selected_branch.id }}{% endif %}"
+                >
+                  Edit
+                </button>
+                <form method="POST" action="{% url 'adjust_stock' product.id %}" style="display:inline;">
+                  {% csrf_token %}
+                  {% if selected_branch %}<input type="hidden" name="branch" value="{{ selected_branch.id }}">{% endif %}
+                  <input type="hidden" name="adjustment" value="-1">
+                  <button type="submit" class="btn btn-sm btn-outline">-1</button>
+                </form>
+                <form method="POST" action="{% url 'adjust_stock' product.id %}" style="display:inline;">
+                  {% csrf_token %}
+                  {% if selected_branch %}<input type="hidden" name="branch" value="{{ selected_branch.id }}">{% endif %}
+                  <input type="hidden" name="adjustment" value="1">
+                  <button type="submit" class="btn btn-sm btn-outline">+1</button>
+                </form>
+                <form method="POST" action="{% url 'delete_product' product.id %}" style="display:inline;" onsubmit="return confirm('Delete {{ product.name }}?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr data-pagination-ignore="true">
+            <td colspan="8">No products found</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+
+      <div class="table-footer" id="inventoryTableFooter">
+        <div class="pagination-info" id="inventoryTablePaginationInfo"></div>
+        <div class="pagination-controls" id="inventoryTablePaginationControls">
+          <button type="button" class="btn btn-outline btn-sm pagination-btn" data-page="prev">Prev</button>
+          <div class="pagination-pages" id="inventoryTablePaginationPages"></div>
+          <button type="button" class="btn btn-outline btn-sm pagination-btn" data-page="next">Next</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- =========================
+     ADD PRODUCT MODAL
+========================= -->
+<div class="modal-overlay" id="productModal">
+  <div class="modal modal-lg">
+
+    <div class="modal-header">
+      <h3>Add Product</h3>
+      <button onclick="closeProductModal()">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <form method="POST" action="{% url 'add_product' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      <div class="ai-assistant-panel">
+        <div class="ai-assistant-title">
+          <i data-lucide="sparkles"></i>
+          <span>AI Assistant</span>
+        </div>
+        <textarea id="productAiCommand" class="input" rows="3" placeholder="Type or speak: Add product for me. Product name is iPhone 13, price is 450000, quantity is 5, category is phones."></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline" onclick="startAiSpeech('productAiCommand')">
+            <i data-lucide="mic"></i>
+            Voice
+          </button>
+          <button type="button" class="btn btn-outline" id="productAiPreviewBtn" onclick="previewProductAi()">Preview Details</button>
+          <button type="button" class="btn btn-primary" id="productAiApplyBtn" onclick="applyProductAi()" disabled>Apply to Form</button>
+        </div>
+        <div id="productAiPreview" class="ai-preview-card"></div>
+      </div>
+
+      <input type="text" name="name" id="newProductName" placeholder="Product Name" class="input" required>
+      {% if entitlements.barcode.allowed %}
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        <input type="text" name="code" id="newProductCode" placeholder="Product Code (Barcode/SKU)" class="input" style="flex:1;">
+        <button type="button" class="btn btn-outline" id="generateNewProductCode">Generate</button>
+      </div>
+      {% else %}
+      <div class="card" style="padding:0.75rem 1rem;color:var(--muted-foreground);">
+        Barcode/SKU tools are locked. {{ entitlements.barcode.message }}
+      </div>
+      {% endif %}
+
+      <input type="search" class="input" data-category-filter="newProductCategory" placeholder="Search categories">
+      <select name="category" id="newProductCategory" class="input">
+        <option value="">No category</option>
+        {% for category in categories %}
+          <option value="{{ category.id }}">{{ category.name }}</option>
+        {% endfor %}
+      </select>
+      <input type="hidden" name="new_category_name" id="newProductNewCategory" value="">
+      {% if entitlements.multi_branch.allowed %}
+      {% if selected_branch %}
+      <input type="hidden" name="branch_id" value="{{ selected_branch.id }}">
+      <small style="color:var(--muted-foreground);">This product will be saved to {{ selected_branch.name }} only.</small>
+      {% else %}
+      <select name="branch_id" class="input">
+        <option value="">Apply to overall store</option>
+        {% for branch in branches %}
+          <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+        {% endfor %}
+      </select>
+      <small style="color:var(--muted-foreground);">Choose a branch if this stock should belong to one location only.</small>
+      {% endif %}
+      {% endif %}
+
+      <input type="number" name="cost_price" id="newProductCostPrice" placeholder="Cost Price" class="input" required>
+      <input type="number" name="selling_price" id="newProductSellingPrice" placeholder="Selling Price" class="input" required>
+      {% if entitlements.tax_tools.allowed %}
+      <select name="vat_status" class="input">
+        <option value="standard">VAT: Standard (7.5%)</option>
+        <option value="zero">VAT: Zero-rated (0%)</option>
+        <option value="exempt">VAT: Exempt</option>
+      </select>
+      <small style="color:var(--muted-foreground);">Use VAT schedules for exempt or zero-rated goods.</small>
+      {% else %}
+      <input type="hidden" name="vat_status" value="standard">
+      {% endif %}
+      <input type="number" name="stock" id="newProductStock" min="0" step="0.01" placeholder="Stock" class="input" required>
+      <input type="number" name="low_stock_threshold" id="newProductLowStockThreshold" value="5" class="input">
+
+      <input type="file" name="image" class="input">
+
+      <div style="margin-top:15px;">
+        <button type="button" class="btn btn-outline" onclick="closeProductModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Product</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<!-- =========================
+     EDIT PRODUCT MODAL
+========================= -->
+<div class="modal-overlay" id="editProductModal">
+  <div class="modal modal-lg">
+
+    <div class="modal-header">
+      <h3>Edit Product</h3>
+      <button onclick="closeEditProductModal()">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <form method="POST" action="#" id="editProductForm" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      <input type="text" name="name" id="editProductName" placeholder="Product Name" class="input" required>
+      {% if entitlements.barcode.allowed %}
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        <input type="text" name="code" id="editProductCode" placeholder="Product Code (Barcode/SKU)" class="input" style="flex:1;">
+        <button type="button" class="btn btn-outline" id="generateEditProductCode">Generate</button>
+      </div>
+      {% else %}
+      <input type="hidden" name="code" id="editProductCode" value="">
+      {% endif %}
+
+      <input type="search" class="input" data-category-filter="editProductCategory" placeholder="Search categories">
+      <select name="category" id="editProductCategory" class="input">
+        <option value="">No category</option>
+        {% for category in categories %}
+          <option value="{{ category.id }}">{{ category.name }}</option>
+        {% endfor %}
+      </select>
+      {% if entitlements.multi_branch.allowed %}
+      {% if selected_branch %}
+      <input type="hidden" name="branch_id" id="editProductBranch" value="{{ selected_branch.id }}">
+      <small style="color:var(--muted-foreground);">This update applies to {{ selected_branch.name }} inventory only.</small>
+      {% else %}
+      <select name="branch_id" id="editProductBranch" class="input">
+        <option value="">Apply to overall store</option>
+        {% for branch in branches %}
+          <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+        {% endfor %}
+      </select>
+      <small style="color:var(--muted-foreground);">When a branch is selected, stock and branch price update for that location.</small>
+      {% endif %}
+      {% else %}
+      <input type="hidden" name="branch_id" id="editProductBranch" value="">
+      {% endif %}
+
+      <input type="number" name="cost_price" id="editProductCostPrice" placeholder="Cost Price" class="input" required>
+      <input type="number" name="selling_price" id="editProductSellingPrice" placeholder="Selling Price" class="input" required>
+      {% if entitlements.tax_tools.allowed %}
+      <select name="vat_status" id="editProductVatStatus" class="input">
+        <option value="standard">VAT: Standard (7.5%)</option>
+        <option value="zero">VAT: Zero-rated (0%)</option>
+        <option value="exempt">VAT: Exempt</option>
+      </select>
+      <small style="color:var(--muted-foreground);">Use VAT schedules for exempt or zero-rated goods.</small>
+      {% else %}
+      <input type="hidden" name="vat_status" id="editProductVatStatus" value="standard">
+      {% endif %}
+      <input type="number" name="stock" id="editProductStock" min="0" step="0.01" placeholder="Stock" class="input" required>
+      <input type="number" name="low_stock_threshold" id="editProductLowStockThreshold" class="input">
+
+      <div style="display:flex; gap:12px; align-items:center;">
+        <div style="width:72px;height:72px;border-radius:12px;overflow:hidden;background:var(--muted);display:flex;align-items:center;justify-content:center;">
+          <img id="editProductImagePreview" src="" alt="Product image" style="width:100%;height:100%;object-fit:cover;display:none;">
+          <i id="editProductImagePlaceholder" data-lucide="package" style="width:28px;height:28px;color:var(--muted-foreground);"></i>
+        </div>
+        <div style="flex:1;">
+          <input type="file" name="image" id="editProductImageInput" class="input" accept="image/*">
+          <small style="color:var(--muted-foreground);">Upload to replace the current image.</small>
+        </div>
+      </div>
+
+      <div style="margin-top:15px;">
+        <button type="button" class="btn btn-outline" onclick="closeEditProductModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Update Product</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<!-- =========================
+     ADD CATEGORY MODAL
+========================= -->
+<div class="modal-overlay" id="categoryModal">
+  <div class="modal">
+
+    <div class="modal-header">
+      <h3>Add Category</h3>
+      <button onclick="closeCategoryModal()">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <form method="POST" action="{% url 'add_category' %}">
+      {% csrf_token %}
+      {% if selected_branch %}
+      <input type="hidden" name="branch_id" value="{{ selected_branch.id }}">
+      {% endif %}
+      <div class="ai-assistant-panel">
+        <div class="ai-assistant-title">
+          <i data-lucide="sparkles"></i>
+          <span>AI Assistant</span>
+        </div>
+        <textarea id="categoryAiCommand" class="input" rows="3" placeholder="Type or speak: Create category for me, the name is iPhone."></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline" onclick="startAiSpeech('categoryAiCommand')">
+            <i data-lucide="mic"></i>
+            Voice
+          </button>
+          <button type="button" class="btn btn-outline" id="categoryAiPreviewBtn" onclick="previewCategoryAi()">Preview Category</button>
+          <button type="button" class="btn btn-primary" id="categoryAiApplyBtn" onclick="applyCategoryAi()" disabled>Use This Name</button>
+        </div>
+        <div id="categoryAiPreview" class="ai-preview-card"></div>
+      </div>
+
+      <input type="text" name="name" id="categoryNameInput" placeholder="Category Name" class="input" required>
+
+      <div style="margin-top:15px;">
+        <button type="button" class="btn btn-outline" onclick="closeCategoryModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Category</button>
+      </div>
+    </form>
+
+    <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px;">
+      <h4 style="margin-bottom:8px;">Existing Categories</h4>
+      <input type="search" class="input" id="categoryManageSearch" placeholder="Search categories to delete" style="margin-bottom:10px;">
+      <div id="categoryManageList" style="display:grid;gap:8px;max-height:260px;overflow:auto;">
+        {% for category in categories %}
+          <div class="category-manage-row" data-category-name="{{ category.name|lower }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:8px;padding:8px 10px;">
+            <span>{{ category.name }}</span>
+            <form method="POST" action="{% url 'delete_category' category.id %}" onsubmit="return confirm('Delete category {{ category.name }}? Products in it will become uncategorized.')" style="margin:0;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </div>
+        {% empty %}
+          <p style="color:var(--muted-foreground);">No categories yet</p>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- =========================
+     MODAL SCRIPT
+========================= -->
+<script>
+let productAiParsed = null;
+let categoryAiParsed = null;
+
+function getCsrfToken() {
+    const tokenInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return tokenInput ? tokenInput.value : '';
+}
+
+function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, function (char) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        }[char];
+    });
+}
+
+async function requestInventoryAi(mode, command) {
+    const formData = new FormData();
+    formData.append('mode', mode);
+    formData.append('command', command);
+    const response = await fetch("{% url 'ai_inventory_assistant' %}", {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || 'AI assistant could not process that command.');
+    }
+    return data;
+}
+
+function startAiSpeech(targetId) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert('Voice input is not supported in this browser. You can type the command instead.');
+        return;
+    }
+    const input = document.getElementById(targetId);
+    if (!input) {
+        return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-NG';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = function (event) {
+        const transcript = event.results[0][0].transcript || '';
+        input.value = input.value ? `${input.value} ${transcript}` : transcript;
+    };
+    recognition.onerror = function () {
+        alert('Voice input failed. Please try again or type the command.');
+    };
+    recognition.start();
+}
+
+function renderAiPreview(containerId, parsed, fields, missing) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        return;
+    }
+    const items = fields.map(field => `
+        <div class="ai-preview-item">
+          <small>${escapeHtml(field.label)}</small>
+          <strong>${escapeHtml(parsed[field.key] || field.empty || '-')}</strong>
+        </div>
+    `).join('');
+    const missingHtml = missing && missing.length
+        ? `<div class="ai-warning">Missing: ${escapeHtml(missing.join(', '))}</div>`
+        : '';
+    const imageHtml = parsed.image_url
+        ? `<div class="ai-warning">Image suggestion found. Please upload the product image manually before saving.</div>`
+        : '';
+    container.innerHTML = `<div>${escapeHtml(parsed.message || 'Review the extracted details before applying.')}</div><div class="ai-preview-grid">${items}</div>${missingHtml}${imageHtml}`;
+    container.classList.add('active');
+}
+
+async function previewCategoryAi() {
+    const commandInput = document.getElementById('categoryAiCommand');
+    const button = document.getElementById('categoryAiPreviewBtn');
+    const applyButton = document.getElementById('categoryAiApplyBtn');
+    const command = commandInput ? commandInput.value.trim() : '';
+    if (!command) {
+        alert('Type the category command first.');
+        return;
+    }
+    try {
+        button.disabled = true;
+        button.textContent = 'Checking...';
+        const data = await requestInventoryAi('category', command);
+        categoryAiParsed = data.parsed;
+        renderAiPreview('categoryAiPreview', categoryAiParsed, [{ key: 'name', label: 'Category name' }], data.missing);
+        applyButton.disabled = !data.can_save;
+    } catch (err) {
+        alert(err.message || 'Unable to preview category.');
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Preview Category';
+    }
+}
+
+function applyCategoryAi() {
+    if (!categoryAiParsed || !categoryAiParsed.name) {
+        return;
+    }
+    document.getElementById('categoryNameInput').value = categoryAiParsed.name;
+}
+
+async function previewProductAi() {
+    const commandInput = document.getElementById('productAiCommand');
+    const button = document.getElementById('productAiPreviewBtn');
+    const applyButton = document.getElementById('productAiApplyBtn');
+    const command = commandInput ? commandInput.value.trim() : '';
+    if (!command) {
+        alert('Type the product command first.');
+        return;
+    }
+    try {
+        button.disabled = true;
+        button.textContent = 'Checking...';
+        const data = await requestInventoryAi('product', command);
+        productAiParsed = data.parsed;
+        renderAiPreview('productAiPreview', productAiParsed, [
+            { key: 'name', label: 'Product name' },
+            { key: 'category', label: 'Category' },
+            { key: 'stock', label: 'Quantity' },
+            { key: 'cost_price', label: 'Cost price' },
+            { key: 'selling_price', label: 'Selling price' },
+            { key: 'barcode', label: 'Barcode' },
+            { key: 'description', label: 'Description' }
+        ], data.missing);
+        applyButton.disabled = !data.can_save;
+    } catch (err) {
+        alert(err.message || 'Unable to preview product.');
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Preview Details';
+    }
+}
+
+function applyProductAi() {
+    if (!productAiParsed) {
+        return;
+    }
+    const setValue = (id, value) => {
+        const input = document.getElementById(id);
+        if (input && value !== undefined && value !== null && String(value).trim() !== '') {
+            input.value = value;
+        }
+    };
+    setValue('newProductName', productAiParsed.name);
+    setValue('newProductStock', productAiParsed.stock);
+    setValue('newProductCostPrice', productAiParsed.cost_price);
+    setValue('newProductSellingPrice', productAiParsed.selling_price);
+    setValue('newProductCode', productAiParsed.barcode);
+
+    const categorySelect = document.getElementById('newProductCategory');
+    const newCategoryInput = document.getElementById('newProductNewCategory');
+    if (categorySelect && newCategoryInput && productAiParsed.category) {
+        const wanted = productAiParsed.category.trim().toLowerCase();
+        const match = Array.from(categorySelect.options).find(option => option.textContent.trim().toLowerCase() === wanted);
+        if (match) {
+            categorySelect.value = match.value;
+            newCategoryInput.value = '';
+        } else {
+            categorySelect.value = '';
+            newCategoryInput.value = productAiParsed.category;
+            const preview = document.getElementById('productAiPreview');
+            if (preview) {
+                preview.insertAdjacentHTML('beforeend', `<div class="ai-warning">New category "${escapeHtml(productAiParsed.category)}" will be created when you save this product.</div>`);
+            }
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    lucide.createIcons();
+    setupTablePagination('inventoryTable');
+
+    document.querySelectorAll('[data-category-filter]').forEach(function (input) {
+        const select = document.getElementById(input.dataset.categoryFilter);
+        if (!select) {
+            return;
+        }
+        input.addEventListener('input', function () {
+            const q = input.value.trim().toLowerCase();
+            Array.from(select.options).forEach(function (option, index) {
+                option.hidden = index > 0 && q && !option.textContent.toLowerCase().includes(q);
+            });
+        });
+    });
+
+    const categoryManageSearch = document.getElementById('categoryManageSearch');
+    if (categoryManageSearch) {
+        categoryManageSearch.addEventListener('input', function () {
+            const q = categoryManageSearch.value.trim().toLowerCase();
+            document.querySelectorAll('.category-manage-row').forEach(function (row) {
+                row.style.display = !q || row.dataset.categoryName.includes(q) ? 'flex' : 'none';
+            });
+        });
+    }
+
+    const editImageInput = document.getElementById('editProductImageInput');
+    if (editImageInput) {
+        editImageInput.addEventListener('change', function () {
+            const preview = document.getElementById('editProductImagePreview');
+            const placeholder = document.getElementById('editProductImagePlaceholder');
+            const file = editImageInput.files && editImageInput.files[0];
+            if (!file) {
+                preview.src = '';
+                preview.style.display = 'none';
+                placeholder.style.display = 'block';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                preview.src = event.target.result;
+                preview.style.display = 'block';
+                placeholder.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function fetchGeneratedCode() {
+        const res = await fetch("{% url 'generate_product_code' %}");
+        const data = await res.json();
+        if (!data.success) {
+            throw new Error(data.message || "Failed to generate code.");
+        }
+        return data.code;
+    }
+
+    const newCodeBtn = document.getElementById('generateNewProductCode');
+    const newCodeInput = document.getElementById('newProductCode');
+    if (newCodeBtn && newCodeInput) {
+        newCodeBtn.addEventListener('click', async function () {
+            try {
+                newCodeBtn.disabled = true;
+                newCodeBtn.textContent = 'Generating...';
+                newCodeInput.value = await fetchGeneratedCode();
+            } catch (err) {
+                alert(err.message || 'Unable to generate code.');
+            } finally {
+                newCodeBtn.disabled = false;
+                newCodeBtn.textContent = 'Generate';
+            }
+        });
+    }
+
+    const editCodeBtn = document.getElementById('generateEditProductCode');
+    const editCodeInput = document.getElementById('editProductCode');
+    if (editCodeBtn && editCodeInput) {
+        editCodeBtn.addEventListener('click', async function () {
+            try {
+                editCodeBtn.disabled = true;
+                editCodeBtn.textContent = 'Generating...';
+                editCodeInput.value = await fetchGeneratedCode();
+            } catch (err) {
+                alert(err.message || 'Unable to generate code.');
+            } finally {
+                editCodeBtn.disabled = false;
+                editCodeBtn.textContent = 'Generate';
+            }
+        });
+    }
+});
+
+function openProductModal() {
+    document.getElementById('productModal').classList.add('active');
+}
+function closeProductModal() {
+    document.getElementById('productModal').classList.remove('active');
+}
+
+function openEditProductModal(button) {
+    const form = document.getElementById('editProductForm');
+    const modal = document.getElementById('editProductModal');
+    const productId = button.dataset.productId;
+    const editUrlTemplate = "{% url 'edit_product' 0 %}";
+
+    form.action = editUrlTemplate.replace("/0/", "/" + productId + "/");
+    document.getElementById('editProductName').value = button.dataset.name || '';
+    document.getElementById('editProductCode').value = button.dataset.code || '';
+    document.getElementById('editProductCategory').value = button.dataset.categoryId || '';
+    document.getElementById('editProductCostPrice').value = button.dataset.costPrice || '';
+    document.getElementById('editProductSellingPrice').value = button.dataset.sellingPrice || '';
+    document.getElementById('editProductStock').value = button.dataset.stock || '';
+    document.getElementById('editProductLowStockThreshold').value = button.dataset.lowStockThreshold || '';
+    document.getElementById('editProductVatStatus').value = button.dataset.vatStatus || 'standard';
+    document.getElementById('editProductBranch').value = button.dataset.branchId || '';
+
+    const imageUrl = button.dataset.imageUrl || '';
+    const preview = document.getElementById('editProductImagePreview');
+    const placeholder = document.getElementById('editProductImagePlaceholder');
+    if (imageUrl) {
+        preview.src = imageUrl;
+        preview.style.display = 'block';
+        placeholder.style.display = 'none';
+    } else {
+        preview.src = '';
+        preview.style.display = 'none';
+        placeholder.style.display = 'block';
+    }
+
+    modal.classList.add('active');
+}
+
+function closeEditProductModal() {
+    document.getElementById('editProductModal').classList.remove('active');
+}
+
+function openCategoryModal() {
+    document.getElementById('categoryModal').classList.add('active');
+}
+function closeCategoryModal() {
+    document.getElementById('categoryModal').classList.remove('active');
+}
+
+document.querySelectorAll('.modal-overlay').forEach(modal => {
+    modal.addEventListener('click', function(e){
+        if(e.target === modal){
+            modal.classList.remove('active');
+        }
+    });
+});
+
+function setupTablePagination(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table || !table.tBodies.length) {
+        return;
+    }
+
+    const tbody = table.tBodies[0];
+    const allRows = Array.from(tbody.rows);
+    const rows = allRows.filter(row => !row.dataset.paginationIgnore);
+    const emptyRow = allRows.find(row => row.dataset.paginationIgnore);
+    const pageSize = parseInt(table.dataset.pageSize || '8', 10);
+
+    const footer = document.getElementById(tableId + 'Footer');
+    const info = document.getElementById(tableId + 'PaginationInfo');
+    const pages = document.getElementById(tableId + 'PaginationPages');
+    const prevBtn = footer ? footer.querySelector('[data-page="prev"]') : null;
+    const nextBtn = footer ? footer.querySelector('[data-page="next"]') : null;
+
+    if (!footer || !info || !pages || !prevBtn || !nextBtn) {
+        return;
+    }
+
+    if (rows.length === 0) {
+        footer.style.display = 'none';
+        if (emptyRow) {
+            emptyRow.style.display = '';
+        }
+        return;
+    }
+
+    const totalPages = Math.ceil(rows.length / pageSize);
+    if (totalPages <= 1) {
+        footer.style.display = 'none';
+        rows.forEach(row => {
+            row.style.display = '';
+        });
+        if (emptyRow) {
+            emptyRow.style.display = 'none';
+        }
+        return;
+    }
+
+    let currentPage = 1;
+
+    function renderPage(page) {
+        currentPage = Math.min(Math.max(1, page), totalPages);
+        const start = (currentPage - 1) * pageSize;
+        const end = start + pageSize;
+
+        rows.forEach((row, index) => {
+            row.style.display = index >= start && index < end ? '' : 'none';
+        });
+
+        if (emptyRow) {
+            emptyRow.style.display = 'none';
+        }
+
+        const rangeStart = Math.min(start + 1, rows.length);
+        const rangeEnd = Math.min(end, rows.length);
+        info.textContent = `Showing ${rangeStart}-${rangeEnd} of ${rows.length}`;
+
+        prevBtn.disabled = currentPage === 1;
+        nextBtn.disabled = currentPage === totalPages;
+
+        pages.innerHTML = '';
+        for (let i = 1; i <= totalPages; i++) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-outline btn-sm pagination-btn';
+            if (i === currentPage) {
+                button.classList.add('is-active');
+            }
+            button.textContent = i;
+            button.addEventListener('click', () => renderPage(i));
+            pages.appendChild(button);
+        }
+    }
+
+    prevBtn.addEventListener('click', () => renderPage(currentPage - 1));
+    nextBtn.addEventListener('click', () => renderPage(currentPage + 1));
+
+    renderPage(1);
+}
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+

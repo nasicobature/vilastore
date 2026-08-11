@@ -1,0 +1,112 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="edu-product-page">
+  <section class="edu-hero">
+    <div class="edu-hero-copy">
+      <div class="edu-hero-mark">
+        <i data-lucide="graduation-cap"></i>
+      </div>
+      <p class="registration-eyebrow">EduPortal for Schools</p>
+      <h1>Launch with verified secondary schools first.</h1>
+      <p>
+        Manage students, staff, classes, subjects, fees, scores, result review, and role-based school operations after VilaStore verifies the institution.
+      </p>
+      <div class="edu-hero-actions">
+        <a href="/edu/secondary/register/" class="wizard-btn wizard-btn-primary">Register Secondary School</a>
+        <a href="#pricing" class="wizard-btn wizard-btn-secondary">View Pricing</a>
+      </div>
+    </div>
+
+    <div class="edu-launch-panel">
+      <div class="launch-badge">Primary launch product</div>
+      <h2>Secondary School Portal</h2>
+      <p>Built for nursery, primary, and secondary schools that need verified administration, fees, results, and staff workflow.</p>
+      <div class="launch-feature-grid">
+        <span><i data-lucide="users"></i> Student and staff records</span>
+        <span><i data-lucide="book-open"></i> Classes and subjects</span>
+        <span><i data-lucide="clipboard-check"></i> Result workflow</span>
+        <span><i data-lucide="credit-card"></i> Fees management</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="portal-options">
+    <a href="/edu/secondary/login/" class="portal-option is-primary">
+      <div>
+        <i data-lucide="school"></i>
+        <h2>Secondary School Login</h2>
+        <p>For verified schools using the live EduPortal secondary workflow.</p>
+      </div>
+      <span>Open Portal</span>
+    </a>
+
+    <a href="/edu/tertiary/login/" class="portal-option">
+      <div>
+        <i data-lucide="building-2"></i>
+        <h2>Tertiary Pilot Login</h2>
+        <p>For approved pilot institutions. Some tertiary modules are still being completed.</p>
+      </div>
+      <span>Custom / Pilot</span>
+    </a>
+  </section>
+
+  <section id="pricing" class="pricing-section">
+    <div class="section-heading">
+      <h2>EduPortal Pricing</h2>
+      <p>Schools can choose monthly billing or a discounted 3-month termly subscription.</p>
+    </div>
+
+    <div class="pricing-grid">
+      <article class="pricing-card">
+        <p class="plan-name">Monthly Plan</p>
+        <h3>NGN 250,000 <span>/ month</span></h3>
+        <p class="student-limit">Per school, billed monthly</p>
+        <ul>
+          <li>Full EduPortal access</li>
+          <li>Admin dashboard</li>
+          <li>Students and staff</li>
+          <li>Classes and subjects</li>
+          <li>Fees and result workflow</li>
+        </ul>
+      </article>
+
+      <article class="pricing-card is-featured">
+        <p class="plan-name">Termly Plan</p>
+        <h3>NGN 70,000 <span>/ term</span></h3>
+        <p class="student-limit">3 months per school</p>
+        <ul>
+          <li>Standard 3-month cost: NGN 75,000</li>
+          <li>Termly discount: NGN 5,000</li>
+          <li>Total payable: NGN 70,000</li>
+          <li>Registry, accountant, teacher, examiner roles</li>
+          <li>Result submission, review, and fee tracking</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="pricing-notes">
+      <span>Choose Monthly or Termly during subscription and renewal</span>
+      <span>Document verification remains required before portal approval</span>
+      <span>SMS, WhatsApp, and online payment charges billed separately</span>
+    </div>
+  </section>
+
+  <section class="coming-soon-section">
+    <div class="section-heading">
+      <h2>Coming Soon Modules</h2>
+      <p>These should be sold as upcoming or custom features until they are fully wired.</p>
+    </div>
+    <div class="coming-soon-grid">
+      <span>CBT exams</span>
+      <span>Question bank</span>
+      <span>Transcript</span>
+      <span>Parent portal</span>
+      <span>Student online payment</span>
+      <span>Advanced analytics</span>
+      <span>Tertiary course registration</span>
+      <span>Full tertiary lecturer workflow</span>
+    </div>
+  </section>
+</div>
+{% endblock %}

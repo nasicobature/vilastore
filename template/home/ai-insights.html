@@ -1,0 +1,239 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - AI Insights</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'js/offline-web.js' %}" defer></script>
+  <style>
+    .ai-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+    .ai-card { padding:1rem; }
+    .ai-list { display:grid; gap:.55rem; margin:.75rem 0 0; }
+    .ai-row { border:1px solid var(--border); border-radius:8px; padding:.75rem; background:var(--background); }
+    .ai-row strong { display:block; }
+    .ai-muted { color:var(--muted-foreground); font-size:.88rem; line-height:1.45; }
+    .ai-chat-box { display:grid; gap:.75rem; }
+    .ai-chat-log { min-height:160px; max-height:280px; overflow:auto; border:1px solid var(--border); border-radius:8px; padding:.75rem; background:var(--background); }
+    .ai-chat-msg { margin-bottom:.75rem; }
+    .ai-chat-msg b { display:block; font-size:.78rem; color:var(--muted-foreground); text-transform:uppercase; }
+    @media (max-width: 900px) { .ai-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div class="sidebar-logo-icon"><i data-lucide="store"></i></div><h1>VilaStore</h1></div>
+      <nav class="sidebar-nav">
+        <a href="{% url 'index' %}" class="nav-link"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+        <a href="{% url 'product' %}" class="nav-link"><i data-lucide="package"></i><span>Products</span></a>
+        <a href="{% url 'inventory' %}" class="nav-link"><i data-lucide="boxes"></i><span>Inventory</span></a>
+        <a href="{% url 'sales-history' %}" class="nav-link"><i data-lucide="receipt"></i><span>Sales History</span></a>
+        <a href="{% url 'loans' %}" class="nav-link"><i data-lucide="credit-card"></i><span>Credit</span></a>
+        <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
+        <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
+        <a href="{% url 'ai_insights' %}" class="nav-link active"><i data-lucide="sparkles"></i><span>AI Insights</span></a>
+        <a href="{% url 'customer' %}" class="nav-link"><i data-lucide="users"></i><span>Customers</span></a>
+        <a href="{% url 'settings' %}" class="nav-link"><i data-lucide="settings"></i><span>Settings</span></a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div class="page-header-content">
+          <h1>AI Insights</h1>
+          <p>Simple AI-style analysis for sales, expenses, inventory, customers, staff activity, voice, and receipts.</p>
+        </div>
+      </header>
+
+      {% if messages %}
+      <section style="margin-bottom:1rem;">
+        {% for message in messages %}
+        <div class="card" style="padding:.75rem 1rem;">{{ message }}</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      <section class="ai-grid">
+        <article class="card ai-card">
+          <h3>AI Profit Analysis</h3>
+          <p class="ai-muted">Net profit this week: <strong>NGN {{ profit_analysis.net_profit }}</strong></p>
+          <div class="ai-list">
+            {% for item in profit_analysis.advice %}
+            <div class="ai-row">{{ item }}</div>
+            {% endfor %}
+          </div>
+        </article>
+
+        <article class="card ai-card">
+          <h3>AI Sales Forecast</h3>
+          <div class="ai-list">
+            <div class="ai-row"><strong>Daily</strong>NGN {{ sales_forecast.daily }}</div>
+            <div class="ai-row"><strong>Weekly</strong>NGN {{ sales_forecast.weekly }}</div>
+            <div class="ai-row"><strong>Monthly</strong>NGN {{ sales_forecast.monthly }}</div>
+          </div>
+          <p class="ai-muted">{{ sales_forecast.message }}</p>
+        </article>
+
+        <article class="card ai-card">
+          <h3>AI Low Stock Prediction</h3>
+          <div class="ai-list">
+            {% for item in low_stock_prediction %}
+            <div class="ai-row"><strong>{{ item.name }}</strong>{{ item.message }} <span class="ai-muted">Stock: {{ item.stock }}</span></div>
+            {% empty %}
+            <div class="ai-row">No product looks likely to finish soon based on recent sales.</div>
+            {% endfor %}
+          </div>
+        </article>
+
+        <article class="card ai-card">
+          <h3>AI Expense Warning</h3>
+          <p class="ai-muted">This week: NGN {{ expense_warning.week_expenses }}. Previous week: NGN {{ expense_warning.previous_week_expenses }}.</p>
+          <div class="ai-list">
+            {% for item in expense_warning.warnings %}
+            <div class="ai-row">{{ item }}</div>
+            {% endfor %}
+          </div>
+        </article>
+
+        <article class="card ai-card">
+          <h3>AI Customer Insights</h3>
+          <div class="ai-list">
+            {% for item in customer_insights.best_customers|slice:":5" %}
+            <div class="ai-row"><strong>{{ item.name }}</strong>NGN {{ item.total_spent }} spent across {{ item.visits }} visit(s)</div>
+            {% empty %}
+            <div class="ai-row">No customer spending pattern yet. Link sales to customer records for better insights.</div>
+            {% endfor %}
+          </div>
+          <p class="ai-muted" style="margin-top:.75rem;">Inactive customers found: {{ customer_insights.inactive_customers|length }}</p>
+        </article>
+
+        <article class="card ai-card">
+          <h3>AI Fraud Detection</h3>
+          <div class="ai-list">
+            {% for item in fraud_signals %}
+            <div class="ai-row">{{ item }}</div>
+            {% endfor %}
+          </div>
+        </article>
+      </section>
+
+      <section class="ai-grid" style="margin-top:1rem;">
+        <article class="card ai-card">
+          <h3>Smart Product Search</h3>
+          <p class="ai-muted">Try “coke”, “coka”, or “soft drink”.</p>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+            <input type="search" id="aiProductSearch" class="input" placeholder="Search product by name, code, or similar word" style="flex:1;min-width:220px;">
+            <button type="button" class="btn btn-primary" id="aiSearchBtn"><i data-lucide="search"></i> Search</button>
+          </div>
+          <div id="aiSearchResults" class="ai-list"></div>
+        </article>
+
+        <article class="card ai-card">
+          <h3>AI Voice Assistant</h3>
+          <p class="ai-muted">Use English or simple Hausa-English like “sell 2 coke” or “add stock 5 rice”.</p>
+          <div style="display:grid;gap:.5rem;">
+            <textarea id="aiVoiceText" class="input" rows="3" placeholder="Speak or type command"></textarea>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+              <button type="button" class="btn btn-outline" id="aiVoiceRecord"><i data-lucide="mic"></i> Record</button>
+              <button type="button" class="btn btn-primary" id="aiVoiceParse"><i data-lucide="sparkles"></i> Understand</button>
+            </div>
+          </div>
+          <div id="aiVoiceResult" class="ai-list"></div>
+        </article>
+
+        <article class="card ai-card">
+          <h3>AI Receipt Scanner</h3>
+          <p class="ai-muted">Upload a receipt image for record keeping, and paste receipt text to extract items. Full OCR can be connected later.</p>
+          <form method="POST" action="{% url 'ai_receipt_scan' %}" enctype="multipart/form-data" style="display:grid;gap:.75rem;">
+            {% csrf_token %}
+            <input type="file" name="receipt_image" accept="image/*" capture="environment" class="input">
+            <textarea name="receipt_text" class="input" rows="5" placeholder="Example: Rice 2 4500&#10;Coca-Cola 12 300"></textarea>
+            <label style="display:flex;gap:.5rem;align-items:center;"><input type="checkbox" name="apply_inventory"> Update matched inventory after parsing</label>
+            <button type="submit" class="btn btn-primary"><i data-lucide="scan-text"></i> Process Receipt</button>
+          </form>
+          <div class="ai-list">
+            {% for scan in recent_receipt_scans %}
+            <div class="ai-row"><strong>Scan #{{ scan.id }}</strong>{{ scan.get_status_display }} · {{ scan.created_at|date:"M d, Y H:i" }}</div>
+            {% endfor %}
+          </div>
+        </article>
+
+        <article class="card ai-card">
+          <h3>AI Business Advice Assistant</h3>
+          <div class="ai-chat-box">
+            <div class="ai-chat-log" id="aiChatLog">
+              {% for message in recent_ai_messages %}
+              <div class="ai-chat-msg"><b>You</b>{{ message.question }}</div>
+              <div class="ai-chat-msg"><b>VilaStore AI</b>{{ message.answer }}</div>
+              {% empty %}
+              <div class="ai-muted">Ask: “How is my profit?”, “Which product may finish soon?”, or “Who are my best customers?”</div>
+              {% endfor %}
+            </div>
+            <form id="aiChatForm" style="display:flex;gap:.5rem;flex-wrap:wrap;">
+              {% csrf_token %}
+              <input type="text" name="question" class="input" placeholder="Ask about your business" style="flex:1;min-width:220px;">
+              <button type="submit" class="btn btn-primary"><i data-lucide="send"></i> Ask</button>
+            </form>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.lucide) lucide.createIcons();
+      const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+      const searchInput = document.getElementById('aiProductSearch');
+      const searchResults = document.getElementById('aiSearchResults');
+      document.getElementById('aiSearchBtn')?.addEventListener('click', async function () {
+        const q = searchInput.value.trim();
+        if (!q) return;
+        const response = await fetch(`{% url 'ai_smart_product_search' %}?q=${encodeURIComponent(q)}`);
+        const data = await response.json();
+        searchResults.innerHTML = (data.results || []).map(item => `<div class="ai-row"><strong>${item.name}</strong>NGN ${item.price} · Stock ${item.stock}</div>`).join('') || '<div class="ai-row">No product found.</div>';
+      });
+
+      const voiceText = document.getElementById('aiVoiceText');
+      document.getElementById('aiVoiceRecord')?.addEventListener('click', function () {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          alert('Voice recording is not supported in this browser. Type the command instead.');
+          return;
+        }
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-NG';
+        recognition.onresult = event => { voiceText.value = event.results[0][0].transcript; };
+        recognition.start();
+      });
+      document.getElementById('aiVoiceParse')?.addEventListener('click', async function () {
+        const form = new FormData();
+        form.append('csrfmiddlewaretoken', csrf);
+        form.append('transcript', voiceText.value);
+        const response = await fetch('{% url "ai_voice_command" %}', { method: 'POST', body: form, headers: { 'X-CSRFToken': csrf } });
+        const data = await response.json();
+        const parsed = data.parsed || {};
+        document.getElementById('aiVoiceResult').innerHTML = `<div class="ai-row"><strong>${parsed.intent || 'unknown'} · Qty ${parsed.quantity || 1}</strong>${parsed.message || ''}</div>` + (parsed.product_matches || []).map(item => `<div class="ai-row">${item.name} · Stock ${item.stock}</div>`).join('');
+      });
+
+      document.getElementById('aiChatForm')?.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        const question = form.get('question');
+        const response = await fetch('{% url "ai_chat" %}', { method: 'POST', body: form, headers: { 'X-CSRFToken': csrf } });
+        const data = await response.json();
+        const log = document.getElementById('aiChatLog');
+        if (data.success) {
+          log.innerHTML += `<div class="ai-chat-msg"><b>You</b>${question}</div><div class="ai-chat-msg"><b>VilaStore AI</b>${data.answer}</div>`;
+          event.currentTarget.reset();
+          log.scrollTop = log.scrollHeight;
+        }
+      });
+    });
+  </script>
+</body>
+</html>

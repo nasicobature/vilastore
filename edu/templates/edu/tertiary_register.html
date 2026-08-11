@@ -1,0 +1,159 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="registration-shell">
+  <div class="registration-container">
+    <a href="/edu/tertiary/login/" class="registration-back">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to login
+    </a>
+
+    <div class="registration-header">
+      <div class="registration-mark bg-secondary">
+        <i data-lucide="building-2" class="text-secondary-foreground"></i>
+      </div>
+      <div>
+        <p class="registration-eyebrow">Tertiary Institution Verification</p>
+        <h1 class="registration-title">Create a verified institution portal</h1>
+        <p class="registration-copy">Submit institution details, verification documents, and the VC/Provost account for review.</p>
+      </div>
+    </div>
+
+    <div class="registration-card">
+      <ol class="wizard-steps" data-wizard-steps>
+        <li class="wizard-step is-active" data-step-indicator="0"><span>1</span><strong>Details</strong></li>
+        <li class="wizard-step" data-step-indicator="1"><span>2</span><strong>Address</strong></li>
+        <li class="wizard-step" data-step-indicator="2"><span>3</span><strong>Documents</strong></li>
+        <li class="wizard-step" data-step-indicator="3"><span>4</span><strong>Admin</strong></li>
+        <li class="wizard-step" data-step-indicator="4"><span>5</span><strong>Plan</strong></li>
+        <li class="wizard-step" data-step-indicator="5"><span>6</span><strong>Review</strong></li>
+      </ol>
+
+      <form method="post" enctype="multipart/form-data" class="wizard-form" data-registration-wizard novalidate>
+        {% csrf_token %}
+        <div class="wizard-alert" data-wizard-error hidden></div>
+
+        <section class="wizard-panel is-active" data-wizard-panel>
+          <div class="section-heading">
+            <h2>Institution Details</h2>
+            <p>Start with the official identity of the institution.</p>
+          </div>
+          <div class="form-grid">
+            <label class="field-block">Institution Name *<input type="text" name="institution_name" required data-review-label="Institution Name" /></label>
+            <label class="field-block">School Code<input type="text" name="school_code" placeholder="Leave blank to auto-generate" data-review-label="School Code" /></label>
+            <label class="field-block">Short Name<input type="text" name="short_name" data-review-label="Short Name" /></label>
+            <label class="field-block">Ownership Type
+              <select name="ownership_type" data-review-label="Ownership Type">
+                {% for value, label in ownership_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="field-block">Year Established<input type="number" name="year_established" data-review-label="Year Established" /></label>
+            <label class="field-block">CAC Number<input type="text" name="cac_number" data-review-label="CAC Number" /></label>
+            <label class="field-block">TIN Number<input type="text" name="tin_number" data-review-label="TIN Number" /></label>
+            <label class="field-block">Owner/Admin NIN<input type="text" name="owner_id_number" data-review-label="Owner/Admin NIN" /></label>
+            <label class="field-block">License Number<input type="text" name="license_number" data-review-label="License Number" /></label>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-wizard-panel>
+          <div class="section-heading">
+            <h2>Contact and Address</h2>
+            <p>Use the real campus location and contact channels for verification.</p>
+          </div>
+          <div class="form-grid">
+            <label class="field-block">Country<input type="text" name="country" value="Nigeria" data-review-label="Country" /></label>
+            <label class="field-block">State<input type="text" name="state" data-review-label="State" /></label>
+            <label class="field-block">City<input type="text" name="city" data-review-label="City" /></label>
+            <label class="field-block field-wide">Address<input type="text" name="address" data-review-label="Address" /></label>
+            <label class="field-block">Postal Code<input type="text" name="postal_code" data-review-label="Postal Code" /></label>
+            <label class="field-block">Institution Phone<input type="text" name="phone_number" data-review-label="Institution Phone" /></label>
+            <label class="field-block">Institution Email<input type="email" name="email" data-review-label="Institution Email" /></label>
+            <label class="field-block">Website<input type="url" name="website" data-review-label="Website" /></label>
+            <label class="field-block">Grading System
+              <select name="grading_system" data-review-label="Grading System">
+                {% for value, label in grading_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="field-block">Max Grade<input type="number" step="0.01" name="max_grade" value="100" data-review-label="Max Grade" /></label>
+            <label class="field-block">Currency<input type="text" name="currency" value="NGN" data-review-label="Currency" /></label>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-wizard-panel>
+          {% include 'edu/partials/verification_fields.html' %}
+        </section>
+
+        <section class="wizard-panel" data-wizard-panel>
+          <div class="section-heading">
+            <h2>VC/Provost Account</h2>
+            <p>This account will stay pending until VilaStore approves the institution documents.</p>
+          </div>
+          <div class="form-grid">
+            <label class="field-block">Full Name *<input type="text" name="vc_full_name" required data-review-label="VC/Provost Name" /></label>
+            <div class="field-block generated-field">VC/Provost ID<span>Generated after submit</span></div>
+            <label class="field-block">Password *<input type="password" name="vc_password" required /></label>
+            <label class="field-block">Role *
+              <select name="vc_role" data-review-label="Role">
+                <option value="vc">VC</option>
+                <option value="provost">Provost</option>
+              </select>
+            </label>
+            <label class="field-block">Admin Email *<input type="email" name="admin_email" required data-review-label="Admin Email" /></label>
+            <label class="field-block">Admin Phone *<input type="text" name="admin_phone" required data-review-label="Admin Phone" /></label>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-wizard-panel>
+          <div class="section-heading">
+            <h2>Subscription Plan</h2>
+            <p>Choose how this institution will pay for EduPortal access.</p>
+          </div>
+          <div class="subscription-plan-grid">
+            {% for key, plan in subscription_plans.items %}
+              <label class="subscription-plan-card">
+                <input
+                  type="radio"
+                  name="subscription_billing_cycle"
+                  value="{{ plan.cycle }}"
+                  data-review-label="Subscription Plan"
+                  {% if plan.cycle == default_subscription_cycle %}checked{% endif %}
+                />
+                <span class="plan-card-title">{{ plan.name }}</span>
+                <strong>NGN {{ plan.amount_display }}</strong>
+                <small>{{ plan.duration_label }}. {{ plan.summary }}</small>
+                {% if plan.discount > 0 %}
+                  <em>Standard NGN {{ plan.standard_amount_display }} minus NGN {{ plan.discount_display }} discount.</em>
+                {% endif %}
+              </label>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-wizard-panel>
+          <div class="section-heading">
+            <h2>Review and Submit</h2>
+            <p>Confirm the summary, then submit the institution for VilaStore verification.</p>
+          </div>
+          <div class="review-grid" data-review-output></div>
+          <div class="verification-notice">
+            <i data-lucide="shield-check"></i>
+            <div>
+              <strong>Verification notice</strong>
+              <p>After submission, you will pay the selected EduPortal subscription. Portal access will still only be granted after VilaStore reviews and approves the submitted documents.</p>
+            </div>
+          </div>
+        </section>
+
+        <div class="wizard-actions">
+          <button type="button" class="wizard-btn wizard-btn-secondary" data-wizard-prev>Back</button>
+          <button type="button" class="wizard-btn wizard-btn-primary" data-wizard-next>Continue</button>
+          <button type="submit" class="wizard-btn wizard-btn-primary" data-wizard-submit hidden>Submit & Pay</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

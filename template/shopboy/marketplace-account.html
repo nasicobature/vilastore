@@ -1,0 +1,143 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketplace - My Orders</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <header class="marketplace-header">
+    <div class="marketplace-header-inner marketplace-header-inner-stacked">
+      <div class="marketplace-header-top">
+        <a href="{% url 'marketplace_home' %}" class="marketplace-logo">
+          <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+          <span>VilaStore</span>
+        </a>
+        <div class="marketplace-actions">
+          <a href="{% url 'marketplace' %}" class="btn btn-ghost"><i data-lucide="shopping-bag"></i> Browse</a>
+          <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
+        </div>
+      </div>
+      {% include 'partials/marketplace-buyer-nav.html' %}
+    </div>
+  </header>
+
+  <div class="marketplace-container marketplace-portal-shell">
+    <aside class="marketplace-sidebar marketplace-portal-sidebar">
+      <div class="marketplace-sidebar-panel">
+        <span class="badge badge-primary">My Activity</span>
+        <h3>{{ buyer.email }}</h3>
+        <p>Everything you started in the marketplace stays here so you can return without searching again.</p>
+      </div>
+      <div class="marketplace-sidebar-panel">
+        <h4>Quick Access</h4>
+        <div class="filter-list">
+          <a href="{% url 'marketplace' %}" class="filter-btn">
+            <span>Browse Marketplace</span>
+            <i data-lucide="arrow-right"></i>
+          </a>
+          <a href="{% url 'marketplace_home' %}" class="filter-btn">
+            <span>Customer Portal</span>
+            <i data-lucide="arrow-right"></i>
+          </a>
+        </div>
+      </div>
+      <div class="marketplace-sidebar-panel">
+        <h4>Snapshot</h4>
+        <div class="marketplace-mini-metrics">
+          <div class="marketplace-mini-metric">
+            <span>House Chats</span>
+            <strong>{{ house_inquiries|length }}</strong>
+          </div>
+          <div class="marketplace-mini-metric">
+            <span>Orders</span>
+            <strong>{{ orders|length }}</strong>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="marketplace-main marketplace-portal-main">
+      <section class="marketplace-hero-panel">
+        <div>
+          <span class="badge badge-primary">Saved Activity</span>
+          <h1>Orders and chats, organized in one simple place.</h1>
+          <p>Continue house conversations, reopen shop orders, and keep your marketplace activity easy to navigate.</p>
+        </div>
+        <div class="marketplace-hero-actions">
+          <a href="{% url 'marketplace' %}" class="btn btn-primary"><i data-lucide="shopping-bag"></i> Browse Marketplace</a>
+          <a href="{% url 'marketplace_home' %}" class="btn btn-outline"><i data-lucide="layout-dashboard"></i> Customer Portal</a>
+        </div>
+      </section>
+
+      <div class="marketplace-results-header">
+        <h2>My Orders and House Chats</h2>
+        <p style="color:var(--muted-foreground);">Signed in as {{ buyer.email }}</p>
+      </div>
+
+      <div class="card" style="padding:1rem;margin-bottom:1.5rem;">
+        <p style="margin:0;">Your shop orders and house owner conversations are saved here so you can continue them anytime.</p>
+      </div>
+
+      <div class="shop-list" style="margin-bottom:1.5rem;">
+        {% for inquiry in house_inquiries %}
+        <div class="card" style="padding:1rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+            <div>
+              <strong>{{ inquiry.house.title }}</strong>
+              <p style="margin:0.25rem 0;color:var(--muted-foreground);">Address shared privately in chat.</p>
+              <p style="margin:0;color:var(--muted-foreground);">Status: {{ inquiry.get_status_display }}</p>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:600;">&#8358;{{ inquiry.house.price|floatformat:2 }}</div>
+              <a href="{% url 'marketplace_house_inquiry_chat' inquiry.public_id %}" class="btn btn-outline btn-sm" style="margin-top:0.5rem;">Open Chat</a>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="card" style="padding:2rem;text-align:center;">
+          <i data-lucide="messages-square" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
+          <p style="color:var(--muted-foreground);">No house chats yet. Open a house and message the owner when you are ready.</p>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="shop-list">
+        {% for order in orders %}
+        <div class="card" style="padding:1rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+            <div>
+              <strong>{{ order.shop_owner.business_name|default:order.shop_owner.username }}</strong>
+              <p style="margin:0.25rem 0;color:var(--muted-foreground);">Placed {{ order.created_at|date:"M d, Y" }}</p>
+              <p style="margin:0;color:var(--muted-foreground);">Status: {{ order.get_status_display }}</p>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:600;">&#8358;{{ order.total_amount|floatformat:2 }}</div>
+              <a href="{% url 'marketplace_order_chat' order.public_id %}" class="btn btn-outline btn-sm" style="margin-top:0.5rem;">
+                View Order
+              </a>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="card" style="padding:2rem;text-align:center;">
+          <i data-lucide="shopping-bag" style="width:42px;height:42px;margin:0 auto 0.75rem;display:block;color:var(--muted-foreground);"></i>
+          <p style="color:var(--muted-foreground);">No orders yet. Browse the marketplace to place your first order.</p>
+        </div>
+        {% endfor %}
+      </div>
+    </main>
+  </div>
+
+  <script>
+    if (window.lucide && typeof window.lucide.createIcons === "function") {
+      window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

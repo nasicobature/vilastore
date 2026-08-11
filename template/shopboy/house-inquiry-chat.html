@@ -1,0 +1,104 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ inquiry.house.title }} - House Inquiry</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <form style="display:none;">{% csrf_token %}</form>
+  <header class="marketplace-header">
+    <div class="marketplace-header-inner {% if not is_seller %}marketplace-header-inner-stacked{% endif %}">
+      <div class="marketplace-header-top">
+        <a href="{% if is_seller %}{% url 'housing_management' %}?section=inquiries{% else %}{% url 'marketplace_home' %}{% endif %}" class="marketplace-logo">
+          <div class="sidebar-logo-icon"><i data-lucide="house"></i></div>
+          <span>VilaStore</span>
+        </a>
+
+        <div class="order-chat-title">
+          <h3>{{ inquiry.house.title }}</h3>
+          <span>Inquiry #{{ inquiry.public_id|stringformat:"s"|slice:":8" }}</span>
+        </div>
+
+        <div class="marketplace-actions">
+          <span class="badge badge-{% if inquiry.status == 'closed' %}warning{% else %}primary{% endif %}">
+            {{ inquiry.get_status_display }}
+          </span>
+          <a href="{% if is_seller %}{% url 'housing_management' %}?section=inquiries{% else %}{% url 'marketplace_house_detail' inquiry.house.id %}{% endif %}" class="btn btn-ghost"><i data-lucide="arrow-left"></i> Back</a>
+        </div>
+      </div>
+      {% if not is_seller %}
+      {% include 'partials/marketplace-buyer-nav.html' with buyer=inquiry.buyer marketplace_active_tab='marketplace' %}
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="marketplace-container order-chat-layout" data-inquiry="{{ inquiry.public_id }}" data-access="{{ access_token }}">
+    <aside class="marketplace-sidebar order-chat-sidebar">
+      <div class="card order-chat-card">
+        <h4 class="order-chat-card-title">House</h4>
+        <p style="font-weight:600;">{{ inquiry.house.title }}</p>
+        <p style="font-size:0.875rem;color:var(--muted-foreground);">{{ inquiry.house.location }}</p>
+        <p style="font-size:0.875rem;color:var(--muted-foreground);margin-top:0.5rem;">{{ inquiry.house.get_listing_mode_display }} {{ inquiry.house.get_property_type_display }}</p>
+        <p style="font-size:0.875rem;color:var(--muted-foreground);">Price: &#8358;{{ inquiry.house.price|floatformat:2 }}</p>
+      </div>
+
+      <div class="card order-chat-card">
+        <h4 class="order-chat-card-title">Buyer</h4>
+        <p style="font-weight:600;">{{ inquiry.buyer_name }}</p>
+        <p style="font-size:0.875rem;color:var(--muted-foreground);">{{ inquiry.buyer_contact }}</p>
+      </div>
+
+      <div class="card order-chat-card">
+        <h4 class="order-chat-card-title">Owner</h4>
+        <p style="font-weight:600;">{{ seller_label }}</p>
+        <p style="font-size:0.875rem;color:var(--muted-foreground);">{{ seller_phone|default:"Phone not provided" }}</p>
+      </div>
+
+      {% if inquiry.house.primary_image %}
+      <div class="card order-chat-card">
+        <img src="{{ inquiry.house.primary_image.image.url }}" alt="{{ inquiry.house.title }}" style="width:100%;border-radius:1rem;object-fit:cover;max-height:220px;">
+      </div>
+      {% endif %}
+    </aside>
+
+    <main class="marketplace-main order-chat-main">
+      <div class="order-chat-messages" id="chatMessages">
+        <div style="text-align:center;margin-bottom:1rem;">
+          <span class="badge badge-secondary" style="font-size:0.75rem;">Inquiry opened on {{ inquiry.created_at|date:"M d, Y" }}</span>
+        </div>
+        {% for msg in chat_messages %}
+        <div class="chat-bubble-row {% if msg.sender_type == 'buyer' %}own{% endif %}">
+          <div class="chat-avatar"><i data-lucide="{% if msg.sender_type == 'seller' %}house{% elif msg.sender_type == 'system' %}info{% else %}user{% endif %}"></i></div>
+          <div class="chat-bubble {% if msg.sender_type == 'buyer' %}chat-bubble-own{% else %}chat-bubble-other{% endif %}">
+            <p>{{ msg.message|linebreaksbr }}</p>
+            <span class="chat-time">{{ msg.created_at|date:"H:i" }}</span>
+          </div>
+        </div>
+        {% empty %}
+        <div style="text-align:center;padding:3rem;">
+          <i data-lucide="messages-square" style="width:48px;height:48px;margin:0 auto 1rem;display:block;color:var(--muted-foreground);"></i>
+          <p style="color:var(--muted-foreground);">No messages yet. Start the conversation.</p>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="order-chat-input-area">
+        <div class="order-chat-input-row">
+          <input type="text" class="input" id="messageInput" placeholder="Type a message..." autocomplete="off">
+          <button class="btn btn-primary" id="sendBtn" type="button"><i data-lucide="send"></i></button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+  <script src="{% static 'js/house-inquiry-chat.js' %}"></script>
+</body>
+</html>

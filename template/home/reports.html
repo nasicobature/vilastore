@@ -1,0 +1,704 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Reports</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
+  <script src="{% static 'js/offline-web.js' %}" defer></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">
+          <i data-lucide="store"></i>
+        </div>
+        <h1>VilaStore</h1>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="{% url 'index' %}" class="nav-link">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="{% url 'product' %}" class="nav-link">
+          <i data-lucide="package"></i>
+          <span>Products</span>
+        </a>
+        <a href="{% url 'inventory' %}" class="nav-link">
+          <i data-lucide="boxes"></i>
+          <span>Inventory</span>
+        </a>
+      <a href="{% url 'sales-history' %}" class="nav-link">
+        <i data-lucide="receipt"></i>
+        <span>Sales History</span>
+      </a>
+      <a href="{% url 'loans' %}" class="nav-link">
+        <i data-lucide="credit-card"></i>
+        <span>Credit</span>
+      </a>
+      <a href="{% url 'expenses' %}" class="nav-link">
+        <i data-lucide="wallet"></i>
+        <span>Expenses</span>
+      </a>
+        <a href="{% url 'reports' %}" class="nav-link active">
+          <i data-lucide="bar-chart-3"></i>
+          <span>Reports</span>
+        </a>
+        <a href="{% url 'customer' %}" class="nav-link">
+          <i data-lucide="users"></i>
+          <span>Customers</span>
+        </a>
+        <a href="{% url 'settings' %}" class="nav-link">
+          <i data-lucide="settings"></i>
+          <span>Settings</span>
+        </a>
+        {% if is_nigeria and has_tax_tools %}
+        <a href="#nrs-tax-filing" class="nav-link" onclick="scrollToTaxFiling(event)">
+          <i data-lucide="file-text"></i>
+          <span>NRS Tax Filing</span>
+        </a>
+        {% endif %}
+      </nav>
+
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div class="page-header-content">
+          <h1>Reports</h1>
+          <p>View your business performance and analytics</p>
+        </div>
+        <div class="header-actions">
+          <select id="branchFilter" class="input" onchange="updateReports()">
+            <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+            {% for branch in branches %}
+              <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}{% if branch.is_default %} (Default){% endif %}</option>
+            {% endfor %}
+          </select>
+          <select id="periodFilter" class="input" onchange="updateReports()">
+            <option value="today" {% if period == "today" %}selected{% endif %}>Today</option>
+            <option value="week" {% if period == "week" %}selected{% endif %}>This Week</option>
+            <option value="month" {% if period == "month" %}selected{% endif %}>This Month</option>
+            <option value="year" {% if period == "year" %}selected{% endif %}>This Year</option>
+            <option value="all" {% if period == "all" %}selected{% endif %}>All Time</option>
+            <option value="custom" {% if period == "custom" %}selected{% endif %}>Custom Range</option>
+          </select>
+          <input type="date" id="startDate" class="input" value="{{ start_date|date:'Y-m-d' }}">
+          <input type="date" id="endDate" class="input" value="{{ end_date|date:'Y-m-d' }}">
+          <button type="button" class="btn btn-outline" onclick="updateReports()">Apply</button>
+        </div>
+      </header>
+
+      <section class="stats-grid stats-grid-5">
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Total Revenue</span>
+            <div class="stat-card-icon primary">
+              <i data-lucide="trending-up"></i>
+            </div>
+          </div>
+          <div class="stat-card-value" id="totalRevenue">₦{{ total_revenue|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Total Profit</span>
+            <div class="stat-card-icon primary">
+              <i data-lucide="wallet"></i>
+            </div>
+          </div>
+          <div class="stat-card-value text-profit" id="totalProfit">₦{{ total_profit|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Total Expenses</span>
+            <div class="stat-card-icon destructive">
+              <i data-lucide="trending-down"></i>
+            </div>
+          </div>
+          <div class="stat-card-value text-destructive" id="totalExpensesValue">₦{{ total_expenses|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Net Profit</span>
+            <div class="stat-card-icon primary">
+              <i data-lucide="banknote"></i>
+            </div>
+          </div>
+          <div class="stat-card-value" id="netProfit">₦{{ net_profit|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Transactions</span>
+            <div class="stat-card-icon primary">
+              <i data-lucide="receipt"></i>
+            </div>
+          </div>
+          <div class="stat-card-value" id="totalTransactions">{{ total_transactions }}</div>
+        </div>
+      </section>
+
+      <section class="business-analysis">
+        <div class="business-analysis-header">
+          <div>
+            <span class="analysis-eyebrow">Decision Center</span>
+            <h2>Business Data Analysis</h2>
+            <p>Automatic insights from sales, profit, inventory, customers, credit, branches, and expenses.</p>
+          </div>
+          <div class="health-score-card {% if health_score < 50 %}is-risk{% elif health_score < 75 %}is-watch{% else %}is-healthy{% endif %}">
+            <span>Health Score</span>
+            <strong>{{ health_score }}</strong>
+            <small>/100</small>
+          </div>
+        </div>
+
+        <div class="summary-grid" style="margin-bottom:1rem;">
+          <div class="summary-item">
+            <span class="summary-label">Gross Margin</span>
+            <span class="summary-value text-profit">{{ gross_margin_percent|floatformat:1 }}%</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Net Margin</span>
+            <span class="summary-value {% if net_profit < 0 %}text-destructive{% else %}text-profit{% endif %}">{{ net_margin_percent|floatformat:1 }}%</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Expense Ratio</span>
+            <span class="summary-value">{{ expense_ratio_percent|floatformat:1 }}%</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Customers</span>
+            <span class="summary-value">{{ customer_count }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Credit Outstanding</span>
+            <span class="summary-value {% if credit_total > 0 %}text-destructive{% endif %}">₦{{ credit_total|floatformat:2 }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Stock Value</span>
+            <span class="summary-value">₦{{ stock_value|floatformat:2 }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Stock Profit Potential</span>
+            <span class="summary-value text-profit">₦{{ inventory_profit_potential|floatformat:2 }}</span>
+          </div>
+        </div>
+
+        <div class="analysis-section">
+          <div class="analysis-section-title">
+            <h3>Recommended Actions</h3>
+            <span>{{ action_recommendations|length }} priorities</span>
+          </div>
+          <div class="recommendation-grid">
+            {% for recommendation in action_recommendations %}
+              <div class="recommendation-card">
+                <i data-lucide="check-circle-2"></i>
+                <span>{{ recommendation }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="insight-grid">
+          {% for insight in business_insights %}
+          <div class="insight-card insight-{{ insight.tone }}">
+            <strong>{{ insight.title }}</strong>
+            <p>{{ insight.message }}</p>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="analysis-card-grid">
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Top Product Analysis</h4>
+            {% if top_product_rows %}
+              <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                {% for product in top_product_rows %}
+                <div style="display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+                  <div>
+                    <strong>{{ product.name }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">{{ product.quantity|floatformat:2 }} sold</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <strong>₦{{ product.revenue|floatformat:2 }}</strong>
+                    <div class="text-profit" style="font-size:0.85rem;">₦{{ product.profit|floatformat:2 }} profit</div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p style="color:var(--muted-foreground);">No product sales yet for this period.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Best Profit Products</h4>
+            {% if best_profit_products %}
+              <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                {% for product in best_profit_products %}
+                <div style="display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+                  <div>
+                    <strong>{{ product.name }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">{{ product.quantity|floatformat:2 }} sold</div>
+                  </div>
+                  <strong class="text-profit">₦{{ product.profit|floatformat:2 }}</strong>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p style="color:var(--muted-foreground);">No profitable product data yet.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Low Margin Products</h4>
+            {% if low_margin_products %}
+              <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                {% for product in low_margin_products %}
+                <div style="display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+                  <div>
+                    <strong>{{ product.name }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">Margin {{ product.margin|floatformat:1 }}%</div>
+                  </div>
+                  <strong>₦{{ product.profit|floatformat:2 }}</strong>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p style="color:var(--muted-foreground);">No low-margin products found in this period.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Restock Recommendations</h4>
+            {% if restock_recommendations %}
+              <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                {% for product in restock_recommendations %}
+                <div style="display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+                  <div>
+                    <strong>{{ product.name }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">Sold {{ product.sold|floatformat:2 }}, left {{ product.stock|floatformat:2 }}</div>
+                  </div>
+                  <strong>Buy {{ product.suggested|floatformat:0 }}+</strong>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p style="color:var(--muted-foreground);">No urgent restock recommendation right now.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Expense Analysis</h4>
+            {% if expense_rows %}
+              <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                {% for expense in expense_rows %}
+                <div style="display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+                  <div>
+                    <strong>{{ expense.category }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">{{ expense.percent|floatformat:1 }}% of expenses</div>
+                  </div>
+                  <strong>₦{{ expense.amount|floatformat:2 }}</strong>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p style="color:var(--muted-foreground);">No expenses recorded for this period.</p>
+            {% endif %}
+            {% if expense_warnings %}
+              <div style="margin-top:0.75rem;">
+                {% for warning in expense_warnings %}
+                  <div class="card" style="padding:0.65rem 0.75rem;margin-top:0.5rem;border-left:4px solid #d97706;">
+                    <strong>{{ warning.title }}</strong>
+                    <div style="color:var(--muted-foreground);font-size:0.85rem;">{{ warning.message }}</div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Inventory Signals</h4>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+              <span class="badge badge-warning">{{ low_stock_count }} low stock</span>
+              <span class="badge badge-destructive">{{ out_of_stock_count }} out of stock</span>
+            </div>
+            {% if low_stock_products %}
+              <strong style="display:block;margin-bottom:0.35rem;">Restock soon</strong>
+              {% for product in low_stock_products %}
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:0.35rem 0;">
+                  <span>{{ product.name }}</span>
+                  <span>{{ product.stock|floatformat:2 }} left</span>
+                </div>
+              {% endfor %}
+            {% elif slow_moving_products %}
+              <strong style="display:block;margin-bottom:0.35rem;">Slow moving stock</strong>
+              {% for product in slow_moving_products %}
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:0.35rem 0;">
+                  <span>{{ product.name }}</span>
+                  <span>{{ product.stock|floatformat:2 }} in stock</span>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p style="color:var(--muted-foreground);">Inventory looks balanced for this period.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Customer Insights</h4>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+              <span class="badge badge-success">{{ repeat_customer_count }} repeat customers</span>
+              <span class="badge badge-warning">{{ credit_sales_count }} credit sales</span>
+            </div>
+            {% if top_customers %}
+              {% for customer in top_customers %}
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:0.35rem 0;">
+                  <span>{{ customer.name }}</span>
+                  <span>₦{{ customer.sales|floatformat:2 }}</span>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p style="color:var(--muted-foreground);">No named customer sales yet. Add customer names to unlock better insights.</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Credit Analysis</h4>
+            <div class="summary-item" style="margin-bottom:0.75rem;">
+              <span class="summary-label">Outstanding Credit</span>
+              <span class="summary-value text-destructive">₦{{ credit_total|floatformat:2 }}</span>
+            </div>
+            {% if top_credit_customers %}
+              {% for customer in top_credit_customers %}
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:0.35rem 0;">
+                  <span>{{ customer.name }}</span>
+                  <span>₦{{ customer.balance|floatformat:2 }}</span>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p style="color:var(--muted-foreground);">No unpaid credit found for this period.</p>
+            {% endif %}
+          </div>
+
+          {% if branch_comparison %}
+          <div>
+            <h4 style="margin-bottom:0.65rem;">Branch Comparison</h4>
+            {% for branch in branch_comparison %}
+              <div style="border-bottom:1px solid var(--border);padding:0.45rem 0;">
+                <div style="display:flex;justify-content:space-between;gap:1rem;">
+                  <strong>{{ branch.name }}</strong>
+                  <strong class="{% if branch.net < 0 %}text-destructive{% else %}text-profit{% endif %}">₦{{ branch.net|floatformat:2 }}</strong>
+                </div>
+                <div style="color:var(--muted-foreground);font-size:0.85rem;">
+                  Sales ₦{{ branch.sales|floatformat:2 }} · Profit ₦{{ branch.profit|floatformat:2 }} · Expenses ₦{{ branch.expenses|floatformat:2 }} · {{ branch.transactions }} sales
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="reports-grid">
+        <div class="card report-card">
+          <div class="card-header">
+            <h3>Profit Margin</h3>
+          </div>
+          <div class="profit-margin-display">
+            <div class="profit-circle">
+              <svg viewBox="0 0 100 100">
+                <circle class="bg" cx="50" cy="50" r="45"/>
+                <circle class="progress" cx="50" cy="50" r="45" id="profitProgress"/>
+              </svg>
+              <div class="profit-value" id="profitMarginValue">
+                {{ gross_margin_percent|floatformat:0 }}%
+              </div>
+            </div>
+            <div class="profit-legend">
+              <div class="legend-item">
+                <span class="legend-color profit"></span>
+                <span>Profit</span>
+              </div>
+              <div class="legend-item">
+                <span class="legend-color cost"></span>
+                <span>Cost</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card report-card">
+          <div class="card-header">
+            <h3>Top Selling Products</h3>
+          </div>
+          <div class="top-products" id="topProducts">
+            <div class="empty-state-small">
+              <i data-lucide="package-x"></i>
+              <p>No sales data</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card report-card">
+          <div class="card-header">
+            <h3>Expense Breakdown</h3>
+          </div>
+          <div class="expense-breakdown" id="expenseBreakdown">
+            <div class="empty-state-small">
+              <i data-lucide="wallet"></i>
+              <p>No expense data</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card report-card full-width">
+          <div class="card-header">
+            <h3>Sales Summary</h3>
+          </div>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <span class="summary-label">Average Transaction</span>
+              <span class="summary-value" id="avgTransaction">₦{{ avg_transaction|floatformat:2 }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Items Sold</span>
+              <span class="summary-value" id="itemsSold">{{ items_sold }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Avg Profit/Sale</span>
+              <span class="summary-value text-profit" id="avgProfit">₦{{ avg_profit_per_sale|floatformat:2 }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Total Cost</span>
+              <span class="summary-value" id="totalCost">₦{{ total_revenue|floatformat:2 }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {% if is_nigeria and has_tax_tools %}
+      <section class="tax-filing-section" id="nrs-tax-filing">
+        <div class="section-header-box">
+          <div class="section-header-icon">
+            <i data-lucide="file-text"></i>
+          </div>
+          <div class="section-header-text">
+            <h2>NRS Tax Filing</h2>
+            <p>Generate Companies Income Tax (CIT) and Value Added Tax (VAT) returns for FIRS submission</p>
+          </div>
+        </div>
+
+        <div class="tax-tabs">
+          <button class="tax-tab active" data-tab="cit" onclick="switchTaxTab('cit')">
+            <i data-lucide="building-2"></i>
+            Companies Income Tax (CIT)
+          </button>
+          <button class="tax-tab" data-tab="vat" onclick="switchTaxTab('vat')">
+            <i data-lucide="receipt"></i>
+            Value Added Tax (VAT)
+          </button>
+        </div>
+
+        <div class="tax-form-container" id="citForm">
+          <div class="card tax-form-card">
+            <div class="tax-form-header">
+              <div class="tax-form-title">
+                <h3>Companies Income Tax Return</h3>
+                <span class="tax-badge">FIRS CIT Form</span>
+              </div>
+              <div class="tax-period-selector">
+                <label>Accounting Year End:</label>
+                <select id="citYear" class="input" onchange="updateCITForm()">
+                  <option value="{{ cit_year }}">31 December {{ cit_year }}</option>
+                  <option value="{{ cit_year|add:'-1' }}">31 December {{ cit_year|add:"-1" }}</option>
+                  <option value="{{ cit_year|add:'-2' }}">31 December {{ cit_year|add:"-2" }}</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="tax-form-body">
+              <div class="tax-section">
+                <div class="tax-section-header"><span class="section-number">2</span><h4>Income Statement</h4></div>
+                <div class="tax-table">
+                  <div class="tax-row"><span class="tax-label">Revenue (Gross Sales)</span><span class="tax-value" id="citRevenue">₦{{ cit_revenue|floatformat:2 }}</span></div>
+                  <div class="tax-row"><span class="tax-label">Cost of Sales</span><span class="tax-value negative" id="citCostOfSales">₦{{ cit_cost|floatformat:2 }}</span></div>
+                  <div class="tax-row highlight"><span class="tax-label">Gross Profit</span><span class="tax-value" id="citGrossProfit">₦{{ cit_gross_profit|floatformat:2 }}</span></div>
+                </div>
+              </div>
+
+              <div class="tax-section">
+                <div class="tax-section-header"><span class="section-number">3</span><h4>Deductions</h4></div>
+                <div class="tax-table">
+                  <div class="tax-row"><span class="tax-label">Operating Expenses</span><span class="tax-value negative" id="citOperatingExpenses">₦{{ cit_operating_expenses|floatformat:2 }}</span></div>
+                  <div class="tax-row highlight"><span class="tax-label">Assessable Profit</span><span class="tax-value" id="citAssessableProfit">₦{{ cit_assessable_profit|floatformat:2 }}</span></div>
+                  <div class="tax-row highlight primary"><span class="tax-label">Total Profit (Taxable Profit)</span><span class="tax-value" id="citTaxableProfit">₦{{ cit_taxable_profit|floatformat:2 }}</span></div>
+                </div>
+              </div>
+
+              <div class="tax-section">
+                <div class="tax-section-header"><span class="section-number">4</span><h4>Tax Calculation</h4></div>
+                <div class="tax-table">
+                  <div class="tax-row"><span class="tax-label">CIT Rate Applied</span><span class="tax-value">{{ cit_rate_percent|floatformat:2 }}%</span></div>
+                  <div class="tax-row"><span class="tax-label">Rate Basis</span><span class="tax-value">{{ cit_rate_label }}</span></div>
+                  <div class="tax-row"><span class="tax-label">Fixed Assets (Reported)</span><span class="tax-value">{% if request.user.fixed_assets %}???{{ request.user.fixed_assets|floatformat:2 }}{% else %}Not set{% endif %}</span></div>
+                  <div class="tax-row"><span class="tax-label">Professional Services</span><span class="tax-value">{{ request.user.is_professional_services|yesno:"Yes,No" }}</span></div>
+                  {% if cit_rate_note %}
+                  <div class="tax-row"><span class="tax-label">Note</span><span class="tax-value">{{ cit_rate_note }}</span></div>
+                  {% endif %}
+                  <div class="tax-row highlight"><span class="tax-label">Company Income Tax Due</span><span class="tax-value" id="citTaxDue">₦{{ cit_tax_due|floatformat:2 }}</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tax-form-container hidden" id="vatForm">
+          <div class="card tax-form-card">
+            <div class="tax-form-header">
+              <div class="tax-form-title">
+                <h3>Value Added Tax Return</h3>
+                <span class="tax-badge vat">FIRS VAT Form</span>
+              </div>
+              <div class="tax-period-selector">
+                <label>Tax Period:</label>
+                <select id="vatPeriod" class="input" onchange="updateVATForm()">
+                  <option value="{{ vat_year }}-{{ vat_month|stringformat:'02d' }}">{{ vat_month }}/{{ vat_year }}</option>
+                </select>
+              </div>
+            </div>
+            <div class="tax-form-body">
+              <div class="tax-section">
+                <div class="tax-section-header"><span class="section-number">2</span><h4>Output VAT (Sales)</h4></div>
+                <div class="tax-table">
+                  <div class="tax-row"><span class="tax-label">VAT Registration</span><span class="tax-value">{% if vat_registered %}Eligible{% else %}Not eligible{% endif %}</span></div>
+                  {% if vat_registration_note %}
+                  <div class="tax-row"><span class="tax-label">Note</span><span class="tax-value">{{ vat_registration_note }}</span></div>
+                  {% endif %}
+                  <div class="tax-row"><span class="tax-label">Total Taxable Sales</span><span class="tax-value" id="vatTaxableSales">₦{{ vat_taxable_sales|floatformat:2 }}</span></div>
+                  <div class="tax-row highlight"><span class="tax-label">Output VAT (VAT Collected)</span><span class="tax-value" id="vatOutputVat">₦{{ vat_output_vat|floatformat:2 }}</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      {% elif is_nigeria %}
+      <section class="card" style="padding:1rem 1.25rem;margin-top:1.5rem;">
+        <h3 style="margin-bottom:0.35rem;">Tax tools locked</h3>
+        <p style="color:var(--muted-foreground);">{{ tax_upgrade_message }}</p>
+      </section>
+      {% endif %}
+    </main>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    lucide.createIcons();
+    switchTaxTab('cit');
+});
+
+function updateReports() {
+    const period = document.getElementById("periodFilter").value;
+    const branch = document.getElementById("branchFilter") ? document.getElementById("branchFilter").value : "all";
+    const startDate = document.getElementById("startDate") ? document.getElementById("startDate").value : "";
+    const endDate = document.getElementById("endDate") ? document.getElementById("endDate").value : "";
+    const params = [];
+    if (branch) {
+        params.push(`branch=${encodeURIComponent(branch)}`);
+    }
+    if (period) {
+        params.push(`period=${encodeURIComponent(period)}`);
+    }
+    if (period === "custom") {
+        if (startDate) {
+            params.push(`start_date=${encodeURIComponent(startDate)}`);
+        }
+        if (endDate) {
+            params.push(`end_date=${encodeURIComponent(endDate)}`);
+        }
+    }
+    window.location.href = `{% url 'reports' %}?${params.join("&")}`;
+}
+
+function updateCITForm() {
+    const period = document.getElementById("periodFilter").value;
+    const branch = document.getElementById("branchFilter") ? document.getElementById("branchFilter").value : "all";
+    const year = document.getElementById("citYear").value;
+    const startDate = document.getElementById("startDate") ? document.getElementById("startDate").value : "";
+    const endDate = document.getElementById("endDate") ? document.getElementById("endDate").value : "";
+    const params = [
+        `branch=${encodeURIComponent(branch)}`,
+        `period=${encodeURIComponent(period)}`,
+        `cit_year=${encodeURIComponent(year)}`
+    ];
+    if (period === "custom") {
+        if (startDate) {
+            params.push(`start_date=${encodeURIComponent(startDate)}`);
+        }
+        if (endDate) {
+            params.push(`end_date=${encodeURIComponent(endDate)}`);
+        }
+    }
+    window.location.href = `{% url 'reports' %}?${params.join("&")}`;
+}
+
+function updateVATForm() {
+    const period = document.getElementById("periodFilter").value;
+    const branch = document.getElementById("branchFilter") ? document.getElementById("branchFilter").value : "all";
+    const raw = document.getElementById("vatPeriod").value.split("-");
+    const year = raw[0];
+    const month = raw[1];
+    const startDate = document.getElementById("startDate") ? document.getElementById("startDate").value : "";
+    const endDate = document.getElementById("endDate") ? document.getElementById("endDate").value : "";
+    const params = [
+        `branch=${encodeURIComponent(branch)}`,
+        `period=${encodeURIComponent(period)}`,
+        `vat_year=${encodeURIComponent(year)}`,
+        `vat_month=${encodeURIComponent(month)}`
+    ];
+    if (period === "custom") {
+        if (startDate) {
+            params.push(`start_date=${encodeURIComponent(startDate)}`);
+        }
+        if (endDate) {
+            params.push(`end_date=${encodeURIComponent(endDate)}`);
+        }
+    }
+    window.location.href = `{% url 'reports' %}?${params.join("&")}`;
+}
+
+function scrollToTaxFiling(event) {
+    event.preventDefault();
+    document.getElementById("nrs-tax-filing").scrollIntoView({ behavior: "smooth" });
+}
+
+function switchTaxTab(tabName) {
+    const citForm = document.getElementById("citForm");
+    const vatForm = document.getElementById("vatForm");
+    const tabs = document.querySelectorAll(".tax-tab");
+    tabs.forEach(tab => tab.classList.remove("active"));
+    citForm.classList.add("hidden");
+    vatForm.classList.add("hidden");
+    if (tabName === "cit") {
+        citForm.classList.remove("hidden");
+        document.querySelector('[data-tab="cit"]').classList.add("active");
+    }
+    if (tabName === "vat") {
+        vatForm.classList.remove("hidden");
+        document.querySelector('[data-tab="vat"]').classList.add("active");
+    }
+}
+</script>
+</body>
+</html>

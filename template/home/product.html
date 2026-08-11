@@ -1,0 +1,447 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Products</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
+  <script src="{% static 'js/offline-web.js' %}" defer></script>
+</head>
+<body class="has-cart-panel">
+<div class="app-container">
+
+  <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">
+          <i data-lucide="store"></i>
+        </div>
+        <h1>VilaStore</h1>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <a href="{% url 'index' %}" class="nav-link"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+        <a href="{% url 'product' %}" class="nav-link active"><i data-lucide="package"></i><span>Products</span></a>
+        <a href="{% url 'inventory' %}" class="nav-link"><i data-lucide="boxes"></i><span>Inventory</span></a>
+        <a href="{% url 'sales-history' %}" class="nav-link"><i data-lucide="receipt"></i><span>Sales History</span></a>
+        <a href="{% url 'loans' %}" class="nav-link"><i data-lucide="credit-card"></i><span>Credit</span></a>
+        <a href="{% url 'expenses' %}" class="nav-link"><i data-lucide="wallet"></i><span>Expenses</span></a>
+        <a href="{% url 'reports' %}" class="nav-link"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
+        <a href="{% url 'customer' %}" class="nav-link"><i data-lucide="users"></i><span>Customers</span></a>
+        <a href="{% url 'settings' %}" class="nav-link"><i data-lucide="settings"></i><span>Settings</span></a>
+      </nav>
+    </aside>
+
+  <!-- Main -->
+  <main class="main-content">
+    <header class="page-header">
+      <h1>Products</h1>
+      <p>Manage and sell your products</p>
+    </header>
+    {% if messages %}
+      <section style="margin-bottom: 1rem;">
+        {% for message in messages %}
+          <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
+        {% endfor %}
+      </section>
+    {% endif %}
+
+    {% if last_sale %}
+      <div class="card" style="margin-bottom: 1rem; padding: 1rem; display:flex; gap:1rem; align-items:center; justify-content:space-between; flex-wrap:wrap;border:1px solid rgba(34,197,94,0.35);">
+        <div>
+          <strong>Online sale completed</strong><br>
+          {{ last_sale.created_at|date:"M d, Y" }}
+          <small>{{ last_sale.created_at|time:"H:i" }}</small>
+          &middot;
+          &#8358;{{ last_sale.total_amount|floatformat:2 }}
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <a class="btn btn-primary" href="{% url 'sale_receipt' last_sale.id %}" target="_blank" rel="noopener">
+            <i data-lucide="receipt"></i> Print Slip
+          </a>
+          <a class="btn btn-outline" href="{% url 'ai_insights' %}">
+            <i data-lucide="sparkles"></i> Shop Analysis
+          </a>
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="products-layout">
+
+      <!-- PRODUCTS SECTION -->
+      <div class="products-section">
+
+        <form method="GET" action="{% url 'product' %}" style="margin-bottom:1rem;">
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <select name="branch" class="input" style="min-width:220px;">
+              <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+              {% for branch in branches %}
+                <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}{% if branch.is_default %} (Default){% endif %}</option>
+              {% endfor %}
+            </select>
+            <input type="text" name="q" class="input" placeholder="Search products by name, code, or category" value="{{ search_query }}" style="flex:1;min-width:220px;">
+            <button type="submit" class="btn btn-outline">Search</button>
+            {% if search_query %}
+              <a href="{% url 'product' %}?{% if selected_branch %}branch={{ selected_branch.id }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}" class="btn btn-ghost">Clear</a>
+            {% endif %}
+          </div>
+        </form>
+
+        <form method="GET" action="{% url 'product' %}" style="margin-bottom:1rem;">
+          {% if selected_branch %}<input type="hidden" name="branch" value="{{ selected_branch.id }}">{% endif %}
+          {% if search_query %}<input type="hidden" name="q" value="{{ search_query }}">{% endif %}
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <input type="search" class="input" data-category-filter="productCategoryFilter" placeholder="Search categories" style="flex:1;min-width:200px;">
+            <select name="category" id="productCategoryFilter" class="input" style="flex:1;min-width:220px;">
+              <option value="">All categories</option>
+              {% for category in categories %}
+                <option value="{{ category.id }}" {% if selected_category == category.id|stringformat:'s' %}selected{% endif %}>{{ category.name }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline">Filter Category</button>
+            {% if selected_category %}
+              <a href="{% url 'product' %}?{% if selected_branch %}branch={{ selected_branch.id }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-ghost">Clear Category</a>
+            {% endif %}
+          </div>
+        </form>
+
+        <section class="price-search-panel" data-price-search>
+          <div class="price-search-field">
+            <i data-lucide="search"></i>
+            <input type="search" class="input" data-price-search-input placeholder="Search exact price, e.g. ₦500 or 1,000">
+          </div>
+          <div class="price-search-results" data-price-search-results aria-live="polite"></div>
+        </section>
+
+        <div class="products-grid">
+          {% for product in products %}
+            <div
+              class="product-card"
+              data-offline-product
+              data-product-id="{{ product.id }}"
+              data-product-name="{{ product.name|escape }}"
+              data-product-code="{{ product.code|default:''|escape }}"
+              data-product-price="{{ product.display_price }}"
+              data-product-stock="{{ product.display_stock }}"
+              data-product-category="{{ product.category.name|default:'Uncategorized'|escape }}"
+              data-product-image="{% if product.image %}{{ product.image.url }}{% endif %}"
+            >
+
+              <form method="POST" action="{% url 'add_to_cart' product.id %}">
+                {% csrf_token %}
+
+                <div class="product-card-image">
+                  {% if product.image %}
+                    <img src="{{ product.image.url }}" style="width:100%;height:150px;object-fit:cover;">
+                  {% else %}
+                    <div style="height:150px;display:flex;align-items:center;justify-content:center;background:#f3f3f3;">
+                      No Image
+                    </div>
+                  {% endif %}
+                </div>
+
+                <div class="product-card-content">
+                  <h3>{{ product.name }}</h3>
+                  <p>₦{{ product.display_price }}</p>
+                  <small style="color:var(--muted-foreground);">{{ product.category.name|default:"Uncategorized" }}</small>
+                  <br>
+                  <small>{{ product.display_stock }} in stock{% if selected_branch %} at {{ selected_branch.name }}{% endif %}</small>
+                </div>
+
+                <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;">
+                  <input type="number" name="quantity" min="0.01" step="0.01" max="{{ product.display_stock }}" value="1" class="input" style="width:80px;" {% if product.display_stock <= 0 %}disabled{% endif %}>
+                  <button type="submit" class="btn btn-primary btn-full" {% if product.display_stock <= 0 %}disabled{% endif %}>
+                    Add to Cart
+                  </button>
+                </div>
+              </form>
+
+            </div>
+          {% empty %}
+            <p>No products available</p>
+          {% endfor %}
+        </div>
+
+      </div>
+
+      <!-- CART PANEL -->
+      <div class="cart-panel" id="floatingCartPanel" aria-label="Shopping cart">
+
+        <div class="floating-cart-panel-header">
+          <h3>Shopping Cart</h3>
+          <button type="button" class="floating-cart-close" data-floating-cart-close aria-label="Close cart">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div id="offlineCartMirror"></div>
+        <form method="POST" action="{% url 'add_to_cart_by_code' %}" style="margin-bottom:0.75rem;">
+          {% csrf_token %}
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <input type="text" name="code" id="productCodeInput" placeholder="Scan or enter code" class="input" style="flex:1;min-width:180px;">
+            <input type="number" name="quantity" min="0.01" step="0.01" placeholder="Qty" class="input" style="width:80px;">
+            <button type="button" class="btn btn-outline" id="productScanBtn">Scan with Camera</button>
+            <button type="submit" class="btn btn-outline">Add by Code</button>
+          </div>
+          <div id="productCodePreview" style="margin-top:0.35rem;font-size:0.85rem;color:var(--muted-foreground);"></div>
+        </form>
+        <div id="productScanModal" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:9999;">
+          <div style="background:#fff;border-radius:12px;padding:1rem;max-width:360px;width:90%;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+              <strong>Scan Barcode</strong>
+              <button type="button" class="btn btn-ghost" id="productScanClose">Close</button>
+            </div>
+            <video id="productScanVideo" style="width:100%;border-radius:8px;background:#000;" autoplay playsinline></video>
+            <div style="font-size:0.8rem;color:var(--muted-foreground);margin-top:0.5rem;">
+              Point the camera at the barcode.
+            </div>
+          </div>
+        </div>
+
+        {% if cart %}
+          <ul>
+            {% for key, item in cart.items %}
+              <li
+                style="margin-bottom:10px;"
+                data-offline-cart-item
+                data-product-id="{{ key }}"
+                data-product-name="{{ item.name|escapejs }}"
+                data-product-price="{{ item.price }}"
+                data-product-quantity="{{ item.quantity }}"
+              >
+                <strong>{{ item.name }}</strong><br>
+                {{ item.quantity }} × ₦{{ item.price }}
+
+                <!-- Update Quantity -->
+                <div>
+                  <form method="POST" action="{% url 'update_cart' key %}" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="decrease">
+                    <button type="submit">−</button>
+                  </form>
+
+                  <form method="POST" action="{% url 'update_cart' key %}" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="increase">
+                    <button type="submit">+</button>
+                  </form>
+
+                  <form method="POST" action="{% url 'update_cart' key %}" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="set">
+                    <input type="number" name="quantity" value="{{ item.quantity }}" min="0" step="0.01" style="width:70px;">
+                    <button type="submit" name="action" value="set">Update</button>
+                  </form>
+                  {% if can_edit_price %}
+                  <form method="POST" action="{% url 'update_cart' key %}" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="price">
+                    <input type="number" name="price" value="{{ item.price }}" min="0" step="0.01" style="width:90px;">
+                    <button type="submit">Update Price</button>
+                  </form>
+                  {% endif %}
+                  <form method="POST" action="{% url 'remove_from_cart' key %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit">Remove</button>
+                  </form>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+
+          <hr>
+
+          <p><strong>Total:</strong> ₦{{ cart_total }}</p>
+
+          <form method="POST" action="{% url 'checkout' %}">
+            {% csrf_token %}
+            <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem;">
+              <label style="font-size:0.85rem;color:var(--muted-foreground);">Payment Status</label>
+              <select name="payment_status" class="input" id="paymentStatusSelect">
+                <option value="paid">Paid</option>
+                <option value="loan">Credit</option>
+              </select>
+              <label style="font-size:0.85rem;color:var(--muted-foreground);">Customer Full Name (optional)</label>
+              <input type="text" name="customer_name" class="input" placeholder="e.g. John Doe">
+              <div id="loanPaymentBlock" style="display:none;">
+                <label style="font-size:0.85rem;color:var(--muted-foreground);">Initial Payment (optional)</label>
+                <input type="number" name="initial_payment" min="0" step="0.01" class="input" placeholder="0.00">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">
+              Complete Sale
+            </button>
+          </form>
+
+        {% else %}
+          <p>Cart is empty</p>
+        {% endif %}
+
+      </div>
+
+    </div>
+
+  </main>
+</div>
+<button
+  type="button"
+  class="floating-cart-button{% if not cart %} floating-cart-button-empty{% endif %}"
+  data-floating-cart-open
+  aria-controls="floatingCartPanel"
+  aria-expanded="false"
+  aria-label="Open cart"
+  {% if not cart %}hidden{% endif %}
+>
+  <i data-lucide="shopping-cart"></i>
+  <span class="floating-cart-badge">{% if cart %}{{ cart|length }}{% else %}0{% endif %}</span>
+</button>
+<button type="button" class="floating-cart-backdrop" data-floating-cart-close aria-label="Close cart"></button>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    lucide.createIcons();
+
+    const codeInput = document.getElementById('productCodeInput');
+    const preview = document.getElementById('productCodePreview');
+    const scanBtn = document.getElementById('productScanBtn');
+    const scanModal = document.getElementById('productScanModal');
+    const scanClose = document.getElementById('productScanClose');
+    const scanVideo = document.getElementById('productScanVideo');
+    let scanStream = null;
+    let scanning = false;
+    let lookupTimer;
+
+    document.querySelectorAll('[data-category-filter]').forEach(function (input) {
+      const select = document.getElementById(input.dataset.categoryFilter);
+      if (!select) return;
+      input.addEventListener('input', function () {
+        const q = input.value.trim().toLowerCase();
+        Array.from(select.options).forEach(function (option, index) {
+          option.hidden = index > 0 && q && !option.textContent.toLowerCase().includes(q);
+        });
+      });
+    });
+
+    const paymentSelect = document.getElementById('paymentStatusSelect');
+    const loanBlock = document.getElementById('loanPaymentBlock');
+    function syncLoanBlock() {
+      if (!paymentSelect || !loanBlock) return;
+      loanBlock.style.display = paymentSelect.value === 'loan' ? 'block' : 'none';
+    }
+    if (paymentSelect) {
+      paymentSelect.addEventListener('change', syncLoanBlock);
+      syncLoanBlock();
+    }
+
+    function setPreview(text) {
+      if (!preview) return;
+      preview.textContent = text || '';
+    }
+
+    async function lookupByCode(code) {
+      if (!code) {
+        setPreview('');
+        return;
+      }
+      try {
+        const branchPart = `{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}`;
+        const res = await fetch(`{% url 'product_lookup_by_code' %}?code=${encodeURIComponent(code)}${branchPart}`);
+        const data = await res.json();
+        if (!data.success) {
+          setPreview('No product found for this code.');
+          return;
+        }
+        setPreview(`Found: ${data.name} (Stock: ${data.stock})`);
+      } catch (err) {
+        const offlineProduct = window.VilaStoreOffline && window.VilaStoreOffline.findProductByCode(code);
+        if (offlineProduct) {
+          setPreview(`Found offline: ${offlineProduct.name} (Last stock: ${offlineProduct.stock})`);
+        } else {
+          setPreview('Unable to lookup code right now.');
+        }
+      }
+    }
+
+    if (codeInput) {
+      codeInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          // Prevent auto-submit on scanner enter; staff will choose qty and click Add.
+          e.preventDefault();
+        }
+      });
+      codeInput.addEventListener('input', function (e) {
+        const code = (e.target.value || '').trim();
+        clearTimeout(lookupTimer);
+        lookupTimer = setTimeout(function () {
+          lookupByCode(code);
+        }, 250);
+      });
+    }
+
+    async function stopScan() {
+      scanning = false;
+      if (scanStream) {
+        scanStream.getTracks().forEach((t) => t.stop());
+        scanStream = null;
+      }
+      if (scanModal) scanModal.style.display = 'none';
+    }
+
+    async function startScan() {
+      if (!codeInput || !scanVideo) return;
+      if (!('BarcodeDetector' in window)) {
+        alert('Camera barcode scanning is not supported on this device/browser.');
+        return;
+      }
+      try {
+        scanStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        });
+        scanVideo.srcObject = scanStream;
+        if (scanModal) scanModal.style.display = 'flex';
+        scanning = true;
+
+        const detector = new BarcodeDetector({
+          formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code']
+        });
+
+        const scanLoop = async () => {
+          if (!scanning) return;
+          try {
+            const barcodes = await detector.detect(scanVideo);
+            if (barcodes && barcodes.length > 0) {
+              const code = barcodes[0].rawValue || '';
+              if (code) {
+                codeInput.value = code;
+                codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                await stopScan();
+                return;
+              }
+            }
+          } catch (err) {
+            // Ignore detection errors and keep scanning.
+          }
+          requestAnimationFrame(scanLoop);
+        };
+        requestAnimationFrame(scanLoop);
+      } catch (err) {
+        alert('Unable to access camera. Please allow camera permission.');
+        await stopScan();
+      }
+    }
+
+    if (scanBtn) {
+      scanBtn.addEventListener('click', startScan);
+    }
+    if (scanClose) {
+      scanClose.addEventListener('click', stopScan);
+    }
+});
+</script>
+</body>
+</html>
+

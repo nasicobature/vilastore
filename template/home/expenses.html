@@ -1,0 +1,255 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Expenses</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">
+          <i data-lucide="store"></i>
+        </div>
+        <h1>VilaStore</h1>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="{% url 'index' %}" class="nav-link">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="{% url 'product' %}" class="nav-link">
+          <i data-lucide="package"></i>
+          <span>Products</span>
+        </a>
+        <a href="{% url 'inventory' %}" class="nav-link">
+          <i data-lucide="boxes"></i>
+          <span>Inventory</span>
+        </a>
+      <a href="{% url 'sales-history' %}" class="nav-link">
+        <i data-lucide="receipt"></i>
+        <span>Sales History</span>
+      </a>
+      <a href="{% url 'loans' %}" class="nav-link">
+        <i data-lucide="credit-card"></i>
+        <span>Credit</span>
+      </a>
+      <a href="{% url 'expenses' %}" class="nav-link active">
+        <i data-lucide="wallet"></i>
+        <span>Expenses</span>
+      </a>
+        <a href="{% url 'reports' %}" class="nav-link">
+          <i data-lucide="bar-chart-3"></i>
+          <span>Reports</span>
+        </a>
+        <a href="{% url 'customer' %}" class="nav-link">
+          <i data-lucide="users"></i>
+          <span>Customers</span>
+        </a>
+        <a href="{% url 'settings' %}" class="nav-link">
+          <i data-lucide="settings"></i>
+          <span>Settings</span>
+        </a>
+      </nav>
+
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div class="page-header-content">
+          <h1>Expenses</h1>
+          <p>Track and manage your business expenses</p>
+        </div>
+        <div class="header-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <form method="GET" action="{% url 'expenses' %}">
+            <select name="branch" class="input" onchange="this.form.submit()">
+              <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+              {% for branch in branches %}
+                <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+              {% endfor %}
+            </select>
+          </form>
+          <button class="btn btn-primary" type="button" onclick="openExpenseModal()">
+            <i data-lucide="plus"></i>
+            Add Expense
+          </button>
+        </div>
+      </header>
+
+      {% if messages %}
+        <section style="margin-bottom: 1rem;">
+          {% for message in messages %}
+            <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      <section class="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Today's Expenses</span>
+            <div class="stat-card-icon destructive">
+              <i data-lucide="trending-down"></i>
+            </div>
+          </div>
+          <div class="stat-card-value">₦{{ today_expenses|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">This Week</span>
+            <div class="stat-card-icon warning">
+              <i data-lucide="calendar"></i>
+            </div>
+          </div>
+          <div class="stat-card-value">₦{{ week_expenses|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">This Month</span>
+            <div class="stat-card-icon primary">
+              <i data-lucide="calendar-days"></i>
+            </div>
+          </div>
+          <div class="stat-card-value">₦{{ month_expenses|floatformat:2 }}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-title">Total Records</span>
+            <div class="stat-card-icon primary">
+              <i data-lucide="file-text"></i>
+            </div>
+          </div>
+          <div class="stat-card-value">{{ total_records }}</div>
+        </div>
+      </section>
+
+      <section class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Branch</th>
+              <th>Category</th>
+              <th>Description</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for expense in expenses %}
+              <tr>
+                <td>{{ expense.date|date:"Y-m-d" }}</td>
+                <td>{{ expense.branch.name|default:"Unassigned" }}</td>
+                <td>{{ expense.category }}</td>
+                <td>{{ expense.title }}</td>
+                <td>₦{{ expense.amount|floatformat:2 }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="empty-state">
+                  <i data-lucide="receipt"></i>
+                  <p>No expenses found</p>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="expenseModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Expense</h3>
+        <button class="modal-close" type="button" onclick="closeExpenseModal()">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <form method="POST" action="{% url 'expenses' %}" class="modal-form">
+        {% csrf_token %}
+        <div class="form-group">
+          <label for="expenseCategory">Category</label>
+          <select id="expenseCategory" name="category" class="input" required>
+            <option value="">Select category</option>
+            <option value="Transport">Transport</option>
+            <option value="Rent">Rent</option>
+            <option value="Electricity">Electricity</option>
+            <option value="Salaries">Salaries</option>
+            <option value="Supplies">Supplies</option>
+            <option value="Maintenance">Maintenance</option>
+            <option value="Marketing">Marketing</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="expenseBranch">Branch</label>
+          <select id="expenseBranch" name="branch_id" class="input">
+            <option value="">No specific branch</option>
+            {% for branch in branches %}
+              <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="expenseAmount">Amount (₦)</label>
+          <input type="number" id="expenseAmount" name="amount" class="input" placeholder="0" min="0.01" step="0.01" required>
+        </div>
+
+        <div class="form-group">
+          <label for="expenseDescription">Description</label>
+          <textarea id="expenseDescription" name="title" class="input textarea" placeholder="Enter expense details..." rows="3" required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="expenseDate">Date</label>
+          <input type="date" id="expenseDate" name="date" class="input" required>
+        </div>
+
+        <div class="form-buttons">
+          <button type="button" class="btn btn-outline" onclick="closeExpenseModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i data-lucide="save"></i>
+            Save Expense
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      lucide.createIcons();
+    });
+
+    function openExpenseModal() {
+      document.getElementById('expenseModal').classList.add('active');
+    }
+
+    function closeExpenseModal() {
+      document.getElementById('expenseModal').classList.remove('active');
+    }
+
+    document.querySelectorAll('.modal-overlay').forEach(function (modal) {
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+          modal.classList.remove('active');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

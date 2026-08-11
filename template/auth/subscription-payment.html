@@ -1,0 +1,105 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Payment Required</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="auth-page">
+  <div class="auth-container">
+    <div class="auth-branding">
+      <div class="auth-branding-content">
+        <div class="auth-logo">
+          <div class="auth-logo-icon">
+            <i data-lucide="store"></i>
+          </div>
+          <h1>VilaStore</h1>
+        </div>
+        <h2>{% if is_upgrade %}Upgrade Plan{% else %}Payment Required{% endif %}</h2>
+        <p>{% if is_upgrade %}Complete your upgrade payment to unlock your new VilaStore features.{% else %}Complete your subscription payment to continue managing your shop.{% endif %}</p>
+        <div class="auth-features">
+          <div class="auth-feature">
+            <i data-lucide="shield-check"></i>
+            <span>Secure Flutterwave checkout</span>
+          </div>
+          <div class="auth-feature">
+            <i data-lucide="clock"></i>
+            <span>Instant access after payment</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="auth-form-panel">
+      <div class="auth-form-container">
+        <div class="auth-form-header">
+          <h2>{% if is_upgrade %}Upgrade Subscription{% else %}Subscription Payment{% endif %}</h2>
+          <p>{% if is_upgrade %}You are upgrading from {{ current_plan.name }} to {{ plan.name }}.{% else %}Please complete the payment to unlock your dashboard.{% endif %}</p>
+        </div>
+
+        {% if messages %}
+        <section style="margin-bottom:1rem;">
+          {% for message in messages %}
+          <div class="card" style="padding:0.75rem 1rem;margin-bottom:0.5rem;">{{ message }}</div>
+          {% endfor %}
+        </section>
+        {% endif %}
+
+        <div class="card" style="padding:1rem;margin-bottom:1rem;">
+          {% if subscription_active_until and not is_upgrade %}
+          <p style="margin:0 0 0.5rem 0;color:var(--muted-foreground);">
+            Access ended on {{ subscription_active_until|date:"M d, Y" }}.
+          </p>
+          {% endif %}
+          <p style="margin:0 0 0.5rem 0;"><strong>{{ plan.name|default:"Starter" }} Plan</strong></p>
+          {% if is_upgrade %}
+          <p style="margin:0 0 0.5rem 0;"><strong>Plan upgrade</strong></p>
+          <p style="margin:0 0 0.5rem 0;">New monthly subscription: &#8358;{{ monthly_fee }}</p>
+          <p style="margin:0 0 0.5rem 0;color:var(--muted-foreground);">Your upgraded features will activate immediately after payment.</p>
+          {% elif registration_due %}
+          <p style="margin:0 0 0.5rem 0;"><strong>First monthly subscription</strong></p>
+          <p style="margin:0 0 0.5rem 0;">Monthly subscription: &#8358;{{ monthly_fee }}</p>
+          {% else %}
+          <p style="margin:0 0 0.5rem 0;"><strong>Monthly renewal</strong></p>
+          <p style="margin:0 0 0.5rem 0;">Monthly subscription: &#8358;{{ monthly_fee }}</p>
+          {% endif %}
+          <p style="margin:0;"><strong>Total due: &#8358;{{ amount_due }}</strong></p>
+        </div>
+
+        <form method="POST" action="{% url 'subscription_payment' %}" id="subscriptionPaymentForm">
+          {% csrf_token %}
+          <input type="hidden" id="subscriptionPaymentReference" name="payment_reference">
+          <button type="submit" class="btn btn-primary btn-lg btn-full" id="startSubscriptionPayment">
+            <i data-lucide="credit-card"></i>
+            Pay Now
+          </button>
+        </form>
+
+        <div class="auth-footer" style="margin-top:1rem;">
+          {% if request.user.is_authenticated %}
+          <a href="{% url 'logout' %}" class="link">Sign out</a>
+          {% else %}
+          <a href="{% url 'login' %}" class="link">Sign in</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.FLUTTERWAVE_PUBLIC_KEY = "{{ FLUTTERWAVE_PUBLIC_KEY|default:''|escapejs }}";
+    window.SUBSCRIPTION_EMAIL = "{{ subscription_email|default:''|escapejs }}";
+    window.SUBSCRIPTION_AMOUNT = {{ amount_due|default:0 }};
+    window.SUBSCRIPTION_CUSTOMER_NAME = "{{ subscription_customer_name|default:'VilaStore customer'|escapejs }}";
+    window.SUBSCRIPTION_PHONE = "{{ subscription_phone|default:''|escapejs }}";
+    window.SUBSCRIPTION_DESCRIPTION = "{% if is_upgrade %}VilaStore upgrade to {{ plan.name|default:'selected'|escapejs }}{% else %}{{ plan.name|default:'VilaStore'|escapejs }} plan payment{% endif %}";
+  </script>
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
+  <script src="{% static 'js/subscription.js' %}?v=20260303"></script>
+</body>
+</html>

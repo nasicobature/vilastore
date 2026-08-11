@@ -1,0 +1,300 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Investor Dashboard</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { background:#f6f8fb; }
+    .investor-shell { width:min(1180px, 100%); margin:0 auto; }
+    .investor-hero {
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:1rem;
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:1rem;
+      padding:1.5rem;
+      box-shadow:0 16px 36px rgba(15, 23, 42, 0.08);
+      margin-bottom:1.25rem;
+    }
+    .investor-brand { display:flex; align-items:center; gap:.8rem; color:var(--primary); font-weight:800; margin-bottom:.7rem; }
+    .investor-logo {
+      width:42px;
+      height:42px;
+      border-radius:.75rem;
+      border:1px solid var(--border);
+      background:url("{% static 'img/vilastore-logo.png' %}") center/cover no-repeat, var(--primary-soft);
+    }
+    .investor-hero h1 { margin:0; color:#101828; font-size:clamp(1.55rem, 4vw, 2.4rem); line-height:1.08; }
+    .investor-hero p { margin:.45rem 0 0; color:var(--muted-foreground); max-width:680px; }
+    .investor-actions { display:flex; gap:.65rem; flex-wrap:wrap; justify-content:flex-end; }
+    .investor-grid { display:grid; gap:1rem; }
+    .top-grid { grid-template-columns:repeat(4, minmax(0, 1fr)); }
+    .overview-grid { grid-template-columns:repeat(6, minmax(0, 1fr)); margin-top:1rem; }
+    .investor-card {
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:.875rem;
+      padding:1rem;
+      box-shadow:0 8px 22px rgba(15, 23, 42, .05);
+    }
+    .metric-card { min-height:150px; display:flex; flex-direction:column; justify-content:space-between; }
+    .metric-head { display:flex; justify-content:space-between; gap:.75rem; align-items:flex-start; }
+    .metric-label { display:block; color:var(--muted-foreground); font-size:.78rem; font-weight:800; text-transform:uppercase; letter-spacing:0; }
+    .metric-value { color:#101828; font-size:1.85rem; font-weight:800; line-height:1.1; margin-top:.35rem; overflow-wrap:anywhere; }
+    .metric-icon {
+      width:42px;
+      height:42px;
+      border-radius:.75rem;
+      display:grid;
+      place-items:center;
+      color:var(--primary);
+      background:rgba(15, 118, 110, .1);
+      flex:0 0 auto;
+    }
+    .metric-icon.revenue { color:#047857; background:#dcfce7; }
+    .metric-icon.warning { color:#92400e; background:#fff4d6; }
+    .metric-icon.cost { color:#9f1239; background:#ffe4e6; }
+    .status-pill {
+      display:inline-flex;
+      align-items:center;
+      gap:.35rem;
+      width:fit-content;
+      padding:.35rem .55rem;
+      border-radius:999px;
+      font-size:.78rem;
+      font-weight:800;
+      background:#dcfce7;
+      color:#047857;
+    }
+    .status-pill.warning { background:#fff4d6; color:#92400e; }
+    .status-pill.neutral { background:var(--muted); color:var(--muted-foreground); }
+    .overview-card { min-height:104px; }
+    .overview-card .metric-value { font-size:1.1rem; }
+    .dashboard-section { margin-top:1rem; }
+    .section-header { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; }
+    .section-header h2 { font-size:1.05rem; color:#101828; margin:0; }
+    .section-header p { color:var(--muted-foreground); margin:.25rem 0 0; font-size:.9rem; }
+    .table-wrap { overflow-x:auto; }
+    .investor-table { width:100%; min-width:720px; border-collapse:collapse; }
+    .investor-table th, .investor-table td { text-align:left; padding:.85rem .75rem; border-bottom:1px solid var(--border); vertical-align:top; }
+    .investor-table th { color:var(--muted-foreground); font-size:.78rem; text-transform:uppercase; letter-spacing:0; }
+    .investor-table td { color:#182230; font-size:.9rem; }
+    .calc-panel {
+      display:grid;
+      grid-template-columns:minmax(0, 1fr) minmax(280px, .55fr);
+      gap:1rem;
+      margin-top:1rem;
+      align-items:start;
+    }
+    .calc-list { display:grid; gap:.75rem; }
+    .calc-row { display:flex; justify-content:space-between; gap:1rem; padding:.85rem 0; border-bottom:1px solid var(--border); }
+    .calc-row span { color:var(--muted-foreground); }
+    .calc-row strong { color:#101828; }
+    @media (max-width:1024px) {
+      .top-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+      .overview-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+      .calc-panel { grid-template-columns:1fr; }
+    }
+    @media (max-width:720px) {
+      .main-content { padding:1rem; }
+      .investor-hero { flex-direction:column; }
+      .investor-actions { width:100%; justify-content:stretch; }
+      .investor-actions .btn { flex:1 1 auto; justify-content:center; }
+      .top-grid, .overview-grid { grid-template-columns:1fr; }
+      .metric-card { min-height:132px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container" style="min-height:100vh;">
+    <main class="main-content" style="margin-left:0;">
+      <div class="investor-shell">
+        <header class="investor-hero">
+          <div>
+            <div class="investor-brand"><span class="investor-logo"></span><span>VilaStore Investor Portal</span></div>
+            <h1>Welcome, {{ investor.name }}</h1>
+            <p>Your ownership: {{ investor.ownership_percent }}%. Monitor shops, revenue, cloud operating costs, and net position in one clear view.</p>
+          </div>
+          <div class="investor-actions">
+            <a href="{% url 'investor_logout' %}" class="btn btn-ghost"><i data-lucide="log-out"></i> Logout</a>
+          </div>
+        </header>
+
+        <section class="investor-grid top-grid" aria-label="Investor summary">
+          <article class="investor-card metric-card">
+            <div class="metric-head">
+              <div><span class="metric-label">Active Shops</span><div class="metric-value" data-stat="activeShops">56</div></div>
+              <div class="metric-icon"><i data-lucide="store"></i></div>
+            </div>
+            <span class="status-pill"><i data-lucide="trending-up"></i> Positive</span>
+          </article>
+
+          <article class="investor-card metric-card">
+            <div class="metric-head">
+              <div><span class="metric-label">Total Revenue Generated</span><div class="metric-value" data-money="totalRevenue">₦224,000</div></div>
+              <div class="metric-icon revenue"><i data-lucide="banknote"></i></div>
+            </div>
+            <span class="status-pill neutral"><i data-lucide="receipt"></i> Revenue view</span>
+          </article>
+
+          <article class="investor-card metric-card">
+            <div class="metric-head">
+              <div><span class="metric-label">Inactive Shops</span><div class="metric-value" data-stat="inactiveShops">79</div></div>
+              <div class="metric-icon warning"><i data-lucide="pause-circle"></i></div>
+            </div>
+            <span class="status-pill warning"><i data-lucide="alert-triangle"></i> Inactive</span>
+          </article>
+
+          <article class="investor-card metric-card">
+            <div class="metric-head">
+              <div><span class="metric-label">AWS Paid July</span><div class="metric-value" data-money="awsCost">₦178,000</div></div>
+              <div class="metric-icon cost"><i data-lucide="cloud"></i></div>
+            </div>
+            <span class="status-pill"><i data-lucide="check-circle-2"></i> Paid</span>
+          </article>
+        </section>
+
+        <section class="investor-grid overview-grid" aria-label="Business overview">
+          <article class="investor-card overview-card"><span class="metric-label">Total Shops</span><div class="metric-value" data-stat="totalShops">135</div></article>
+          <article class="investor-card overview-card"><span class="metric-label">Active Shops</span><div class="metric-value" data-stat="activeShops">56</div></article>
+          <article class="investor-card overview-card"><span class="metric-label">Inactive Shops</span><div class="metric-value" data-stat="inactiveShops">79</div></article>
+          <article class="investor-card overview-card"><span class="metric-label">Total Revenue</span><div class="metric-value" data-money="totalRevenue">₦224,000</div></article>
+          <article class="investor-card overview-card"><span class="metric-label">Total Operational Cost</span><div class="metric-value" data-money="awsCost">₦178,000</div></article>
+          <article class="investor-card overview-card"><span class="metric-label">Net Position</span><div class="metric-value" data-money="netPosition">₦46,000</div></article>
+        </section>
+
+        <section class="investor-card dashboard-section">
+          <div class="section-header">
+            <div>
+              <h2>AWS Payment History</h2>
+              <p>Recent cloud service payments for VilaStore operations.</p>
+            </div>
+            <i data-lucide="cloud-cog"></i>
+          </div>
+          <div class="table-wrap">
+            <table class="investor-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th>Payment Status</th>
+                  <th>Reference</th>
+                </tr>
+              </thead>
+              <tbody id="paymentHistoryBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="calc-panel">
+          <article class="investor-card">
+            <div class="section-header">
+              <div>
+                <h2>Investor Overview</h2>
+                <p>Revenue, cost, and net position at a glance.</p>
+              </div>
+              <i data-lucide="calculator"></i>
+            </div>
+            <div class="calc-list">
+              <div class="calc-row"><span>Total Shops</span><strong data-stat="totalShops">135</strong></div>
+              <div class="calc-row"><span>Total Revenue</span><strong data-money="totalRevenue">₦224,000</strong></div>
+              <div class="calc-row"><span>Total Operational Cost</span><strong data-money="awsCost">₦178,000</strong></div>
+              <div class="calc-row"><span>Net Position</span><strong data-money="netPosition">₦46,000</strong></div>
+            </div>
+          </article>
+
+          <article class="investor-card">
+            <div class="section-header">
+              <div>
+                <h2>Return Snapshot</h2>
+                <p>Subscription return calculation.</p>
+              </div>
+              <i data-lucide="trending-up"></i>
+            </div>
+            <div class="calc-list">
+              <div class="calc-row"><span>Backend Active Subscriptions</span><strong>{{ active_shops }}</strong></div>
+              <div class="calc-row"><span>Monthly Subscription Revenue</span><strong>&#8358;{{ monthly_revenue|floatformat:2 }}</strong></div>
+              <div class="calc-row"><span>Your Monthly Return</span><strong>&#8358;{{ monthly_return|floatformat:2 }}</strong></div>
+            </div>
+          </article>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const dashboardStats = {
+      activeShops: 56,
+      inactiveShops: 79,
+      totalRevenue: 224000,
+      awsCost: 178000,
+      payments: [
+        {
+          date: "July 17, 2026",
+          period: "Paid Month",
+          description: "AWS Cloud Service Payment",
+          amount: 178000,
+          status: "Paid",
+          reference: "AWS-2026-07"
+        },
+        {
+          date: "August 18, 2026",
+          period: "Next Month",
+          description: "AWS Cloud Service Payment",
+          amount: 178000,
+          status: "Next",
+          reference: "AWS-2026-08"
+        }
+      ]
+    };
+
+    const currency = new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: "NGN",
+      maximumFractionDigits: 0
+    });
+
+    function setAll(selector, value) {
+      document.querySelectorAll(selector).forEach((node) => {
+        node.textContent = value;
+      });
+    }
+
+    function renderInvestorDashboard() {
+      const totalShops = dashboardStats.activeShops + dashboardStats.inactiveShops;
+      const netPosition = dashboardStats.totalRevenue - dashboardStats.awsCost;
+
+      setAll('[data-stat="activeShops"]', dashboardStats.activeShops);
+      setAll('[data-stat="inactiveShops"]', dashboardStats.inactiveShops);
+      setAll('[data-stat="totalShops"]', totalShops);
+      setAll('[data-money="totalRevenue"]', currency.format(dashboardStats.totalRevenue));
+      setAll('[data-money="awsCost"]', currency.format(dashboardStats.awsCost));
+      setAll('[data-money="netPosition"]', currency.format(netPosition));
+
+      document.getElementById("paymentHistoryBody").innerHTML = dashboardStats.payments.map((payment) => `
+        <tr>
+          <td>${payment.date}</td>
+          <td>${payment.description}<br><span style="color:var(--muted-foreground);">Period: ${payment.period}</span></td>
+          <td>${currency.format(payment.amount)}</td>
+          <td><span class="badge ${payment.status === "Paid" ? "badge-success" : "badge-warning"}">${payment.status}</span></td>
+          <td>${payment.reference}</td>
+        </tr>
+      `).join("");
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      renderInvestorDashboard();
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

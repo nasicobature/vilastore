@@ -1,0 +1,93 @@
+<article class="report-card-modern rounded-xl border border-border bg-background overflow-hidden shadow-sm">
+  <div class="bg-primary text-primary-foreground px-5 py-4">
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+      <div>
+        <p class="text-xs uppercase tracking-wider opacity-80">{% if card.is_preview %}Report Card Preview{% else %}Student Report Card{% endif %}</p>
+        <h3 class="font-display font-semibold text-xl leading-tight">{{ user.profile.institution.name }}</h3>
+        <p class="text-sm opacity-90">{{ card.session }}{% if card.term %} / {{ card.term }}{% endif %}</p>
+      </div>
+      <div class="text-sm sm:text-right">
+        <p class="opacity-80">Class</p>
+        <p class="font-semibold">{{ card.academic_class.name|default:"-" }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="p-5 space-y-5">
+    {% if card.is_preview %}
+      <div class="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
+        Preview only. Students will see the final report card after Admin approval and publication.
+      </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div class="md:col-span-2 rounded-lg border border-border bg-muted/20 p-3">
+        <p class="text-xs text-muted-foreground uppercase tracking-wider">Student</p>
+        <p class="font-display font-semibold text-lg">{{ card.student.full_name }}</p>
+        <p class="text-sm text-muted-foreground">{{ card.student.student_id }}</p>
+      </div>
+      <div class="rounded-lg border border-border bg-muted/20 p-3">
+        <p class="text-xs text-muted-foreground uppercase tracking-wider">Position</p>
+        <p class="font-display font-semibold text-lg">{{ card.position|default:"-" }}</p>
+      </div>
+      <div class="rounded-lg border border-border bg-muted/20 p-3">
+        <p class="text-xs text-muted-foreground uppercase tracking-wider">Average</p>
+        <p class="font-display font-semibold text-lg">{{ card.average }}</p>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto rounded-xl border border-border">
+      <table class="w-full">
+        <thead>
+          <tr class="bg-muted/50">
+            <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
+            <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 1</th>
+            <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 2</th>
+            <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Assignment</th>
+            <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Exam</th>
+            <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Total</th>
+            <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Grade</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          {% for result in card.results %}
+            <tr>
+              <td class="px-4 py-3 text-sm font-medium">{{ result.subject.name }}</td>
+              <td class="px-4 py-3 text-sm">{{ result.test1 }}</td>
+              <td class="px-4 py-3 text-sm">{{ result.test2 }}</td>
+              <td class="px-4 py-3 text-sm">{{ result.assignment }}</td>
+              <td class="px-4 py-3 text-sm">{{ result.exam }}</td>
+              <td class="px-4 py-3 text-sm font-semibold">{{ result.total }}</td>
+              <td class="px-4 py-3 text-sm">{{ result.grade }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="px-4 py-3 text-sm text-muted-foreground">No scores available for this report card yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+      <div class="rounded-lg border border-border p-3">
+        <p class="text-xs text-muted-foreground uppercase tracking-wider">Total Score</p>
+        <p class="font-semibold">{{ card.total }}</p>
+      </div>
+      <div class="rounded-lg border border-border p-3">
+        <p class="text-xs text-muted-foreground uppercase tracking-wider">Approval</p>
+        <p class="font-semibold">{{ card.approval_status|default:"-" }}</p>
+      </div>
+      <div class="rounded-lg border border-border p-3">
+        <p class="text-xs text-muted-foreground uppercase tracking-wider">Session</p>
+        <p class="font-semibold">{{ card.session|default:"-" }}</p>
+      </div>
+      <div class="md:col-span-3 rounded-lg border border-border p-3">
+        <p class="text-xs text-muted-foreground uppercase tracking-wider">Teacher Comment</p>
+        <p>{{ card.teacher_comment|default:"-" }}</p>
+      </div>
+      <div class="md:col-span-3 rounded-lg border border-border p-3">
+        <p class="text-xs text-muted-foreground uppercase tracking-wider">Examiner / Admin Comment</p>
+        <p>{{ card.examiner_comment|default:"-" }} / {{ card.admin_comment|default:"-" }}</p>
+      </div>
+    </div>
+  </div>
+</article>

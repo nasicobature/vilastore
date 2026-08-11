@@ -1,0 +1,71 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy | VilaStore</title>
+  {% include "partials/branding-head.html" %}
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f7f4ef; color: #21180f; line-height: 1.6; }
+    main { max-width: 860px; margin: 0 auto; padding: 40px 20px 64px; }
+    header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+    .logo { width: 52px; height: 52px; border-radius: 12px; background: url("{% static 'img/vilastore-logo.png' %}") center/cover no-repeat; }
+    h1 { margin: 0; font-size: 32px; line-height: 1.15; }
+    h2 { margin-top: 30px; font-size: 20px; }
+    p, li { font-size: 15px; }
+    a { color: #8a4b12; font-weight: 700; }
+    .card { background: #fff; border: 1px solid #eadfce; border-radius: 12px; padding: 24px; box-shadow: 0 12px 30px rgba(40, 24, 10, 0.06); }
+    .muted { color: #6b5a48; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1>VilaStore Privacy Policy</h1>
+        <p class="muted">Effective date: May 7, 2026</p>
+      </div>
+    </header>
+    <section class="card">
+      <p>VilaStore provides shop management, marketplace shopping, housing discovery, and business management tools. This policy explains the information we collect, how we use it, and how users can contact us about privacy choices.</p>
+
+      <h2>Information We Collect</h2>
+      <ul>
+        <li>Account information such as name, email address, phone number, verification status, and login details.</li>
+        <li>Marketplace information such as orders, order messages, shop payment details, and house inquiries.</li>
+        <li>Business and housing information entered by owners or agents, including shop details, product images, listing images, customer records, and payment or rental records.</li>
+        <li>Location information when users allow location access for address search or map features.</li>
+        <li>Photos or files selected by users for product, shop, or property uploads.</li>
+        <li>Camera access, when allowed by the user, to scan product barcodes into carts and to capture or upload product, shop, and housing images.</li>
+        <li>Technical information such as device type, app activity needed to operate the service, and security logs.</li>
+      </ul>
+
+      <h2>How We Use Information</h2>
+      <ul>
+        <li>To create and verify accounts, process sign-ins, and protect accounts from misuse.</li>
+        <li>To run marketplace orders, chats, scanner payments, barcode scanning, shop portals, and housing inquiries.</li>
+        <li>To display products, shops, houses, order status, and user-submitted content inside VilaStore.</li>
+        <li>To provide support, respond to requests, improve reliability, and maintain platform security.</li>
+        <li>To comply with applicable laws, enforce terms, and resolve disputes.</li>
+      </ul>
+
+      <h2>Sharing</h2>
+      <p>We share information only as needed to operate VilaStore. For example, order and payment-confirmation details may be shared between buyers, sellers, and shop staff involved in a transaction. We may use trusted service providers for hosting, email, SMS, maps, storage, analytics, and payment or platform operations. We do not sell personal information.</p>
+
+      <h2>Data Retention and Deletion</h2>
+      <p>We keep information for as long as needed to provide VilaStore, meet legal or accounting obligations, prevent fraud, resolve disputes, and maintain business records. Users can request account deletion at <a href="/account-deletion/">/account-deletion/</a>. Some transaction, payment, safety, and legal records may be retained where required.</p>
+
+      <h2>Security</h2>
+      <p>We use reasonable administrative, technical, and organizational safeguards to protect user information. No online service can guarantee absolute security, but we work to keep VilaStore protected and reliable.</p>
+
+      <h2>Children</h2>
+      <p>VilaStore is not directed to children under 13. Users should not create an account if they are not old enough to use online marketplace services in their location.</p>
+
+      <h2>Contact</h2>
+      <p>For privacy questions or requests, contact <a href="mailto:privacy@vilastore.store">privacy@vilastore.store</a>.</p>
+    </section>
+  </main>
+</body>
+</html>

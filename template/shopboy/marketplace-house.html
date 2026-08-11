@@ -1,0 +1,257 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - {{ house.title }}</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <header class="marketplace-header">
+    <div class="marketplace-header-inner {% if buyer %}marketplace-header-inner-stacked{% endif %}">
+      <div class="marketplace-header-top">
+        <a href="{% if buyer %}{% url 'marketplace_home' %}{% else %}{% url 'marketplace' %}{% endif %}" class="marketplace-logo">
+          <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+          <span>VilaStore</span>
+        </a>
+        <div class="marketplace-actions">
+          <a href="{% url 'marketplace' %}?tab=houses" class="btn btn-ghost"><i data-lucide="arrow-left"></i> Back</a>
+          {% if shop_owner %}
+          <a href="{% url 'marketplace_housing_profile' shop_owner.username %}" class="btn btn-ghost"><i data-lucide="building-2"></i> Housing Profile</a>
+          {% elif house.marketplace_agent %}
+          <a href="{% url 'marketplace_housing_agent_profile' house.marketplace_agent.username %}" class="btn btn-ghost"><i data-lucide="building-2"></i> Housing Profile</a>
+          {% endif %}
+          {% if buyer %}
+          <a href="{% url 'marketplace_account' %}" class="btn btn-ghost">My Activity</a>
+          <a href="{% url 'marketplace_logout' %}" class="btn btn-outline">Logout</a>
+          {% else %}
+          <a href="{% url 'marketplace_login' %}" class="btn btn-ghost">Sign In</a>
+          <a href="{% url 'marketplace_signup' %}" class="btn btn-primary">Create Account</a>
+          {% endif %}
+        </div>
+      </div>
+      {% include 'partials/marketplace-buyer-nav.html' %}
+    </div>
+  </header>
+
+  <div class="marketplace-container marketplace-shop-layout">
+    <aside class="marketplace-sidebar marketplace-shop-sidebar">
+      <div class="marketplace-shop-hero marketplace-house-profile-shell marketplace-house-profile-shell-strong">
+        <div class="marketplace-shop-cover marketplace-house-cover marketplace-house-cover-tall">
+          {% if house.primary_image %}
+          <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}">
+          {% elif profile and profile.cover_image %}
+          <img src="{{ profile.cover_image.url }}" alt="{{ house.title }}">
+          {% else %}
+          <div class="marketplace-shop-cover-fallback"></div>
+          {% endif %}
+          <div class="marketplace-house-cover-wash"></div>
+          <div class="marketplace-house-cover-overlay">
+            <span class="house-market-chip house-market-chip-accent"><i data-lucide="home"></i> {{ house.get_listing_mode_display }}</span>
+            <span class="house-market-chip house-market-chip-neutral">{{ house.profile_type_label }}</span>
+          </div>
+        </div>
+        <div class="marketplace-shop-identity">
+          <div class="marketplace-shop-avatar-ring marketplace-house-avatar-ring">
+            {% if house.primary_image %}
+            <img src="{{ house.primary_image.image.url }}" alt="{{ house.title }}" class="marketplace-shop-logo">
+            {% elif shop_owner and shop_owner.profile_image %}
+            <img src="{{ shop_owner.profile_image.url }}" alt="{{ house.display_owner_name }}" class="marketplace-shop-logo">
+            {% else %}
+            <div class="marketplace-shop-logo marketplace-shop-logo-fallback"><i data-lucide="house"></i></div>
+            {% endif %}
+          </div>
+          <div>
+            <h2>{{ house.title }}</h2>
+            <p>{{ house.profile_type_label }} by {{ house.display_owner_name }}</p>
+          </div>
+        </div>
+        <p class="marketplace-shop-description">{{ house.description|default:"No description yet." }}</p>
+        <div class="marketplace-shop-meta marketplace-house-meta-grid">
+          <span><i data-lucide="wallet"></i> NGN {{ house.price|floatformat:2 }}</span>
+          <span><i data-lucide="map-pin"></i> {{ house.area_label }}</span>
+          <span><i data-lucide="badge-check"></i> {{ house.get_availability_status_display }}</span>
+        </div>
+      </div>
+
+      <div class="card marketplace-shop-card marketplace-house-panel">
+        <h4>Quick Facts</h4>
+        <div class="house-detail-panel-grid">
+          <div class="house-detail-panel-item">
+            <span>House Type</span>
+            <strong>{{ house.profile_type_label }}</strong>
+          </div>
+          <div class="house-detail-panel-item">
+            <span>Listing Mode</span>
+            <strong>{{ house.get_listing_mode_display }}</strong>
+          </div>
+          <div class="house-detail-panel-item">
+            <span>Location</span>
+            <strong>{{ house.area_label }}</strong>
+          </div>
+          <div class="house-detail-panel-item">
+            <span>Status</span>
+            <strong>{{ house.get_availability_status_display }}</strong>
+          </div>
+          <div class="house-detail-panel-item">
+            <span>Bedrooms</span>
+            <strong>{{ house.rooms_count }}</strong>
+          </div>
+          <div class="house-detail-panel-item">
+            <span>Available Units</span>
+            <strong>{{ house.units_summary }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="card marketplace-shop-card marketplace-house-panel">
+        <h4>Owner & Agent</h4>
+        <div class="marketplace-house-contact-block">
+          <div>
+            <span>Owner</span>
+            <strong>{{ house.display_owner_name }}</strong>
+            <p>{{ house.display_owner_phone|default:"Phone shared in chat when needed." }}</p>
+            {% if shop_owner %}
+            <a href="{% url 'marketplace_housing_profile' shop_owner.username %}" class="btn btn-ghost btn-sm" style="margin-top:0.75rem;">View All Houses</a>
+            {% elif house.marketplace_agent %}
+            <a href="{% url 'marketplace_housing_agent_profile' house.marketplace_agent.username %}" class="btn btn-ghost btn-sm" style="margin-top:0.75rem;">View All Houses</a>
+            {% endif %}
+          </div>
+          {% if house.marketplace_agent %}
+          <div>
+            <span>{% if house.managed_by_agent %}Property Manager{% else %}Listing Agent{% endif %}</span>
+            <strong>{{ house.marketplace_agent.full_name }}</strong>
+            <p>{{ house.marketplace_agent.phone|default:house.marketplace_agent.email }}</p>
+          </div>
+          {% endif %}
+        </div>
+        <div class="marketplace-house-privacy-note">
+          <i data-lucide="shield"></i>
+          <p>Exact address stays private on the public marketplace. Share inspection directions and full address in chat.</p>
+        </div>
+        {% if active_rental %}
+        <p class="marketplace-house-footnote">Current tenancy ends on {{ active_rental.end_date|date:"F d, Y" }}.</p>
+        {% else %}
+        <p class="marketplace-house-footnote">No active rental record is attached to this listing right now.</p>
+        {% endif %}
+      </div>
+
+      <div class="card marketplace-shop-card marketplace-house-panel marketplace-house-cta-panel">
+        <h4>Interested In This House?</h4>
+        {% if not house.owner %}
+        <p class="marketplace-house-footnote">Owner chat is not available for this listing yet.</p>
+        {% elif buyer %}
+        <form method="POST" action="{% url 'marketplace_create_house_inquiry' house.id %}" class="stack-form" style="margin-top:1rem;">
+          {% csrf_token %}
+          <input type="text" name="buyer_name" class="input" placeholder="Your full name" required>
+          <input type="text" name="buyer_contact" class="input" placeholder="Phone or WhatsApp number" value="{{ buyer.phone }}" required>
+          <textarea name="message" class="input" rows="4" placeholder="Ask about inspection, rent, payment plan, available units, or anything else you need."></textarea>
+          <button type="submit" class="btn btn-primary btn-full"><i data-lucide="messages-square"></i> Open House Chat</button>
+        </form>
+        {% else %}
+        <p class="marketplace-house-footnote">Sign in to ask about this house, inspection, rent terms, and availability.</p>
+        <a href="{% url 'marketplace_login' %}?next={% url 'marketplace_house_detail' house.id %}" class="btn btn-primary btn-full" style="margin-top:1rem;">Sign In To Chat</a>
+        {% endif %}
+      </div>
+    </aside>
+
+    <main class="marketplace-main">
+      <section class="card house-detail-hero-card marketplace-house-headline-card">
+        <div>
+          <span class="badge badge-primary">House Profile</span>
+          <h2>See the house clearly before you start the conversation.</h2>
+          <p>{{ house.profile_type_label }} in {{ house.area_label }} with {{ house.units_summary }} and a {{ house.get_availability_status_display|lower }} status.</p>
+        </div>
+        <div class="marketplace-house-hero-price">
+          <span>Price</span>
+          <strong>NGN {{ house.price|floatformat:2 }}</strong>
+          <small>{{ house.get_listing_mode_display }}</small>
+        </div>
+      </section>
+
+      <section class="marketplace-house-trust-strip">
+        <article class="marketplace-house-trust-card">
+          <i data-lucide="layout-grid"></i>
+          <div>
+            <strong>Compare the essentials</strong>
+            <p>Review type, bedrooms, price, and units before spending time in chat.</p>
+          </div>
+        </article>
+        <article class="marketplace-house-trust-card">
+          <i data-lucide="calendar-check-2"></i>
+          <div>
+            <strong>Ask inspection questions first</strong>
+            <p>Use chat to confirm availability, timing, and payment expectations before visiting.</p>
+          </div>
+        </article>
+        <article class="marketplace-house-trust-card">
+          <i data-lucide="shield-check"></i>
+          <div>
+            <strong>Private address sharing</strong>
+            <p>Exact directions stay private until the owner or agent is ready to share them.</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="marketplace-house-gallery-shell">
+        <div class="marketplace-results-header">
+          <div>
+            <h2>Gallery</h2>
+            <p class="marketplace-house-section-note">Preview the house images before you message the owner or agent.</p>
+          </div>
+        </div>
+        <div class="marketplace-house-gallery-grid">
+          {% for image in house.images.all %}
+          <article class="marketplace-house-gallery-card">
+            <div class="marketplace-house-gallery-media">
+              <img src="{{ image.image.url }}" alt="{{ house.title }}">
+            </div>
+            <div class="marketplace-house-gallery-body">
+              <h3>{{ image.caption|default:house.title }}</h3>
+              <p>{{ house.profile_type_label }} in {{ house.area_label }}</p>
+            </div>
+          </article>
+          {% empty %}
+          <article class="marketplace-house-gallery-card">
+            <div class="marketplace-house-gallery-media housing-listing-fallback"><i data-lucide="house"></i></div>
+            <div class="marketplace-house-gallery-body">
+              <h3>{{ house.title }}</h3>
+              <p>No photos uploaded yet.</p>
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="marketplace-house-insight-grid">
+        <article class="card marketplace-house-insight-card">
+          <h3>What You're Viewing</h3>
+          <ul class="marketplace-house-bullets">
+            <li>{{ house.profile_type_label }}</li>
+            <li>{{ house.units_summary }}</li>
+            <li>{{ house.get_listing_mode_display }} listing in {{ house.area_label }}</li>
+          </ul>
+        </article>
+        <article class="card marketplace-house-insight-card">
+          <h3>Before You Inspect</h3>
+          <ul class="marketplace-house-bullets">
+            <li>Confirm current availability in chat</li>
+            <li>Ask about payment plan or annual rent terms</li>
+            <li>Request full address and inspection schedule privately</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

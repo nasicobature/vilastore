@@ -1,0 +1,349 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Sales History</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
+  <script src="{% static 'js/offline-web.js' %}" defer></script>
+  <style>
+    @media print {
+      .sidebar,
+      .sidebar-footer,
+      .header-actions {
+        display: none !important;
+      }
+
+      .app-container {
+        display: block;
+      }
+
+      .main-content {
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<div class="app-container">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <i data-lucide="store"></i>
+      </div>
+      <h1>VilaStore</h1>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="{% url 'index' %}" class="nav-link">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="{% url 'product' %}" class="nav-link">
+        <i data-lucide="package"></i>
+        <span>Products</span>
+      </a>
+      <a href="{% url 'inventory' %}" class="nav-link">
+        <i data-lucide="boxes"></i>
+        <span>Inventory</span>
+      </a>
+
+      <a href="{% url 'sales-history' %}" class="nav-link active">
+        <i data-lucide="receipt"></i>
+        <span>Sales History</span>
+      </a>
+      <a href="{% url 'loans' %}" class="nav-link">
+        <i data-lucide="credit-card"></i>
+        <span>Credit</span>
+      </a>
+      <a href="{% url 'expenses' %}" class="nav-link">
+        <i data-lucide="wallet"></i>
+        <span>Expenses</span>
+      </a>
+      <a href="{% url 'reports' %}" class="nav-link">
+        <i data-lucide="bar-chart-3"></i>
+        <span>Reports</span>
+      </a>
+      <a href="{% url 'customer' %}" class="nav-link">
+        <i data-lucide="users"></i>
+        <span>Customers</span>
+      </a>
+      <a href="{% url 'settings' %}" class="nav-link">
+        <i data-lucide="settings"></i>
+        <span>Settings</span>
+      </a>
+    </nav>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <header class="page-header">
+      <div class="page-header-content">
+        <h1>Sales History</h1>
+        <p>View all your sales transactions</p>
+        {% if start_date or end_date %}
+        <p>
+          Showing sales from
+          {{ start_date|date:"M d, Y"|default:"any date" }}
+          to
+          {{ end_date|date:"M d, Y"|default:"today" }}.
+        </p>
+        {% endif %}
+      </div>
+      <div class="header-actions">
+        <form method="get" class="filter-form" style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+          <select name="branch" class="input">
+            <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+            {% for branch in branches %}
+              <option value="{{ branch.id }}" {% if selected_branch and selected_branch.id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+            {% endfor %}
+          </select>
+          <input type="date" name="start_date" class="input" value="{{ start_date|date:'Y-m-d' }}">
+          <input type="date" name="end_date" class="input" value="{{ end_date|date:'Y-m-d' }}">
+          <button type="submit" class="btn btn-outline">Apply</button>
+          <a href="{% url 'sales-history' %}" class="btn btn-ghost">Reset</a>
+          <button type="button" class="btn" onclick="window.print()">Print</button>
+        </form>
+      </div>
+    </header>
+    {% if messages %}
+    <section style="margin-bottom: 1rem;">
+      {% for message in messages %}
+        <div class="card" style="padding: 0.75rem 1rem;">{{ message }}</div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    <!-- SUMMARY CARDS -->
+    <div class="stats-grid" style="margin-bottom: 1.5rem;">
+      <div class="card stat-card">
+        <span>Total Sales</span>
+        <h2>₦{{ total_sales|floatformat:2 }}</h2>
+      </div>
+
+      <div class="card stat-card">
+        <span>Total Profit</span>
+        <h2>₦{{ total_profit|floatformat:2 }}</h2>
+      </div>
+
+      <div class="card stat-card">
+        <span>Total Transactions</span>
+        <h2>{{ total_transactions }}</h2>
+      </div>
+    </div>
+
+    <!-- SALES TABLE -->
+    <div class="table-container">
+      <div class="table-toolbar">
+        <form method="get" class="table-search">
+          {% if selected_branch %}
+            <input type="hidden" name="branch" value="{{ selected_branch.id }}">
+          {% endif %}
+          <input type="text" name="q" class="input" placeholder="Search sales (product, staff, customer, ID)" value="{{ search_query }}">
+          {% if start_date %}
+            <input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}">
+          {% endif %}
+          {% if end_date %}
+            <input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}">
+          {% endif %}
+          <button type="submit" class="btn btn-outline">Search</button>
+          {% if search_query %}
+            <a href="{% url 'sales-history' %}?{% if selected_branch %}branch={{ selected_branch.id }}&{% endif %}{% if start_date %}start_date={{ start_date|date:'Y-m-d' }}&{% endif %}{% if end_date %}end_date={{ end_date|date:'Y-m-d' }}{% endif %}" class="btn btn-ghost">Clear</a>
+          {% endif %}
+        </form>
+      </div>
+      <div class="table-scroll">
+      <table class="table table--responsive" id="salesTable" data-page-size="10">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Channel</th>
+            <th>Handled By</th>
+            <th>Products</th>
+            <th>Total Amount</th>
+            <th>Status</th>
+            <th>Paid</th>
+            <th>Balance</th>
+            <th>Total Profit</th>
+            <th>VAT</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+        {% for sale in sales %}
+          <tr>
+            <td data-label="Date">
+              {{ sale.created_at|date:"M d, Y" }} <br>
+              <small>{{ sale.created_at|time:"H:i" }}</small>
+            </td>
+            <td data-label="Channel">
+              <span class="badge badge-primary">{{ sale.get_sales_channel_display }}</span>
+            </td>
+            <td data-label="Handled By">
+              {% if sale.handled_by_shopboy %}
+                {{ sale.handled_by_shopboy.full_name }} <br>
+                <small>@{{ sale.handled_by_shopboy.username }}</small>
+              {% else %}
+                Shop Owner
+              {% endif %}
+            </td>
+
+            <td data-label="Products">
+              {% for item in sale.items.all %}
+                {{ item.product.name }} (x{{ item.quantity }})<br>
+              {% endfor %}
+            </td>
+
+            <td data-label="Total Amount">₦{{ sale.total_amount|floatformat:2 }}</td>
+            <td data-label="Status">
+              {% if sale.payment_status == "paid" %}
+                <span class="badge badge-success">Paid</span>
+              {% elif sale.payment_status == "partial" %}
+                <span class="badge badge-warning">Partially Paid</span>
+              {% else %}
+                <span class="badge badge-danger">Credit (Unpaid)</span>
+              {% endif %}
+            </td>
+            <td data-label="Paid">₦{{ sale.amount_paid|floatformat:2 }}</td>
+            <td data-label="Balance">₦{{ sale.remaining_balance|floatformat:2 }}</td>
+            <td data-label="Total Profit" class="text-profit">₦{{ sale.total_profit|floatformat:2 }}</td>
+            <td data-label="VAT">
+              {% for item in sale.items.all %}
+                {{ item.product.name }}: {{ item.vat_display }}<br>
+              {% endfor %}
+            </td>
+            <td data-label="Actions">
+              <a class="btn btn-primary btn-sm" href="{% url 'sale_receipt' sale.id %}" target="_blank" rel="noopener">
+                <i data-lucide="receipt"></i> Print Slip
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr data-pagination-ignore="true">
+            <td colspan="11" class="empty-state">
+              <i data-lucide="receipt"></i>
+              <p>No sales found</p>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+
+      </table>
+      </div>
+
+      <div class="table-footer" id="salesTableFooter">
+        <div class="pagination-info" id="salesTablePaginationInfo"></div>
+        <div class="pagination-controls" id="salesTablePaginationControls">
+          <button type="button" class="btn btn-outline btn-sm pagination-btn" data-page="prev">Prev</button>
+          <div class="pagination-pages" id="salesTablePaginationPages"></div>
+          <button type="button" class="btn btn-outline btn-sm pagination-btn" data-page="next">Next</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    lucide.createIcons();
+    setupTablePagination('salesTable');
+});
+
+function setupTablePagination(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table || !table.tBodies.length) {
+        return;
+    }
+
+    const tbody = table.tBodies[0];
+    const allRows = Array.from(tbody.rows);
+    const rows = allRows.filter(row => !row.dataset.paginationIgnore);
+    const emptyRow = allRows.find(row => row.dataset.paginationIgnore);
+    const pageSize = parseInt(table.dataset.pageSize || '10', 10);
+
+    const footer = document.getElementById(tableId + 'Footer');
+    const info = document.getElementById(tableId + 'PaginationInfo');
+    const pages = document.getElementById(tableId + 'PaginationPages');
+    const prevBtn = footer ? footer.querySelector('[data-page="prev"]') : null;
+    const nextBtn = footer ? footer.querySelector('[data-page="next"]') : null;
+
+    if (!footer || !info || !pages || !prevBtn || !nextBtn) {
+        return;
+    }
+
+    if (rows.length === 0) {
+        footer.style.display = 'none';
+        if (emptyRow) {
+            emptyRow.style.display = '';
+        }
+        return;
+    }
+
+    const totalPages = Math.ceil(rows.length / pageSize);
+    if (totalPages <= 1) {
+        footer.style.display = 'none';
+        rows.forEach(row => {
+            row.style.display = '';
+        });
+        if (emptyRow) {
+            emptyRow.style.display = 'none';
+        }
+        return;
+    }
+
+    let currentPage = 1;
+
+    function renderPage(page) {
+        currentPage = Math.min(Math.max(1, page), totalPages);
+        const start = (currentPage - 1) * pageSize;
+        const end = start + pageSize;
+
+        rows.forEach((row, index) => {
+            row.style.display = index >= start && index < end ? '' : 'none';
+        });
+
+        if (emptyRow) {
+            emptyRow.style.display = 'none';
+        }
+
+        const rangeStart = Math.min(start + 1, rows.length);
+        const rangeEnd = Math.min(end, rows.length);
+        info.textContent = `Showing ${rangeStart}-${rangeEnd} of ${rows.length}`;
+
+        prevBtn.disabled = currentPage === 1;
+        nextBtn.disabled = currentPage === totalPages;
+
+        pages.innerHTML = '';
+        for (let i = 1; i <= totalPages; i++) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-outline btn-sm pagination-btn';
+            if (i === currentPage) {
+                button.classList.add('is-active');
+            }
+            button.textContent = i;
+            button.addEventListener('click', () => renderPage(i));
+            pages.appendChild(button);
+        }
+    }
+
+    prevBtn.addEventListener('click', () => renderPage(currentPage - 1));
+    nextBtn.addEventListener('click', () => renderPage(currentPage + 1));
+
+    renderPage(1);
+}
+</script>
+
+</body>
+</html>

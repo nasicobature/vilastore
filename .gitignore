@@ -1,9 +1,10 @@
 # Python / Django
+.env
+.env.local
 __pycache__/
 *.py[cod]
 *.sqlite3
 db.sqlite3
-.env
 .venv/
 venv/
 env/
@@ -11,12 +12,16 @@ env/
 # Django runtime files
 media/
 staticfiles/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Node / Vite
 node_modules/
 dist/
 .vite/
-.env.local
 .env.*.local
 
 # Tooling and OS files
@@ -24,4 +29,3 @@ dist/
 Thumbs.db
 .idea/
 .vscode/
-

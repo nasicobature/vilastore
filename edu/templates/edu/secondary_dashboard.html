@@ -1,0 +1,204 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-background">
+  <aside class="w-64 bg-sidebar flex flex-col flex-shrink-0">
+    <div class="p-4 border-b border-sidebar-border">
+      <div class="flex items-center gap-2">
+        <i data-lucide="graduation-cap" class="text-sidebar-primary-foreground"></i>
+        <div>
+          <h1 class="font-display text-sm font-bold text-sidebar-foreground">EduPortal</h1>
+          <p class="text-xs text-sidebar-foreground/60">Secondary School</p>
+        </div>
+      </div>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+      {% for item in nav_items %}
+        <a
+          href="#{{ item.id }}"
+          class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors {% if forloop.first %}bg-sidebar-accent text-sidebar-accent-foreground font-medium{% else %}text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground{% endif %}"
+        >
+          <i data-lucide="{{ item.icon }}" class="w-4 h-4"></i>
+          <span>{{ item.label }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+
+    <div class="p-3 border-t border-sidebar-border">
+      <a href="/logout/" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-destructive/20 hover:text-destructive transition-colors">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <header class="h-16 bg-card border-b border-border flex items-center justify-between px-4 md:px-6 flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="hidden md:flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+          <i data-lucide="search" class="text-muted-foreground w-4 h-4"></i>
+          <input type="text" placeholder="Search..." class="bg-transparent border-none outline-none text-sm w-48" />
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <button class="relative p-2 rounded-lg hover:bg-muted transition-colors">
+          <i data-lucide="bell" class="w-5 h-5"></i>
+          <span class="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
+        </button>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-semibold">
+            {{ user_name|slice:':1'|upper }}
+          </div>
+          <div class="hidden md:block">
+            <p class="text-sm font-medium">{{ user_name }}</p>
+            <p class="text-xs text-muted-foreground">{{ role_label }}</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+      <div id="dashboard">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-display text-2xl font-bold">{{ role_label }} Dashboard</h2>
+          {% if role == 'admin' %}
+            <a href="/edu/secondary/admin/register/" class="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors">
+              Create User
+            </a>
+          {% endif %}
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {% for stat in stats %}
+            <div class="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow">
+              <div class="flex items-start justify-between">
+                <div>
+                  <p class="text-sm text-muted-foreground">{{ stat.label }}</p>
+                  <p class="text-2xl font-display font-bold mt-1">{{ stat.value }}</p>
+                </div>
+                <div class="p-2.5 rounded-lg bg-primary/10 text-primary">
+                  <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% if role == 'admin' %}
+        <div id="users" class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-semibold">Create User Account</h3>
+            <span class="text-xs text-muted-foreground">Admin-only access</span>
+          </div>
+          <form method="post" action="/edu/secondary/users/create/" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Full Name *</label>
+              <input type="text" name="full_name" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">User ID (auto)</label>
+              <div class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm text-muted-foreground">Generated after submit</div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Email *</label>
+              <input type="email" name="email" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Password *</label>
+              <input type="password" name="password" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Role *</label>
+              <select name="role" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                {% for opt in role_options %}
+                  {% if role == 'admin' or opt.slug != 'admin' %}
+                    <option value="{{ opt.slug }}">{{ opt.label }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Class (students)</label>
+              <select name="academic_class" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select Class</option>
+                {% for cls in classes %}
+                  <option value="{{ cls.id }}">{{ cls.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Create Account
+              </button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+
+      {% if role == 'admin' %}
+        <div id="approve-results" class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Pending Approvals</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-muted/50">
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">User</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Role</th>
+                  <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                {% for p in pending_profiles %}
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-3 text-sm">{{ p.user.username }}</td>
+                    <td class="px-4 py-3 text-sm">{{ p.get_role_display }}</td>
+                    <td class="px-4 py-3 text-sm">
+                      <a href="/approve/{{ p.id }}/" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium">Approve</a>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="3" class="px-4 py-3 text-sm">No pending approvals.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      <div id="fees" class="bg-card rounded-xl border border-border p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-display font-semibold">Fees Summary</h3>
+          <button class="text-sm text-muted-foreground hover:text-foreground">Record Payment</button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <p class="text-sm text-muted-foreground">Collected</p>
+            <p class="text-xl font-display font-bold">?{{ fees_total|floatformat:2 }}</p>
+          </div>
+          <div>
+            <p class="text-sm text-muted-foreground">Outstanding</p>
+            <p class="text-xl font-display font-bold">?{{ fees_pending|floatformat:2 }}</p>
+          </div>
+          <div>
+            <p class="text-sm text-muted-foreground">Receipts</p>
+            <p class="text-xl font-display font-bold">{{ students|length }}</p>
+          </div>
+        </div>
+      </div>
+
+      {% for item in nav_placeholders %}
+        <div id="{{ item.id }}" class="bg-card rounded-xl border border-border p-5">
+          <span class="coming-soon-pill">Coming Soon</span>
+          <h3 class="font-display font-semibold mb-2">{{ item.label }}</h3>
+          <p class="text-sm text-muted-foreground">This module is planned for a future EduPortal release and should not be sold as fully active yet.</p>
+        </div>
+      {% endfor %}
+    </main>
+  </div>
+</div>
+{% endblock %}
+

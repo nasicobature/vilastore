@@ -1,0 +1,383 @@
+{% load static %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ brand_title|default:"VilaStore" }} - Sign Up</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="auth-page">
+  <div class="auth-container">
+    <div class="auth-branding">
+      <div class="auth-branding-content">
+        <div class="auth-logo">
+          <div class="auth-logo-icon">
+            <i data-lucide="store"></i>
+          </div>
+          <h1>{{ brand_title|default:"VilaStore" }}</h1>
+        </div>
+        <h2>{{ brand_heading|default:"Launch With Confidence" }}</h2>
+        <p>{{ brand_description|default:"Create your owner account, verify your email, then set up your shop for marketplace visibility." }}</p>
+        <div class="auth-features">
+          <div class="auth-feature">
+            <i data-lucide="check-circle"></i>
+            <span>Fast account setup</span>
+          </div>
+          <div class="auth-feature">
+            <i data-lucide="shield"></i>
+            <span>Email-verified onboarding</span>
+          </div>
+          <div class="auth-feature">
+            <i data-lucide="image-plus"></i>
+            <span>Marketplace-ready shop profile</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="auth-form-panel">
+      <div class="auth-form-container">
+        <div class="step-indicator">
+          <div class="step" data-step="1">
+            <span class="step-number">1</span>
+            <span class="step-label">Account</span>
+          </div>
+          <div class="step-line"></div>
+          <div class="step" data-step="2">
+            <span class="step-number">2</span>
+            <span class="step-label">Verify Email</span>
+          </div>
+          <div class="step-line"></div>
+          <div class="step" data-step="3">
+            <span class="step-number">3</span>
+            <span class="step-label">{{ setup_step_label|default:"Shop Setup" }}</span>
+          </div>
+        </div>
+
+        {% if messages %}
+        <section style="margin-bottom:1rem;">
+          {% for message in messages %}
+          <div class="card" style="padding:0.75rem 1rem;margin-bottom:0.5rem;">{{ message }}</div>
+          {% endfor %}
+        </section>
+        {% endif %}
+
+        <div class="auth-form">
+          <div class="form-step" data-step="1">
+            <div class="auth-form-header">
+              <h2>{{ account_heading|default:"Create Owner Account" }}</h2>
+              <p>{{ account_description|default:"First create your account details before email verification." }}</p>
+            </div>
+
+            <form method="POST" action="{% url 'signup_create_account' %}" id="accountStepForm">
+              {% csrf_token %}
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="firstName">First Name</label>
+                  <input type="text" id="firstName" name="first_name" class="input" value="{{ prefill_first_name }}" required>
+                </div>
+                <div class="form-group">
+                  <label for="lastName">Last Name</label>
+                  <input type="text" id="lastName" name="last_name" class="input" value="{{ prefill_last_name }}" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="signupUsername">Username (Unique)</label>
+                <div class="input-with-icon">
+                  <i data-lucide="at-sign"></i>
+                  <input type="text" id="signupUsername" name="username" class="input" value="{{ prefill_username }}" placeholder="yourshopname" required>
+                </div>
+                <small style="color:var(--muted-foreground);">Use 3-30 characters: letters, numbers, dot, dash, or underscore.</small>
+              </div>
+
+              <div class="form-group">
+                <label for="signupEmail">Email Address</label>
+                <div class="input-with-icon">
+                  <i data-lucide="mail"></i>
+                  <input type="email" id="signupEmail" name="email" class="input" value="{{ prefill_email }}" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="refCode">Agent Referral Code (Optional)</label>
+                <div class="input-with-icon">
+                  <i data-lucide="link"></i>
+                  <input type="text" id="refCode" name="ref_code" class="input" value="{{ prefill_ref_code }}" placeholder="e.g. AGENT12345">
+                </div>
+                <small style="color:var(--muted-foreground);">If an agent invited you, enter their code or use their link.</small>
+              </div>
+
+              <div class="form-group">
+                <label for="phone">Phone Number</label>
+                <div class="input-with-icon">
+                  <i data-lucide="phone"></i>
+                  <input type="tel" id="phone" name="phone" class="input" value="{{ prefill_phone }}" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="signupPassword">Password</label>
+                <div class="input-with-icon">
+                  <i data-lucide="lock"></i>
+                  <input type="password" id="signupPassword" name="password" class="input" placeholder="Create a strong password" required>
+                </div>
+                <small style="color:var(--muted-foreground);">Must include uppercase, number, and special character.</small>
+              </div>
+
+              <div class="form-group">
+                <label for="signupConfirmPassword">Confirm Password</label>
+                <div class="input-with-icon">
+                  <i data-lucide="lock"></i>
+                  <input type="password" id="signupConfirmPassword" name="confirm_password" class="input" placeholder="Re-enter password" required>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-full">
+                Create Account & Continue
+                <i data-lucide="arrow-right"></i>
+              </button>
+            </form>
+          </div>
+
+          <div class="form-step" data-step="2">
+            <div class="auth-form-header">
+              <h2>Verify Email</h2>
+              <p>{{ verify_description|default:"Verify your email before adding shop information." }}</p>
+            </div>
+
+            <div class="card" style="padding:1rem;margin-bottom:1rem;">
+              <div style="display:flex;align-items:center;gap:0.5rem;">
+                <i data-lucide="mail-check" style="width:18px;height:18px;color:var(--primary);"></i>
+                <strong>{{ prefill_email }}</strong>
+              </div>
+              <p style="font-size:0.875rem;color:var(--muted-foreground);margin-top:0.5rem;">
+                Click send code, check your inbox, then enter the code below.
+              </p>
+            </div>
+
+            <form method="POST" action="{% url 'send_code' %}" id="sendCodeForm" style="margin-bottom:1rem;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline btn-full">
+                <i data-lucide="send"></i>
+                Send Verification Code
+              </button>
+            </form>
+
+            <form method="POST" action="{% url 'verify-code' %}" id="verifyCodeForm">
+              {% csrf_token %}
+              <div class="form-group">
+                <label for="emailCodeInput">Verification Code</label>
+                <div class="input-with-icon">
+                  <i data-lucide="key-round"></i>
+                  <input type="text" id="emailCodeInput" name="code" class="input" placeholder="Enter 6-digit code" required>
+                </div>
+              </div>
+
+              <div class="form-buttons">
+                <button type="button" class="btn btn-outline" onclick="goToStep(1)">
+                  <i data-lucide="arrow-left"></i>
+                  Back
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Verify & Continue
+                  <i data-lucide="arrow-right"></i>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="form-step" data-step="3">
+            <div class="auth-form-header">
+              <h2>{{ setup_heading|default:"Set Up Your Shop" }}</h2>
+              <p>{{ setup_description|default:"Add your business and marketplace details. Payment is required before your dashboard is activated." }}</p>
+            </div>
+
+            <form method="POST" action="{{ setup_form_url|default:'' }}" enctype="multipart/form-data" id="shopSetupForm">
+              {% csrf_token %}
+              <input type="hidden" id="paymentReferenceInput" name="payment_reference">
+              <div class="form-group">
+                <label for="businessName">{{ business_name_label|default:"Business Name" }}</label>
+                <div class="input-with-icon">
+                  <i data-lucide="building"></i>
+                  <input type="text" id="businessName" name="business_name" class="input" value="{{ prefill_business_name }}" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="businessType">{{ business_type_label|default:"Business Type" }}</label>
+                  <select id="businessType" name="business_type" class="input" required>
+                    <option value="">Select business type</option>
+                    <option value="electronics" {% if prefill_business_type == "electronics" %}selected{% endif %}>Electronics Store</option>
+                    <option value="fashion" {% if prefill_business_type == "fashion" %}selected{% endif %}>Fashion & Clothing</option>
+                    <option value="grocery" {% if prefill_business_type == "grocery" %}selected{% endif %}>Grocery Store</option>
+                    <option value="housing" {% if prefill_business_type == "housing" %}selected{% endif %}>Housing / Rentals</option>
+                    <option value="pharmacy" {% if prefill_business_type == "pharmacy" %}selected{% endif %}>Pharmacy</option>
+                    <option value="restaurant" {% if prefill_business_type == "restaurant" %}selected{% endif %}>Restaurant</option>
+                    <option value="other" {% if prefill_business_type == "other" %}selected{% endif %}>Other</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="setupPhone">Phone Number</label>
+                  <input type="tel" id="setupPhone" name="phone" class="input" value="{{ prefill_phone }}" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="signupCountry">Country</label>
+                  <select id="signupCountry" name="country" class="input" required>
+                    <option value="">Select your country</option>
+                    <option value="Nigeria" {% if prefill_country == "Nigeria" %}selected{% endif %}>Nigeria</option>
+                    <option value="Ghana" {% if prefill_country == "Ghana" %}selected{% endif %}>Ghana</option>
+                    <option value="Kenya" {% if prefill_country == "Kenya" %}selected{% endif %}>Kenya</option>
+                    <option value="South Africa" {% if prefill_country == "South Africa" %}selected{% endif %}>South Africa</option>
+                    <option value="Tanzania" {% if prefill_country == "Tanzania" %}selected{% endif %}>Tanzania</option>
+                    <option value="Uganda" {% if prefill_country == "Uganda" %}selected{% endif %}>Uganda</option>
+                    <option value="Cameroon" {% if prefill_country == "Cameroon" %}selected{% endif %}>Cameroon</option>
+                    <option value="Senegal" {% if prefill_country == "Senegal" %}selected{% endif %}>Senegal</option>
+                    <option value="Ethiopia" {% if prefill_country == "Ethiopia" %}selected{% endif %}>Ethiopia</option>
+                    <option value="Rwanda" {% if prefill_country == "Rwanda" %}selected{% endif %}>Rwanda</option>
+                    <option value="Other" {% if prefill_country == "Other" %}selected{% endif %}>Other</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="state">State / Region</label>
+                  <input type="text" id="state" name="state" class="input" value="{{ prefill_state }}" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="address">Business Address</label>
+                <div class="input-with-icon">
+                  <i data-lucide="map-pin"></i>
+                  <input type="text" id="address" name="address" class="input" value="{{ prefill_address }}" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="shopCategory">{{ shop_category_label|default:"Marketplace Category" }}</label>
+                <input type="text" id="shopCategory" name="shop_category" class="input" value="{{ prefill_shop_category }}" placeholder="e.g. Fashion, Electronics">
+              </div>
+
+              <div class="form-group">
+                <label for="shopLocation">{{ shop_location_label|default:"Marketplace Location" }}</label>
+                <input type="text" id="shopLocation" name="shop_location" class="input" value="{{ prefill_shop_location }}" placeholder="e.g. Lagos Island">
+              </div>
+
+              <div class="form-group">
+                <label for="shopDescription">{{ shop_description_label|default:"Shop Description" }}</label>
+                <textarea id="shopDescription" name="shop_description" class="input" rows="3" placeholder="Tell buyers about your shop">{{ prefill_shop_description }}</textarea>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="signupProfileImage">Owner Profile Image (optional)</label>
+                  <input type="file" accept="image/*" id="signupProfileImage" name="profile_image" class="input">
+                </div>
+                <div class="form-group">
+                  <label for="marketplaceLogo">Marketplace Logo (optional)</label>
+                  <input type="file" accept="image/*" id="marketplaceLogo" name="marketplace_logo" class="input">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="marketplaceCoverImage">Marketplace Background / Cover Image</label>
+                <input type="file" accept="image/*" id="marketplaceCoverImage" name="marketplace_cover_image" class="input">
+                <small style="color:var(--muted-foreground);">This image appears on your marketplace shop card and shop page.</small>
+              </div>
+
+              <div class="form-group">
+                <label>Pricing</label>
+                <div class="plan-options plan-options-compact" style="margin-bottom:0;">
+                  {% for key, plan in plans.items %}
+                  <label class="plan-option">
+                    <input
+                      type="radio"
+                      name="plan"
+                      value="{{ key }}"
+                      {% if key == prefill_plan %}checked{% endif %}
+                      {% if plan.is_custom %}disabled{% endif %}
+                    >
+                    <div class="plan-card {% if key == 'growth' %}popular{% endif %}">
+                      {% if key == 'growth' %}<div class="plan-badge">Recommended</div>{% endif %}
+                      <div class="plan-header">
+                        <h3>{{ plan.name }}</h3>
+                        <div class="plan-price">
+                          {% if plan.is_custom %}
+                          <span class="price">Custom</span>
+                          <span class="period">contact us</span>
+                          {% else %}
+                          <span class="price">&#8358;{{ plan.monthly_fee|floatformat:0 }}</span>
+                          <span class="period">/month</span>
+                          {% endif %}
+                        </div>
+                      </div>
+                      <p style="color:var(--muted-foreground);font-size:0.85rem;margin:0 0 0.75rem 0;">{{ plan.tagline }} - {{ plan.audience }}</p>
+                      <div class="plan-section-title">Limits</div>
+                      <ul class="plan-features">
+                        <li><i data-lucide="check"></i> {% if plan.is_custom %}Custom onboarding{% else %}Payment required before activation: &#8358;{{ plan.monthly_fee|floatformat:0 }} subscription{% endif %}</li>
+                        {% for label, value in plan.limits %}
+                        <li><i data-lucide="check"></i> <span><strong>{{ label }}:</strong> {{ value }}</span></li>
+                        {% endfor %}
+                      </ul>
+                      <div class="plan-section-title">Plan features</div>
+                      <ul class="plan-features">
+                        {% for feature in plan.features %}
+                        <li><i data-lucide="check"></i> <span>{{ feature }}</span></li>
+                        {% endfor %}
+                      </ul>
+                      <div class="plan-section-title">Category access</div>
+                      <ul class="plan-features">
+                        {% for label, value in plan.feature_groups %}
+                        <li><i data-lucide="check"></i> <span><strong>{{ label }}:</strong> {{ value }}</span></li>
+                        {% endfor %}
+                      </ul>
+                    </div>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="form-buttons">
+                <button type="button" class="btn btn-outline" onclick="goToStep(2)">
+                  <i data-lucide="arrow-left"></i>
+                  Back
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  <i data-lucide="check-circle"></i>
+                  {{ signup_finish_label|default:"Continue to Payment" }}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="auth-footer">
+          <p>Already have an account?</p>
+          <a href="{% url 'login' %}" class="link">Sign in here</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script>
+    window.CURRENT_STEP = parseInt('{{ current_step|default:"1" }}', 10);
+    window.EMAIL_VERIFIED = {{ email_verified|yesno:"true,false" }};
+    window.FLUTTERWAVE_PUBLIC_KEY = "{{ FLUTTERWAVE_PUBLIC_KEY|default:''|escapejs }}";
+    window.SIGNUP_EMAIL = "{{ prefill_email|default:''|escapejs }}";
+  </script>
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
+  <script src="{% static 'js/storage.js' %}"></script>
+  <script src="{% static 'js/utils.js' %}"></script>
+  <script src="{% static 'js/auth.js' %}?v=20260303"></script>
+</body>
+</html>

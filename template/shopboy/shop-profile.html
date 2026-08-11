@@ -1,0 +1,60 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VilaStore - Staff Profile</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app-container">
+    <main class="main-content" style="margin-left:0;max-width:900px;margin-right:auto;">
+      <header class="page-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h1>Staff Panel</h1>
+          <p>Welcome, {{ shopboy.full_name }}</p>
+        </div>
+        <a href="{% url 'shopboy_logout' %}" class="btn btn-outline">
+          <i data-lucide="log-out"></i> Logout
+        </a>
+      </header>
+
+      <section class="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-card-header"><span class="stat-card-title">Staff Name</span></div>
+          <div class="stat-card-value" style="font-size:1.25rem;">{{ shopboy.full_name }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header"><span class="stat-card-title">Username</span></div>
+          <div class="stat-card-value" style="font-size:1.25rem;">{{ shopboy.username }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-header"><span class="stat-card-title">Marketplace Access</span></div>
+          <div class="stat-card-value" style="font-size:1.25rem;">
+            {% if shopboy.can_use_marketplace %}Enabled{% else %}Disabled{% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Assigned Shop</h3>
+        <div style="margin-top:1rem;display:grid;gap:0.75rem;">
+          <div><strong>Business Name:</strong> {{ owner.business_name }}</div>
+          <div><strong>Owner:</strong> {{ owner.first_name }} {{ owner.last_name }}</div>
+          <div><strong>Phone:</strong> {{ owner.phone }}</div>
+          <div><strong>Address:</strong> {{ owner.address }}</div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

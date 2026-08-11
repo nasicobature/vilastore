@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: vilastore
+    runtime: python
+    buildCommand: bash build.sh
+    startCommand: bash -c "python manage.py migrate && gunicorn VilaStore.wsgi:application --bind 0.0.0.0:$PORT"
+    healthCheckPath: /healthz/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.2
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vilastore-db
+          property: connectionString
+      - key: ALLOWED_HOSTS
+        value: vilastore.onrender.com,vilastore.store,www.vilastore.store
+      - key: MEDIA_ROOT
+        value: /var/data/media
+      - key: AI_INVENTORY_PROVIDER
+        value: openai
+      - key: OPENAI_INVENTORY_MODEL
+        value: gpt-5.2
+      - key: OPENAI_API_KEY
+        sync: false
+    disk:
+      name: vilastore-media
+      mountPath: /var/data
+      sizeGB: 1
+databases:
+  - name: vilastore-db

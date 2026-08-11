@@ -1,0 +1,167 @@
+﻿{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ profile.user.business_name|default:profile.user.username }} - Order Chat</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <form style="display:none;">{% csrf_token %}</form>
+  <header class="marketplace-header">
+    <div class="marketplace-header-inner {% if not is_seller %}marketplace-header-inner-stacked{% endif %}">
+      <div class="marketplace-header-top">
+        <a href="{% if is_seller %}{% url 'marketplace' %}{% else %}{% url 'marketplace_home' %}{% endif %}" class="marketplace-logo">
+          <div class="sidebar-logo-icon"><i data-lucide="store"></i></div>
+          <span>VilaStore</span>
+        </a>
+
+        <div class="order-chat-title">
+          <h3>{{ profile.user.business_name|default:profile.user.username }}</h3>
+          <span>Order #{{ order.public_id|stringformat:"s"|slice:":8" }}</span>
+        </div>
+
+        <div class="marketplace-actions">
+          <span class="badge badge-{% if order.status == 'cancelled' %}danger{% else %}primary{% endif %}">
+            {% for key,label in status_choices %}
+              {% if key == order.status %}
+                <i data-lucide="{% if key == 'pending' %}clock{% elif key == 'confirmed' %}check-circle{% elif key == 'paid' %}credit-card{% elif key == 'shipped' %}truck{% elif key == 'delivered' %}package{% else %}x-circle{% endif %}" style="width:12px;height:12px;"></i>
+                {{ label }}
+              {% endif %}
+            {% endfor %}
+          </span>
+          {% if is_seller %}
+          <a href="{% url 'shopboy_marketplace_orders' %}" class="btn btn-ghost"><i data-lucide="arrow-left"></i> Orders</a>
+          {% else %}
+          <a href="{% url 'marketplace_shop' profile.user.username %}" class="btn btn-ghost"><i data-lucide="arrow-left"></i> Back</a>
+          {% endif %}
+        </div>
+      </div>
+      {% if not is_seller %}
+      {% include 'partials/marketplace-buyer-nav.html' with buyer=order.buyer marketplace_active_tab='marketplace' %}
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="marketplace-container order-chat-layout" data-order="{{ order.public_id }}" data-access="{{ access_token }}" data-is-seller="{{ is_seller|yesno:'1,0' }}">
+    <aside class="marketplace-sidebar order-chat-sidebar">
+      <div class="card order-chat-card">
+        <h4 class="order-chat-card-title">Shop</h4>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+          {% if profile.logo %}
+            <img src="{{ profile.logo.url }}" alt="{{ profile.user.business_name }}" style="width:40px;height:40px;border-radius:0.5rem;object-fit:cover;">
+          {% else %}
+            <div style="width:40px;height:40px;border-radius:0.5rem;background:var(--card);display:flex;align-items:center;justify-content:center;">
+              <i data-lucide="store"></i>
+            </div>
+          {% endif %}
+          <div>
+            <p style="font-weight:600;">{{ profile.user.business_name|default:profile.user.username }}</p>
+            <p style="font-size:0.75rem;color:var(--muted-foreground);">@{{ profile.user.username }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card order-chat-card">
+        <h4 class="order-chat-card-title">Order Items</h4>
+        {% for item in items %}
+        <div class="order-chat-item-row">
+          <span class="order-chat-item-name">{{ item.product.name }} x {{ item.quantity }}</span>
+          <span class="order-chat-item-price">&#8358;{{ item.unit_price|floatformat:2 }}</span>
+        </div>
+        {% endfor %}
+        <hr style="border:none;border-top:1px solid var(--border);margin:0.5rem 0;">
+        <div class="order-chat-total">
+          <span>Total</span>
+          <span>&#8358;{{ order.total_amount|floatformat:2 }}</span>
+        </div>
+      </div>
+
+      <div class="card order-chat-card">
+        <h4 class="order-chat-card-title">Buyer</h4>
+        <p style="font-weight:600;">{{ order.buyer_name }}</p>
+        <p style="font-size:0.875rem;color:var(--muted-foreground);">{{ order.buyer_contact }}</p>
+        {% if order.buyer_address %}
+        <p style="font-size:0.75rem;color:var(--muted-foreground);margin-top:0.25rem;">{{ order.buyer_address }}</p>
+        {% endif %}
+      </div>
+
+      <div class="card order-chat-card">
+        <h4 class="order-chat-card-title">Handled By</h4>
+        {% if order.assigned_shopboy %}
+        <p style="font-weight:600;">{{ order.assigned_shopboy.full_name }}</p>
+        <p style="font-size:0.75rem;color:var(--muted-foreground);">@{{ order.assigned_shopboy.username }}</p>
+        {% else %}
+        <p style="font-weight:600;">Shop Owner</p>
+        {% endif %}
+      </div>
+
+      <div class="card order-chat-card order-chat-note">
+        <div style="display:flex;gap:0.75rem;align-items:flex-start;">
+          <i data-lucide="credit-card" style="width:20px;height:20px;color:var(--primary);flex-shrink:0;margin-top:2px;"></i>
+          <div>
+            <p style="font-size:0.875rem;font-weight:500;">Payment Instructions</p>
+            <p style="font-size:0.75rem;color:var(--muted-foreground);margin-top:0.25rem;">The shop owner will send you payment details through this chat. Do not pay until you receive official payment instructions.</p>
+          </div>
+        </div>
+      </div>
+
+      {% if is_seller and order.status != "delivered" and order.status != "cancelled" %}
+      <div class="card order-chat-card">
+        <h4 class="order-chat-card-title">Actions</h4>
+        {% if next_status %}
+        <button class="btn btn-primary btn-full" data-next-status="{{ next_status }}" type="button" id="nextStatusBtn">
+          <i data-lucide="{% if next_status == 'confirmed' %}check-circle{% elif next_status == 'paid' %}credit-card{% elif next_status == 'shipped' %}truck{% else %}package{% endif %}"></i>
+          Mark as {{ next_status|title }}
+        </button>
+        {% endif %}
+        <button class="btn btn-outline btn-full" style="margin-top:0.5rem;" type="button" id="cancelOrderBtn">
+          <i data-lucide="x-circle"></i> Cancel Order
+        </button>
+      </div>
+      {% endif %}
+    </aside>
+
+    <main class="marketplace-main order-chat-main">
+      <div class="order-chat-messages" id="chatMessages">
+        <div style="text-align:center;margin-bottom:1rem;">
+          <span class="badge badge-secondary" style="font-size:0.75rem;">Order created on {{ order.created_at|date:"M d, Y" }}</span>
+        </div>
+        {% if chat_messages|length == 0 %}
+        <div style="text-align:center;padding:3rem;">
+          <i data-lucide="store" style="width:48px;height:48px;margin:0 auto 1rem;display:block;color:var(--muted-foreground);"></i>
+          <p style="color:var(--muted-foreground);">
+            {% if is_seller %}A customer placed an order. Start the conversation!{% else %}Your order has been sent. The shop owner will respond shortly.{% endif %}
+          </p>
+        </div>
+        {% endif %}
+
+        {% for msg in chat_messages %}
+        <div class="chat-bubble-row {% if msg.sender_type == 'buyer' %}own{% endif %}">
+          <div class="chat-avatar"><i data-lucide="{% if msg.sender_type == 'seller' %}store{% elif msg.sender_type == 'system' %}info{% else %}user{% endif %}"></i></div>
+          <div class="chat-bubble {% if msg.sender_type == 'buyer' %}chat-bubble-own{% else %}chat-bubble-other{% endif %}">
+            <p>{{ msg.message|linebreaksbr }}</p>
+            <span class="chat-time">{{ msg.created_at|date:"H:i" }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="order-chat-input-area">
+        <div class="order-chat-input-row">
+          <input type="text" class="input" id="messageInput" placeholder="Type a message..." autocomplete="off">
+          <button class="btn btn-primary" id="sendBtn" type="button"><i data-lucide="send"></i></button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+  <script src="{% static 'js/order-chat.js' %}"></script>
+</body>
+</html>
