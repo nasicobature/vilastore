@@ -23,6 +23,7 @@ from core.utils.notifications import send_email
 
 EDU_DEFAULT_BILLING_CYCLE = 'termly'
 EDU_DEFAULT_PACKAGE = 'starter'
+EDU_REGISTRATION_PACKAGES = {'starter', 'basic', 'growth', 'standard', 'premium', 'enterprise'}
 EDU_PRICING_PACKAGES = [
     ('starter', 'Starter', '1 - 50 Students', EDU_PACKAGE_LIMITS['starter'], Decimal('20000.00')),
     ('basic', 'Basic', '51 - 100 Students', EDU_PACKAGE_LIMITS['basic'], Decimal('30000.00')),
@@ -184,7 +185,7 @@ def _activate_trial_access(institution, profile):
     institution.trial_end_date = today + timedelta(days=EDU_TRIAL_DAYS)
     institution.subscription_expiry_date = institution.trial_end_date
     institution.subscription_active_until = institution.trial_end_date
-    institution.trial_student_limit = _edu_trial_student_limit()
+    institution.trial_student_limit = institution.student_limit or institution.package_student_limit or _edu_trial_student_limit()
     institution.has_used_free_trial = True
     institution.subscription_last_payment_reference = '3-day-free-trial'
     institution.subscription_last_paid_at = None
@@ -1255,6 +1256,10 @@ def _school_register_context(default_school_type='secondary'):
         'type_choices': Institution.TYPE_CHOICES,
         'default_school_type': default_school_type,
         'reserved_subdomains': sorted(RESERVED_EDU_SUBDOMAINS),
+        'pricing_packages': _edu_pricing_packages(),
+        'subscription_plans': _edu_subscription_plans(),
+        'default_subscription_package': EDU_DEFAULT_PACKAGE,
+        'default_subscription_cycle': EDU_DEFAULT_BILLING_CYCLE,
     }
 
 
@@ -1283,6 +1288,8 @@ def _register_school_with_trial(request, default_school_type='secondary'):
         admin_phone = request.POST.get('admin_phone', '').strip()
         admin_password = request.POST.get('admin_password', '').strip()
         confirm_password = request.POST.get('confirm_password', '').strip()
+        subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
+        billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
 
         required_values = [
             institution_name,
@@ -1297,6 +1304,8 @@ def _register_school_with_trial(request, default_school_type='secondary'):
             admin_phone,
             admin_password,
             confirm_password,
+            subscription_package,
+            billing_cycle,
             school_code,
         ]
 
@@ -1304,6 +1313,8 @@ def _register_school_with_trial(request, default_school_type='secondary'):
             messages.error(request, 'Please complete all required school, administrator, and portal fields.')
         elif admin_password != confirm_password:
             messages.error(request, 'Password and confirm password do not match.')
+        elif subscription_package not in EDU_REGISTRATION_PACKAGES:
+            messages.error(request, 'Please choose a valid registration package.')
         elif not _email_is_available(admin_email):
             messages.error(request, 'That administrator email address is already used by another account.')
         elif school_code in RESERVED_EDU_SUBDOMAINS:
@@ -1313,8 +1324,6 @@ def _register_school_with_trial(request, default_school_type='secondary'):
         else:
             try:
                 with transaction.atomic():
-                    subscription_package = EDU_DEFAULT_PACKAGE
-                    billing_cycle = EDU_DEFAULT_BILLING_CYCLE
                     admin_role = 'vc' if institution_type == 'tertiary' else 'admin'
                     staff_prefix = 'TERSTF' if institution_type == 'tertiary' else 'SECSTF'
                     institution = Institution.objects.create(
@@ -1383,6 +1392,8 @@ def _register_school_with_trial(request, default_school_type='secondary'):
                     'admin_username': admin_username,
                     'portal_url': _institution_portal_url(institution),
                     'trial_days': EDU_TRIAL_DAYS,
+                    'selected_package': _edu_package(subscription_package),
+                    'selected_plan': _edu_subscription_plans(subscription_package)[billing_cycle],
                 })
             except IntegrityError:
                 messages.error(request, 'School portal name or administrator ID already exists.')

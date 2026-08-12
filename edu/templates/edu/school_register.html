@@ -14,16 +14,17 @@
       <div>
         <p class="registration-eyebrow">Register School</p>
         <h1 class="registration-title">Create your school portal</h1>
-        <p class="registration-copy">Complete the school profile, create the first admin account, choose your portal name, and start the 3-day free trial.</p>
+        <p class="registration-copy">Complete the school profile, create the first admin account, choose a package, set your portal name, and start the 3-day free trial.</p>
       </div>
     </div>
 
     <div class="registration-card">
-      <ol class="wizard-steps wizard-steps-four" data-wizard-steps>
+      <ol class="wizard-steps" data-wizard-steps>
         <li class="wizard-step is-active" data-step-indicator="0"><span>1</span><strong>School</strong></li>
         <li class="wizard-step" data-step-indicator="1"><span>2</span><strong>Admin</strong></li>
-        <li class="wizard-step" data-step-indicator="2"><span>3</span><strong>Portal</strong></li>
-        <li class="wizard-step" data-step-indicator="3"><span>4</span><strong>Trial</strong></li>
+        <li class="wizard-step" data-step-indicator="2"><span>3</span><strong>Package</strong></li>
+        <li class="wizard-step" data-step-indicator="3"><span>4</span><strong>Portal</strong></li>
+        <li class="wizard-step" data-step-indicator="4"><span>5</span><strong>Confirm</strong></li>
       </ol>
 
       <form method="post" enctype="multipart/form-data" class="wizard-form" data-registration-wizard data-school-register-form novalidate>
@@ -93,6 +94,49 @@
 
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
+            <h2>Choose Your Package</h2>
+            <p>Select the package and billing period the school will continue with after the 3-day free trial.</p>
+          </div>
+          <div class="billing-switch registration-billing-switch">
+            <label>
+              <input type="radio" name="subscription_billing_cycle" value="termly" data-review-label="Billing" data-billing-cycle {% if default_subscription_cycle == 'termly' %}checked{% endif %} />
+              <span class="plan-card-title">Per Term</span>
+            </label>
+            <label>
+              <input type="radio" name="subscription_billing_cycle" value="session" data-review-label="Billing" data-billing-cycle {% if default_subscription_cycle == 'session' %}checked{% endif %} />
+              <span class="plan-card-title">Per Session</span> <span>Save 10%</span>
+            </label>
+          </div>
+          <div class="package-grid registration-package-grid">
+            {% for package in pricing_packages %}
+              {% if package.code != 'enterprise-plus' %}
+                <label class="package-card registration-package-card">
+                  <input
+                    type="radio"
+                    name="subscription_package"
+                    value="{{ package.code }}"
+                    required
+                    data-review-label="Selected Package"
+                    data-package-option
+                    data-package-name="{{ package.name }}"
+                    data-student-limit="{{ package.student_limit }}"
+                    data-student-range="{{ package.student_range }}"
+                    data-term-price="NGN {{ package.term_amount_display }}"
+                    data-session-price="NGN {{ package.session_amount_display }}"
+                    {% if package.code == default_subscription_package %}checked{% endif %}
+                  />
+                  <span class="plan-card-title">{{ package.name }}</span>
+                  <strong data-package-price>NGN {{ package.term_amount_display }}</strong>
+                  <small>{{ package.student_range }}</small>
+                  <em data-package-billing-label>/ term</em>
+                </label>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-wizard-panel>
+          <div class="section-heading">
             <h2>School Portal</h2>
             <p>Your portal name is generated from the school name, and you can edit it before creating the school.</p>
           </div>
@@ -114,17 +158,19 @@
 
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
-            <h2>Start Your 3-Day Free Trial</h2>
-            <p>3 days free. No payment required. You can choose a paid package after exploring the portal.</p>
+            <h2>Confirmation</h2>
+            <p>Review the selected school, package, billing, free trial, and portal before creating the account.</p>
           </div>
           <div class="trial-start-card">
             <div>
               <span>Free Trial</span>
               <strong>3 days free</strong>
-              <small>No package payment is required during registration.</small>
+              <small>No payment is required now. Payment is due only after the trial expires.</small>
             </div>
             <i data-lucide="badge-check"></i>
           </div>
+          <input type="hidden" value="3 Days" data-review-label="Free Trial" />
+          <input type="hidden" value="" data-selected-student-limit data-review-label="Student Limit" />
           <div class="review-grid" data-review-output></div>
           <div class="verification-notice">
             <i data-lucide="shield-check"></i>
@@ -155,6 +201,9 @@
     const portalPreview = form.querySelector('[data-portal-preview]');
     const message = form.querySelector('[data-subdomain-message]');
     const submitButton = form.querySelector('[data-subdomain-submit]');
+    const billingInputs = Array.from(form.querySelectorAll('[data-billing-cycle]'));
+    const packageInputs = Array.from(form.querySelectorAll('[data-package-option]'));
+    const studentLimitInput = form.querySelector('[data-selected-student-limit]');
     const checkUrl = "{% url 'edu:subdomain_check' %}";
     let userEditedCode = false;
     let availabilityTimer = null;
@@ -230,7 +279,39 @@
       }
     });
 
+    const selectedBilling = () => {
+      const selected = billingInputs.find((input) => input.checked);
+      return selected ? selected.value : 'termly';
+    };
+
+    const syncPackagePrices = () => {
+      const cycle = selectedBilling();
+      packageInputs.forEach((input) => {
+        const card = input.closest('.registration-package-card');
+        const price = card ? card.querySelector('[data-package-price]') : null;
+        const label = card ? card.querySelector('[data-package-billing-label]') : null;
+        if (price) {
+          price.textContent = cycle === 'session' ? input.dataset.sessionPrice : input.dataset.termPrice;
+        }
+        if (label) {
+          label.textContent = cycle === 'session' ? '/ session' : '/ term';
+        }
+      });
+      const selectedPackage = packageInputs.find((input) => input.checked);
+      if (studentLimitInput && selectedPackage) {
+        studentLimitInput.value = `${Number(selectedPackage.dataset.studentLimit || 0).toLocaleString()} students`;
+      }
+    };
+
+    billingInputs.forEach((input) => {
+      input.addEventListener('change', syncPackagePrices);
+    });
+    packageInputs.forEach((input) => {
+      input.addEventListener('change', syncPackagePrices);
+    });
+
     checkAvailability();
+    syncPackagePrices();
   })();
 </script>
 {% endblock %}

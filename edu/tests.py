@@ -1,9 +1,7 @@
 from datetime import timedelta
-from decimal import Decimal
 from unittest.mock import patch
 
 from django.test import TestCase, override_settings
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
@@ -15,7 +13,6 @@ from .models import (
     ClassSubject,
     Fee,
     Institution,
-    InstitutionDocumentVerification,
     Payment,
     Profile,
     Result,
@@ -35,213 +32,154 @@ class EduPortalRoutingTests(TestCase):
         response = self.client.get(reverse("edu:index"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'href="/edu/secondary/login/"')
-        self.assertContains(response, 'href="/edu/tertiary/login/"')
+        self.assertContains(response, 'href="/edu/register/"')
+        self.assertContains(response, "Your Personal School Portal")
         self.assertNotContains(response, 'href="/secondary/login/"')
         self.assertNotContains(response, 'href="/tertiary/login/"')
 
     def test_index_shows_launch_pricing_and_coming_soon_modules(self):
         response = self.client.get(reverse("edu:index"))
 
-        self.assertContains(response, "Monthly Plan")
-        self.assertContains(response, "NGN 250,000")
-        self.assertContains(response, "Termly Plan")
-        self.assertContains(response, "NGN 70,000")
-        self.assertContains(response, "Standard 3-month cost: NGN 75,000")
-        self.assertContains(response, "Termly discount: NGN 5,000")
+        self.assertContains(response, "Simple Pricing. Built for Value.")
+        self.assertContains(response, "Per Term")
+        self.assertContains(response, "Per Session")
+        self.assertContains(response, "NGN 20,000")
+        self.assertContains(response, "NGN 30,000")
+        self.assertContains(response, "Save 10%")
         self.assertContains(response, "Coming Soon Modules")
 
-    def test_edu_login_pages_exist(self):
+    def test_general_edu_login_pages_redirect_to_main_site(self):
         secondary = self.client.get(reverse("edu:secondary_login"))
         tertiary = self.client.get(reverse("edu:tertiary_login"))
 
-        self.assertEqual(secondary.status_code, 200)
-        self.assertEqual(tertiary.status_code, 200)
+        self.assertEqual(secondary.status_code, 302)
+        self.assertEqual(tertiary.status_code, 302)
+        self.assertEqual(secondary["Location"], reverse("edu:index"))
+        self.assertEqual(tertiary["Location"], reverse("edu:index"))
 
-    def test_registration_pages_render_verification_wizard(self):
+    def test_registration_pages_render_school_package_trial_wizard(self):
         secondary = self.client.get(reverse("edu:secondary_register"))
         tertiary = self.client.get(reverse("edu:tertiary_register"))
 
         for response in (secondary, tertiary):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, 'class="wizard-form"')
-            self.assertContains(response, "Verification Documents")
-            self.assertContains(response, "Subscription Plan")
-            self.assertContains(response, "NGN 250,000")
-            self.assertContains(response, "NGN 70,000")
-            self.assertContains(response, "Submit & Pay")
+            self.assertContains(response, "Choose Your Package")
+            self.assertContains(response, "School Portal")
+            self.assertContains(response, "Create School & Start Free Trial")
+            self.assertContains(response, "NGN 30,000")
 
 
 class EduPortalVerificationRegistrationTests(TestCase):
-    def _file(self, name):
-        return SimpleUploadedFile(name, b"test document", content_type="application/pdf")
-
-    def _verification_files(self):
-        return {
-            "cac_certificate": self._file("cac-certificate.pdf"),
-            "cac_status_report": self._file("cac-status-report.pdf"),
-            "ministry_approval": self._file("ministry-approval.pdf"),
-            "tin_certificate": self._file("tin-certificate.pdf"),
-            "school_letterhead": self._file("letterhead.pdf"),
-            "school_stamp": self._file("school-stamp.pdf"),
-            "owner_valid_id": self._file("owner-id.pdf"),
-            "utility_bill": self._file("utility-bill.pdf"),
-        }
-
-    def test_secondary_registration_requires_verification_documents(self):
-        response = self.client.post(reverse("edu:secondary_register"), {
-            "institution_name": "Missing Docs Academy",
+    def _registration_payload(self, **overrides):
+        data = {
+            "institution_name": "Trial Package Academy",
+            "institution_type": "secondary",
+            "address": "1 School Road",
+            "state": "Lagos",
+            "lga": "Ikeja",
+            "phone_number": "08000000000",
+            "email": "school@example.com",
             "admin_full_name": "School Admin",
             "admin_password": "StrongPass123!",
+            "confirm_password": "StrongPass123!",
             "admin_email": "admin@example.com",
             "admin_phone": "08000000000",
+            "school_code": "trialpackageacademy",
+            "subscription_package": "basic",
+            "subscription_billing_cycle": "session",
+        }
+        data.update(overrides)
+        return data
+
+    def test_secondary_registration_requires_simple_required_fields(self):
+        response = self.client.post(reverse("edu:secondary_register"), {
+            "institution_name": "Missing Simple Fields Academy",
+            "admin_full_name": "School Admin",
+            "admin_password": "StrongPass123!",
+            "confirm_password": "StrongPass123!",
+            "admin_email": "admin@example.com",
         })
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Please complete verification requirements")
-        self.assertFalse(Institution.objects.filter(name="Missing Docs Academy").exists())
+        self.assertContains(response, "Please complete all required school, administrator, and portal fields.")
+        self.assertFalse(Institution.objects.filter(name="Missing Simple Fields Academy").exists())
 
-    def test_secondary_registration_creates_pending_verification_school(self):
-        data = {
-            "institution_name": "Verified Pending Academy",
-            "admin_full_name": "School Admin",
-            "admin_password": "StrongPass123!",
-            "admin_email": "admin@example.com",
-            "admin_phone": "08000000000",
-            "cac_number": "RC123456",
-            "tin_number": "TIN123456",
-            "owner_id_number": "12345678901",
-        }
-        data.update(self._verification_files())
+    def test_secondary_registration_creates_school_admin_and_trial_with_selected_package(self):
+        response = self.client.post(reverse("edu:secondary_register"), self._registration_payload())
 
-        response = self.client.post(reverse("edu:secondary_register"), data)
-
-        institution = Institution.objects.get(name="Verified Pending Academy")
-        self.assertRedirects(
-            response,
-            reverse("edu:secondary_registration_payment", kwargs={"school_code": institution.school_code}),
-        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Your School Portal Is Ready!")
+        institution = Institution.objects.get(name="Trial Package Academy")
         profile = Profile.objects.get(institution=institution, role="admin")
-        self.assertEqual(institution.verification_status, "pending")
-        self.assertEqual(institution.registration_payment_status, "pending")
-        self.assertEqual(institution.subscription_billing_cycle, "termly")
-        self.assertEqual(institution.registration_payment_amount, Decimal("70000.00"))
+        self.assertEqual(institution.school_code, "trialpackageacademy")
+        self.assertEqual(institution.subscription_package, "basic")
+        self.assertEqual(institution.subscription_billing_cycle, "session")
+        self.assertEqual(institution.student_limit, 100)
+        self.assertEqual(institution.trial_student_limit, 100)
+        self.assertEqual(institution.subscription_status, "trial")
+        self.assertTrue(institution.has_used_free_trial)
+        self.assertEqual((institution.trial_end_date - institution.trial_start_date).days, 3)
         self.assertEqual(profile.user.email, "admin@example.com")
-        self.assertFalse(profile.is_approved)
-        self.assertTrue(institution.cac_certificate)
-        self.assertTrue(institution.owner_valid_id)
-        documents = InstitutionDocumentVerification.objects.filter(institution=institution)
-        self.assertEqual(documents.count(), 8)
-        self.assertEqual(
-            documents.get(document_type="cac_certificate").reference_value,
-            "RC123456",
+        self.assertTrue(profile.is_approved)
+        self.assertTrue(profile.email_verified)
+
+    def test_registration_rejects_taken_or_reserved_subdomain(self):
+        Institution.objects.create(
+            name="Existing Academy",
+            school_code="existingacademy",
+            institution_type="secondary",
         )
-        self.assertEqual(
-            documents.get(document_type="tin_certificate").reference_value,
-            "TIN123456",
+        taken = self.client.post(reverse("edu:secondary_register"), self._registration_payload(
+            institution_name="Taken Academy",
+            school_code="existingacademy",
+            admin_email="taken@example.com",
+        ))
+        reserved = self.client.post(reverse("edu:secondary_register"), self._registration_payload(
+            institution_name="Reserved Academy",
+            school_code="login",
+            admin_email="reserved@example.com",
+        ))
+
+        self.assertContains(taken, "Portal name already taken. Choose another.")
+        self.assertContains(reserved, "That school portal name is reserved.")
+
+    def test_subdomain_availability_endpoint(self):
+        Institution.objects.create(
+            name="Availability Academy",
+            school_code="availability",
+            institution_type="secondary",
         )
-        self.assertEqual(
-            documents.get(document_type="owner_valid_id").reference_value,
-            "12345678901",
-        )
-        self.assertTrue(documents.filter(status="manual_review").exists())
 
-    def test_secondary_registration_can_choose_monthly_subscription(self):
-        data = {
-            "institution_name": "Monthly Academy",
-            "admin_full_name": "School Admin",
-            "admin_password": "StrongPass123!",
-            "admin_email": "monthly-admin@example.com",
-            "admin_phone": "08000000002",
-            "subscription_billing_cycle": "monthly",
-        }
-        data.update(self._verification_files())
+        available = self.client.get(reverse("edu:subdomain_check"), {"subdomain": "new-school"})
+        taken = self.client.get(reverse("edu:subdomain_check"), {"subdomain": "availability"})
+        reserved = self.client.get(reverse("edu:subdomain_check"), {"subdomain": "register"})
 
-        response = self.client.post(reverse("edu:secondary_register"), data)
+        self.assertTrue(available.json()["available"])
+        self.assertFalse(taken.json()["available"])
+        self.assertFalse(reserved.json()["available"])
 
-        institution = Institution.objects.get(name="Monthly Academy")
-        self.assertRedirects(
-            response,
-            reverse("edu:secondary_registration_payment", kwargs={"school_code": institution.school_code}),
-        )
-        self.assertEqual(institution.subscription_billing_cycle, "monthly")
-        self.assertEqual(institution.registration_payment_amount, Decimal("250000.00"))
-
-        payment_page = self.client.get(
-            reverse("edu:secondary_registration_payment", kwargs={"school_code": institution.school_code})
-        )
-        self.assertContains(payment_page, "Monthly Plan")
-        self.assertContains(payment_page, "NGN 250,000")
-
-    @override_settings(EDU_CAC_VERIFICATION_URL="https://verify.example.test/cac")
-    @patch("edu.verification.requests.post")
-    def test_configured_cac_api_marks_document_api_verified(self, mock_post):
-        mock_post.return_value.ok = True
-        mock_post.return_value.content = b'{"verified": true}'
-        mock_post.return_value.json.return_value = {"verified": True}
-
-        data = {
-            "institution_name": "API Verified Academy",
-            "admin_full_name": "School Admin",
-            "admin_password": "StrongPass123!",
-            "admin_email": "api-admin@example.com",
-            "admin_phone": "08000000001",
-            "cac_number": "RC654321",
-        }
-        data.update(self._verification_files())
-
-        response = self.client.post(reverse("edu:secondary_register"), data)
-
-        institution = Institution.objects.get(name="API Verified Academy")
-        self.assertRedirects(
-            response,
-            reverse("edu:secondary_registration_payment", kwargs={"school_code": institution.school_code}),
-        )
-        document = InstitutionDocumentVerification.objects.get(
-            institution=institution,
-            document_type="cac_certificate",
-        )
-        self.assertEqual(document.status, "api_verified")
-        mock_post.assert_called()
-
-    def test_pending_school_admin_login_shows_verification_message(self):
-        data = {
-            "institution_name": "Pending Login Academy",
-            "admin_full_name": "School Admin",
-            "admin_password": "StrongPass123!",
-            "admin_email": "admin@example.com",
-            "admin_phone": "08000000000",
-        }
-        data.update(self._verification_files())
-        self.client.post(reverse("edu:secondary_register"), data)
-        institution = Institution.objects.get(name="Pending Login Academy")
+    def test_trial_school_admin_logs_in_from_school_subdomain(self):
+        self.client.post(reverse("edu:secondary_register"), self._registration_payload(
+            institution_name="Trial Login Academy",
+            school_code="trialloginacademy",
+            admin_email="trial-login@example.com",
+        ))
+        institution = Institution.objects.get(name="Trial Login Academy")
         profile = Profile.objects.get(institution=institution, role="admin")
+        host = f"{institution.school_code}.vilastore.store"
 
         response = self.client.post(reverse("edu:secondary_login"), {
             "school_code": institution.school_code,
             "username": profile.user.username,
             "password": "StrongPass123!",
-        })
+        }, HTTP_HOST=host, secure=True)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "EduPortal subscription payment is required")
-        self.assertFalse("_auth_user_id" in self.client.session)
-
-        email_response = self.client.post(reverse("edu:secondary_login"), {
-            "school_code": institution.school_code,
-            "username": "admin@example.com",
-            "password": "StrongPass123!",
-        })
-        self.assertEqual(email_response.status_code, 200)
-        self.assertContains(email_response, "EduPortal subscription payment is required")
-
-        phone_response = self.client.post(reverse("edu:secondary_login"), {
-            "school_code": institution.school_code,
-            "username": "08000000000",
-            "password": "StrongPass123!",
-        })
-        self.assertEqual(phone_response.status_code, 200)
-        self.assertContains(phone_response, "EduPortal subscription payment is required")
+        self.assertRedirects(
+            response,
+            reverse("edu:secondary_dashboard", kwargs={"role": "admin"}),
+            fetch_redirect_response=False,
+        )
 
     def test_login_repairs_missing_profile_from_staff_record(self):
         institution = Institution.objects.create(
@@ -268,13 +206,17 @@ class EduPortalVerificationRegistrationTests(TestCase):
             "school_code": institution.school_code,
             "username": "repair-admin",
             "password": "StrongPass123!",
-        })
+        }, HTTP_HOST=f"{institution.school_code}.vilastore.store", secure=True)
 
         profile = Profile.objects.get(user=user)
         self.assertEqual(profile.institution, institution)
         self.assertEqual(profile.role, "admin")
         self.assertTrue(profile.is_approved)
-        self.assertRedirects(response, reverse("edu:secondary_dashboard", kwargs={"role": "admin"}))
+        self.assertRedirects(
+            response,
+            reverse("edu:secondary_dashboard", kwargs={"role": "admin"}),
+            fetch_redirect_response=False,
+        )
 
     def test_approved_school_admin_login_is_not_sent_to_shop_subscription_payment(self):
         institution = Institution.objects.create(
@@ -299,9 +241,13 @@ class EduPortalVerificationRegistrationTests(TestCase):
             "school_code": institution.school_code,
             "username": "approved-admin",
             "password": "StrongPass123!",
-        })
+        }, HTTP_HOST=f"{institution.school_code}.vilastore.store", secure=True)
 
-        self.assertRedirects(response, reverse("edu:secondary_dashboard", kwargs={"role": "admin"}))
+        self.assertRedirects(
+            response,
+            reverse("edu:secondary_dashboard", kwargs={"role": "admin"}),
+            fetch_redirect_response=False,
+        )
 
 class EduPortalFeesTests(TestCase):
     def setUp(self):
