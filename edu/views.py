@@ -1351,6 +1351,7 @@ def _validation_error_messages(exc):
 
 
 def _register_school_with_trial(request, default_school_type='secondary'):
+    duplicate_institution = None
     if request.method == 'POST':
         institution_name = request.POST.get('institution_name', '').strip()
         institution_type = request.POST.get('institution_type', default_school_type).strip()
@@ -1399,7 +1400,8 @@ def _register_school_with_trial(request, default_school_type='secondary'):
         elif school_code in RESERVED_EDU_SUBDOMAINS:
             messages.error(request, 'That school portal name is reserved. Please choose another one.')
         elif Institution.objects.filter(school_code__iexact=school_code).exists():
-            messages.error(request, 'Portal name already taken. Choose another.')
+            duplicate_institution = Institution.objects.filter(school_code__iexact=school_code).first()
+            messages.error(request, 'This school portal already exists. Use the existing portal link below or choose another portal name.')
         else:
             try:
                 with transaction.atomic():
@@ -1476,12 +1478,20 @@ def _register_school_with_trial(request, default_school_type='secondary'):
                     'selected_plan': _edu_subscription_plans(subscription_package)[billing_cycle],
                 })
             except IntegrityError:
-                messages.error(request, 'School portal name or administrator ID already exists.')
+                duplicate_institution = Institution.objects.filter(school_code__iexact=school_code).first()
+                if duplicate_institution:
+                    messages.error(request, 'This school portal already exists. Use the existing portal link below or choose another portal name.')
+                else:
+                    messages.error(request, 'School portal name or administrator ID already exists.')
             except ValidationError as exc:
                 for message in _validation_error_messages(exc):
                     messages.error(request, message)
 
-    return render(request, 'edu/school_register.html', _school_register_context(default_school_type))
+    context = _school_register_context(default_school_type)
+    if duplicate_institution:
+        context['duplicate_institution'] = duplicate_institution
+        context['duplicate_portal_url'] = _institution_portal_url(duplicate_institution)
+    return render(request, 'edu/school_register.html', context)
 
 
 def secondary_school_register(request):

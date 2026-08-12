@@ -19,6 +19,18 @@
     </div>
 
     <div class="registration-card">
+      {% if duplicate_institution and duplicate_portal_url %}
+        <div class="mb-5 rounded-2xl border border-primary/25 bg-primary/10 p-5">
+          <p class="text-sm font-semibold text-primary">School portal already exists</p>
+          <h2 class="font-display text-xl font-bold mt-1">{{ duplicate_institution.name }}</h2>
+          <p class="text-sm text-muted-foreground mt-2">Use this working portal link to log in, or choose a different portal name to register another school.</p>
+          <div class="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+            <code class="rounded-lg border border-border bg-background px-3 py-2 text-sm break-all">{{ duplicate_portal_url }}</code>
+            <a href="{{ duplicate_portal_url }}" class="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold hover:bg-primary/90">Go to Portal</a>
+          </div>
+        </div>
+      {% endif %}
+
       <ol class="wizard-steps" data-wizard-steps>
         <li class="wizard-step is-active" data-step-indicator="0"><span>1</span><strong>School</strong></li>
         <li class="wizard-step" data-step-indicator="1"><span>2</span><strong>Admin</strong></li>

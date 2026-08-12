@@ -151,7 +151,8 @@ class EduPortalVerificationRegistrationTests(TestCase):
             admin_email="reserved@example.com",
         ))
 
-        self.assertContains(taken, "Portal name already taken. Choose another.")
+        self.assertContains(taken, "This school portal already exists.")
+        self.assertContains(taken, "/edu/portal/existingacademy/")
         self.assertContains(reserved, "That school portal name is reserved.")
 
     def test_subdomain_availability_endpoint(self):
