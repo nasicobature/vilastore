@@ -33,16 +33,16 @@
 
   <section class="school-portal-section">
     <div class="portal-copy">
-      <span class="portal-kicker"><i data-lucide="globe-2"></i> Dedicated Subdomain</span>
+      <span class="portal-kicker"><i data-lucide="globe-2"></i> Dedicated School Portal</span>
       <h2>Your Personal School Portal</h2>
-      <p>Every school gets a unique subdomain portal on your domain. Staff, students, and parents log in with dedicated access.</p>
+      <p>Every school gets a unique portal link on your domain. Staff, students, and parents log in with dedicated access.</p>
     </div>
     <form class="portal-search" onsubmit="event.preventDefault(); const value = this.elements.school.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''); if (value) window.location.href = '/edu/portal/' + value + '/';">
       <label>
-        <span>School subdomain</span>
+        <span>School portal name</span>
         <div class="subdomain-input">
-          <input type="text" name="school" placeholder="yourschool" aria-label="School subdomain" />
-          <strong>.vilastore.store</strong>
+          <strong>vilastore.store/edu/portal/</strong>
+          <input type="text" name="school" placeholder="yourschool" aria-label="School portal name" />
         </div>
       </label>
       <button type="submit" class="wizard-btn wizard-btn-primary">Go to Portal</button>

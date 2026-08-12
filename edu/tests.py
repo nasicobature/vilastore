@@ -67,6 +67,7 @@ class EduPortalRoutingTests(TestCase):
             self.assertContains(response, "Choose the Right Plan for Your School")
             self.assertContains(response, "registration-package-table")
             self.assertContains(response, "School Portal")
+            self.assertContains(response, "/edu/portal/yourschool/")
             self.assertContains(response, "Create School & Start Free Trial")
             self.assertContains(response, "NGN 30,000")
 
@@ -120,6 +121,8 @@ class EduPortalVerificationRegistrationTests(TestCase):
         institution = Institution.objects.get(name="Trial Package Academy")
         profile = Profile.objects.get(institution=institution, role="admin")
         self.assertEqual(institution.school_code, "trialpackageacademy")
+        self.assertContains(response, "/edu/portal/trialpackageacademy/")
+        self.assertNotContains(response, "trialpackageacademy.vilastore.store")
         self.assertEqual(institution.subscription_package, "basic")
         self.assertEqual(institution.subscription_billing_cycle, "session")
         self.assertEqual(institution.student_limit, 100)
@@ -163,6 +166,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         reserved = self.client.get(reverse("edu:subdomain_check"), {"subdomain": "register"})
 
         self.assertTrue(available.json()["available"])
+        self.assertEqual(available.json()["portal_url"], "/edu/portal/new-school/")
         self.assertFalse(taken.json()["available"])
         self.assertFalse(reserved.json()["available"])
 

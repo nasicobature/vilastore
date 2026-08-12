@@ -160,17 +160,14 @@ def _profile_login_url(profile):
 def _institution_portal_url(institution, admin_id=None):
     if not institution or not institution.school_code:
         return ''
-    subdomain = institution.school_code.lower()
-    url = f'https://{subdomain}.vilastore.store/'
+    url = f'/edu/portal/{institution.school_code.lower()}/'
     if admin_id:
         url += f'?admin_id={requests.utils.quote(admin_id)}'
     return url
 
 
 def _institution_fallback_portal_url(institution):
-    if not institution or not institution.school_code:
-        return ''
-    return f'/edu/portal/{institution.school_code.lower()}/'
+    return _institution_portal_url(institution)
 
 
 def _edu_trial_student_limit():
@@ -766,7 +763,7 @@ def _login_for_institution(request, institution_type, template_name):
     roles = SECONDARY_ROLES if institution_type == 'secondary' else TERTIARY_ROLES
     subdomain_institution = _institution_from_subdomain(request, institution_type)
     if not getattr(request, 'edu_subdomain', ''):
-        messages.info(request, 'School users log in through their school subdomain portal.')
+        messages.info(request, 'School users log in through their school portal link.')
         return redirect('edu:index')
     if not subdomain_institution:
         return render(request, 'edu/portal_not_found.html', status=404)
@@ -1328,7 +1325,7 @@ def edu_subdomain_availability(request):
     return JsonResponse({
         'available': available,
         'subdomain': subdomain,
-        'portal_url': f'https://{subdomain}.vilastore.store' if subdomain else '',
+        'portal_url': f'/edu/portal/{subdomain}/' if subdomain else '',
         'message': message,
     })
 
