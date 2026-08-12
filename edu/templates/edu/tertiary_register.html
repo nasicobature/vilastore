@@ -14,7 +14,7 @@
       <div>
         <p class="registration-eyebrow">Tertiary Institution Verification</p>
         <h1 class="registration-title">Create a verified institution portal</h1>
-        <p class="registration-copy">Complete a simple setup. The person registering becomes the institution admin.</p>
+        <p class="registration-copy">Create the institution portal in a few fields. The person registering becomes the admin.</p>
       </div>
     </div>
 
@@ -40,7 +40,6 @@
           <div class="form-grid">
             <label class="field-block">Institution Name *<input type="text" name="institution_name" required data-review-label="Institution Name" /></label>
             <label class="field-block">School Code<input type="text" name="school_code" placeholder="Leave blank to auto-generate" data-review-label="School Code" /></label>
-            <label class="field-block">Short Name<input type="text" name="short_name" data-review-label="Short Name" /></label>
             <label class="field-block">Ownership Type
               <select name="ownership_type" data-review-label="Ownership Type">
                 {% for value, label in ownership_choices %}
@@ -48,33 +47,20 @@
                 {% endfor %}
               </select>
             </label>
-            <label class="field-block">Year Established<input type="number" name="year_established" data-review-label="Year Established" /></label>
           </div>
         </section>
 
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
-            <h2>Contact and Address</h2>
-            <p>Use the real campus location and contact channels for verification.</p>
+            <h2>Contact</h2>
+            <p>Add only the basic institution contact details.</p>
           </div>
           <div class="form-grid">
-            <label class="field-block">Country<input type="text" name="country" value="Nigeria" data-review-label="Country" /></label>
             <label class="field-block">State<input type="text" name="state" data-review-label="State" /></label>
             <label class="field-block">City<input type="text" name="city" data-review-label="City" /></label>
             <label class="field-block field-wide">Address<input type="text" name="address" data-review-label="Address" /></label>
-            <label class="field-block">Postal Code<input type="text" name="postal_code" data-review-label="Postal Code" /></label>
             <label class="field-block">Institution Phone<input type="text" name="phone_number" data-review-label="Institution Phone" /></label>
             <label class="field-block">Institution Email<input type="email" name="email" data-review-label="Institution Email" /></label>
-            <label class="field-block">Website<input type="url" name="website" data-review-label="Website" /></label>
-            <label class="field-block">Grading System
-              <select name="grading_system" data-review-label="Grading System">
-                {% for value, label in grading_choices %}
-                  <option value="{{ value }}">{{ label }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label class="field-block">Max Grade<input type="number" step="0.01" name="max_grade" value="100" data-review-label="Max Grade" /></label>
-            <label class="field-block">Currency<input type="text" name="currency" value="NGN" data-review-label="Currency" /></label>
           </div>
         </section>
 
@@ -98,8 +84,22 @@
 
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
-            <h2>Choose Package</h2>
-            <p>Free features stay free. Select the student range and billing period for this institution.</p>
+            <h2>Trial and Package</h2>
+            <p>Start with a 2-day trial to explore the portal, or continue straight to payment.</p>
+          </div>
+          <div class="trial-option-grid">
+            <label class="trial-option-card">
+              <input type="radio" name="registration_access" value="trial" data-review-label="Access Option" checked />
+              <span class="plan-card-title">2-Day Free Trial</span>
+              <strong>Explore first</strong>
+              <small>Portal access starts immediately after registration.</small>
+            </label>
+            <label class="trial-option-card">
+              <input type="radio" name="registration_access" value="pay" data-review-label="Access Option" />
+              <span class="plan-card-title">Pay Now</span>
+              <strong>Activate by payment</strong>
+              <small>Continue to payment after registration.</small>
+            </label>
           </div>
           <div class="billing-switch" data-review-label="Billing Period">
             <label><input type="radio" name="subscription_billing_cycle" value="termly" {% if default_subscription_cycle == 'termly' %}checked{% endif %} /> Per Term</label>
@@ -145,7 +145,7 @@
         <div class="wizard-actions">
           <button type="button" class="wizard-btn wizard-btn-secondary" data-wizard-prev>Back</button>
           <button type="button" class="wizard-btn wizard-btn-primary" data-wizard-next>Continue</button>
-          <button type="submit" class="wizard-btn wizard-btn-primary" data-wizard-submit hidden>Submit & Pay</button>
+          <button type="submit" class="wizard-btn wizard-btn-primary" data-wizard-submit hidden>Create Portal</button>
         </div>
       </form>
     </div>

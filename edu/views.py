@@ -140,6 +140,7 @@ EDU_REGISTRATION_FEE = _edu_subscription_amount(EDU_DEFAULT_BILLING_CYCLE, EDU_D
 
 EMAIL_TOKEN_HOURS = 48
 PASSWORD_RESET_HOURS = 2
+EDU_TRIAL_DAYS = 2
 
 
 def _edu_abs_url(request, path):
@@ -152,12 +153,41 @@ def _profile_login_url(profile):
     return '/edu/secondary/login/'
 
 
-def _institution_portal_url(institution):
+def _institution_portal_url(institution, admin_id=None):
     if not institution or not institution.school_code:
         return ''
     institution_type = institution.institution_type or 'secondary'
     subdomain = institution.school_code.lower()
-    return f'https://{subdomain}.vilastore.store/edu/{institution_type}/login/'
+    url = f'https://{subdomain}.vilastore.store/edu/{institution_type}/login/'
+    if admin_id:
+        url += f'?admin_id={requests.utils.quote(admin_id)}'
+    return url
+
+
+def _activate_trial_access(institution, profile):
+    now = timezone.now()
+    institution.registration_payment_status = 'paid'
+    institution.registration_payment_reference = '2-day-trial'
+    institution.registration_payment_paid_at = now
+    institution.subscription_active_until = timezone.localdate() + timedelta(days=EDU_TRIAL_DAYS)
+    institution.subscription_last_payment_reference = '2-day-trial'
+    institution.subscription_last_paid_at = now
+    institution.verification_status = 'approved'
+    institution.verified_at = now
+    institution.save(update_fields=[
+        'registration_payment_status',
+        'registration_payment_reference',
+        'registration_payment_paid_at',
+        'subscription_active_until',
+        'subscription_last_payment_reference',
+        'subscription_last_paid_at',
+        'verification_status',
+        'verified_at',
+    ])
+    profile.is_approved = True
+    profile.email_verified = True
+    profile.approved_at = now
+    profile.save(update_fields=['is_approved', 'email_verified', 'approved_at'])
 
 
 def _email_is_available(email, user=None):
@@ -560,6 +590,10 @@ def _login_for_institution(request, institution_type, template_name):
                 if not school_code or not profile.institution or profile.institution.school_code.upper() != school_code:
                     auth_logout(request)
                     messages.error(request, 'Invalid school code.')
+                elif profile.institution and profile.institution.subscription_active_until and profile.institution.subscription_active_until < timezone.localdate():
+                    auth_logout(request)
+                    payment_url = f"/edu/{profile.institution_type}/register/{profile.institution.school_code}/payment/"
+                    messages.error(request, f'Your EduPortal trial or subscription has ended. Please renew to continue using the portal: {payment_url}')
                 elif not profile.is_approved:
                     auth_logout(request)
                     if profile.institution and profile.institution.registration_payment_status != 'paid':
@@ -590,6 +624,7 @@ def _login_for_institution(request, institution_type, template_name):
         'roles': roles,
         'subdomain_institution': subdomain_institution,
         'resolved_school_code': subdomain_institution.school_code if subdomain_institution else '',
+        'initial_username': request.GET.get('admin_id', '').strip(),
     })
 
 
@@ -1075,6 +1110,7 @@ def secondary_school_register(request):
         admin_email = request.POST.get('admin_email', '').strip()
         billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
         subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
+        registration_access = request.POST.get('registration_access', 'trial')
         missing_verification, verification_uploads = _missing_verification_requirements(request)
 
         if not all([institution_name, admin_full_name, admin_password, admin_email]):
@@ -1140,7 +1176,6 @@ def secondary_school_register(request):
                 profile.approved_by = None
                 profile.approved_at = None
                 profile.save()
-                _send_edu_verification_email(request, profile)
 
                 Staff.objects.create(
                     institution=institution,
@@ -1151,8 +1186,14 @@ def secondary_school_register(request):
                     department='',
                 )
 
-                messages.success(request, f'School registration submitted. Complete payment now. School code: {institution.school_code}. Admin ID: {admin_username}. Portal: {_institution_portal_url(institution)}')
-                return redirect('edu:secondary_registration_payment', school_code=institution.school_code)
+                if registration_access == 'pay':
+                    _send_edu_verification_email(request, profile)
+                    messages.success(request, f'School registration submitted. Complete payment now. School code: {institution.school_code}. Admin ID: {admin_username}. Portal: {_institution_portal_url(institution)}')
+                    return redirect('edu:secondary_registration_payment', school_code=institution.school_code)
+
+                _activate_trial_access(institution, profile)
+                messages.success(request, f'Your 2-day trial is active. School code: {institution.school_code}. Admin ID: {admin_username}.')
+                return redirect(_institution_portal_url(institution, admin_username))
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
 
@@ -1178,6 +1219,7 @@ def _edu_payment_context(institution, login_url, mode='registration'):
     package_code = _normalize_edu_package(institution.subscription_package)
     plan = _edu_subscription_plans(package_code)[cycle]
     amount = Decimal(plan['amount'])
+    subscription_expired = bool(institution.subscription_active_until and institution.subscription_active_until < timezone.localdate())
     return {
         'institution': institution,
         'amount': amount,
@@ -1191,7 +1233,8 @@ def _edu_payment_context(institution, login_url, mode='registration'):
         'login_url': login_url,
         'portal_url': _institution_portal_url(institution),
         'payment_mode': mode,
-        'allow_payment_form': mode == 'renewal' or institution.registration_payment_status != 'paid',
+        'subscription_expired': subscription_expired,
+        'allow_payment_form': mode == 'renewal' or institution.registration_payment_status != 'paid' or subscription_expired,
     }
 
 
@@ -2628,6 +2671,7 @@ def tertiary_school_register(request):
         vc_role = 'vc'
         billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
         subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
+        registration_access = request.POST.get('registration_access', 'trial')
         missing_verification, verification_uploads = _missing_verification_requirements(request)
 
         if not all([institution_name, vc_full_name, vc_password, admin_email]):
@@ -2705,8 +2749,13 @@ def tertiary_school_register(request):
                     department='',
                 )
 
-                messages.success(request, f'Institution registration submitted. Complete payment now. School code: {institution.school_code}. Admin ID: {vc_username}. Portal: {_institution_portal_url(institution)}')
-                return redirect('edu:tertiary_registration_payment', school_code=institution.school_code)
+                if registration_access == 'pay':
+                    messages.success(request, f'Institution registration submitted. Complete payment now. School code: {institution.school_code}. Admin ID: {vc_username}. Portal: {_institution_portal_url(institution)}')
+                    return redirect('edu:tertiary_registration_payment', school_code=institution.school_code)
+
+                _activate_trial_access(institution, profile)
+                messages.success(request, f'Your 2-day trial is active. School code: {institution.school_code}. Admin ID: {vc_username}.')
+                return redirect(_institution_portal_url(institution, vc_username))
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
 

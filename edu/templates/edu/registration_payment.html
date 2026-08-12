@@ -58,7 +58,7 @@
       </div>
     {% endif %}
 
-    {% if institution.registration_payment_status == 'paid' and payment_mode != 'renewal' %}
+    {% if institution.registration_payment_status == 'paid' and payment_mode != 'renewal' and not subscription_expired %}
       <div class="mt-8 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm">
         Payment has been confirmed. VilaStore will approve the portal when setup is complete.
       </div>
