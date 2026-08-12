@@ -89,6 +89,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'edu.middleware.EduTenantMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'core.middleware.SubscriptionRequiredMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -175,6 +176,7 @@ LOGIN_REDIRECT_URL = "/index/"
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.getenv("MEDIA_ROOT", os.path.join(BASE_DIR, 'media'))
 SERVE_MEDIA = env_bool("SERVE_MEDIA", default=True)
+EDU_ROOT_DOMAIN = os.getenv("EDU_ROOT_DOMAIN", "vilastore.store").strip() or "vilastore.store"
 
 # CORS (for Expo web / mobile dev)
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", default=DEBUG)
@@ -199,6 +201,7 @@ if not CORS_ALLOW_ALL_ORIGINS:
         if origin not in CORS_ALLOWED_ORIGINS:
             CORS_ALLOWED_ORIGINS.append(origin)
     CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^https://[a-z0-9-]+\.vilastore\.store$",
         r"^http://localhost:\d+$",
         r"^http://127\.0\.0\.1:\d+$",
         r"^http://10\.\d+\.\d+\.\d+:\d+$",

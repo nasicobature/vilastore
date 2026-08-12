@@ -1,0 +1,19 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="min-h-screen bg-background flex items-center justify-center p-6">
+  <div class="w-full max-w-lg rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+    <div class="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+      <i data-lucide="school" class="w-7 h-7 text-muted-foreground"></i>
+    </div>
+    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">School Portal</p>
+    <h1 class="font-display text-3xl font-bold mt-2">School Portal Not Found</h1>
+    <p class="text-muted-foreground mt-3">
+      The school portal you are trying to access does not exist.
+    </p>
+    <a href="https://vilastore.store/edu/" class="mt-6 inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-5 py-3 text-sm font-semibold hover:bg-primary/90">
+      Visit VilaStore Edu
+    </a>
+  </div>
+</div>
+{% endblock %}

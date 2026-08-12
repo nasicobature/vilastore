@@ -3,8 +3,8 @@
 {% block content %}
 <div class="min-h-screen bg-background flex items-center justify-center p-6">
   <div class="w-full max-w-md">
-    <a href="/" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
-      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to selection
+    <a href="https://vilastore.store/edu/" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> Visit VilaStore Edu
     </a>
 
     <div class="bg-card border border-border rounded-2xl p-8">
@@ -12,8 +12,8 @@
         <div class="w-12 h-12 rounded-xl bg-primary flex items-center justify-center mx-auto mb-3">
           <i data-lucide="graduation-cap" class="text-primary-foreground"></i>
         </div>
-        <h2 class="font-display text-2xl font-bold">Sign In</h2>
-        <p class="text-sm text-muted-foreground mt-1">{% if subdomain_institution %}{{ subdomain_institution.name }}{% else %}Secondary School Portal{% endif %}</p>
+        <h2 class="font-display text-2xl font-bold">{% if subdomain_institution %}{{ subdomain_institution.name }}{% else %}School Portal{% endif %}</h2>
+        <p class="text-sm text-muted-foreground mt-1">Welcome to your school portal.</p>
       </div>
 
       <form method="post" class="space-y-4">
@@ -38,7 +38,7 @@
         {% endif %}
 
         <div>
-          <label class="block text-sm font-medium mb-1.5">User ID, Email, or Phone</label>
+          <label class="block text-sm font-medium mb-1.5">Email / Staff ID</label>
           <input
             type="text"
             name="username"

@@ -503,6 +503,9 @@ def _sync_rental_payment_state(rental):
 
 
 def home(request):
+    if getattr(request, 'edu_subdomain', ''):
+        from edu.views import subdomain_portal_home
+        return subdomain_portal_home(request)
     return render(request, 'home/home.html', {"plans": PLAN_CATALOG})
 
 

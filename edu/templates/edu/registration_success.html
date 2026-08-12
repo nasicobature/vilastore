@@ -1,0 +1,32 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="min-h-screen bg-background flex items-center justify-center p-6">
+  <div class="w-full max-w-2xl rounded-2xl border border-border bg-card p-6 md:p-8 shadow-sm">
+    <div class="w-14 h-14 rounded-2xl bg-success/10 flex items-center justify-center mb-5">
+      <i data-lucide="check-circle-2" class="w-7 h-7 text-success"></i>
+    </div>
+    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Registration Successful</p>
+    <h1 class="font-display text-3xl font-bold mt-2">Your school portal has been created.</h1>
+    <p class="text-muted-foreground mt-3">
+      Your 3-day free trial is active. Use the administrator ID below to log in through your school subdomain.
+    </p>
+
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="rounded-xl border border-border bg-background p-4">
+        <span class="block text-xs text-muted-foreground">School Portal</span>
+        <strong class="block mt-1 break-all">{{ portal_url }}</strong>
+      </div>
+      <div class="rounded-xl border border-border bg-background p-4">
+        <span class="block text-xs text-muted-foreground">Administrator ID</span>
+        <strong class="block mt-1">{{ admin_username }}</strong>
+      </div>
+    </div>
+
+    <a href="{{ portal_url }}" class="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-3 text-sm font-semibold hover:bg-primary/90">
+      Go to School Portal
+      <i data-lucide="arrow-right" class="w-4 h-4"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}

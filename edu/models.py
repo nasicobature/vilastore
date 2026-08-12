@@ -3,8 +3,19 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from decimal import Decimal
+import re
 
 
+RESERVED_EDU_SUBDOMAINS = {
+    'www',
+    'api',
+    'admin',
+    'mail',
+    'edu',
+    'app',
+    'support',
+    'dashboard',
+}
 EDU_PACKAGE_LIMITS = {
     'starter': 50,
     'basic': 100,
@@ -63,7 +74,7 @@ class Institution(models.Model):
     ]
 
     name = models.CharField(max_length=200)
-    school_code = models.CharField(max_length=20, unique=True, null=True, blank=True)
+    school_code = models.CharField(max_length=63, unique=True, null=True, blank=True)
     short_name = models.CharField(max_length=20, blank=True)
     institution_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     ownership_type = models.CharField(max_length=20, choices=OWNERSHIP_CHOICES, default='private')
@@ -127,18 +138,29 @@ class Institution(models.Model):
     user_sequence = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(default=timezone.now)
 
+    @staticmethod
+    def normalize_subdomain(value):
+        value = (value or '').strip().lower()
+        value = re.sub(r'[^a-z0-9-]+', '', value)
+        value = value.strip('-')[:63]
+        return value
+
     def _generate_code(self):
-        base = (self.short_name or self.name or "SCHOOL").upper()
-        base = "".join(ch for ch in base if ch.isalnum())
-        base = base[:6] or "SCHOOL"
+        base = self.normalize_subdomain(self.short_name or self.name or "school") or "school"
+        if base in RESERVED_EDU_SUBDOMAINS:
+            base = f"{base}school"
         code = base
         counter = 1
         while Institution.objects.filter(school_code=code).exclude(pk=self.pk).exists():
             counter += 1
-            code = f"{base}{counter}"
+            suffix = str(counter)
+            code = f"{base[:63 - len(suffix)]}{suffix}"
         return code
 
     def save(self, *args, **kwargs):
+        self.school_code = self.normalize_subdomain(self.school_code)
+        if self.school_code in RESERVED_EDU_SUBDOMAINS:
+            raise ValidationError({'school_code': 'This subdomain is reserved. Please choose another school subdomain.'})
         if not self.school_code:
             self.school_code = self._generate_code()
         if not self.student_limit:

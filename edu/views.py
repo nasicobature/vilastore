@@ -15,7 +15,8 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .models import EDU_PACKAGE_LIMITS, EduSubscriptionSettings, Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
+from .models import EDU_PACKAGE_LIMITS, RESERVED_EDU_SUBDOMAINS, EduSubscriptionSettings, Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
+from .tenant import subdomain_from_host
 from .verification import create_document_verifications
 from core.utils.notifications import send_email
 
@@ -150,17 +151,16 @@ def _edu_abs_url(request, path):
 
 
 def _profile_login_url(profile):
-    if profile and profile.institution_type == 'tertiary':
-        return '/edu/tertiary/login/'
-    return '/edu/secondary/login/'
+    if profile and profile.institution:
+        return _institution_portal_url(profile.institution)
+    return '/edu/'
 
 
 def _institution_portal_url(institution, admin_id=None):
     if not institution or not institution.school_code:
         return ''
-    institution_type = institution.institution_type or 'secondary'
     subdomain = institution.school_code.lower()
-    url = f'https://{subdomain}.vilastore.store/edu/{institution_type}/login/'
+    url = f'https://{subdomain}.vilastore.store/'
     if admin_id:
         url += f'?admin_id={requests.utils.quote(admin_id)}'
     return url
@@ -296,6 +296,13 @@ def edu_portal_access_required(view_func):
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         profile = getattr(request.user, 'profile', None)
+        tenant = getattr(request, 'edu_institution', None)
+        if getattr(request, 'edu_subdomain', '') and not tenant:
+            return render(request, 'edu/portal_not_found.html', status=404)
+        if tenant and profile and profile.institution_id != tenant.id:
+            auth_logout(request)
+            messages.error(request, 'This account does not belong to this school portal.')
+            return redirect(_institution_portal_url(tenant))
         if profile and profile.institution:
             profile.institution.refresh_subscription_status()
             if not profile.institution.has_active_subscription_access:
@@ -573,6 +580,16 @@ def index(request):
     })
 
 
+def subdomain_portal_home(request):
+    institution = getattr(request, 'edu_institution', None)
+    if not getattr(request, 'edu_subdomain', ''):
+        return redirect('edu:index')
+    if not institution:
+        return render(request, 'edu/portal_not_found.html', status=404)
+    template_name = 'edu/tertiary_login.html' if institution.institution_type == 'tertiary' else 'edu/secondary_login.html'
+    return _login_for_institution(request, institution.institution_type, template_name)
+
+
 def _resolve_login_user(institution_type, school_code, identifier):
     User = get_user_model()
     user = User.objects.filter(username__iexact=identifier).first()
@@ -655,29 +672,26 @@ def _get_or_repair_edu_profile(user, institution_type, school_code):
 
 
 def _school_code_from_subdomain(request):
-    host = request.get_host().split(':', 1)[0].lower()
-    root_domain = 'vilastore.store'
-    if not host.endswith('.' + root_domain):
-        return ''
-    subdomain = host[:-(len(root_domain) + 1)].strip('.')
-    if not subdomain or subdomain in {'www', 'edu'}:
-        return ''
-    return subdomain.upper()
+    return subdomain_from_host(request.get_host())
 
 
 def _institution_from_subdomain(request, institution_type):
-    school_code = _school_code_from_subdomain(request)
-    if not school_code:
+    tenant = getattr(request, 'edu_institution', None)
+    if not tenant:
         return None
-    return Institution.objects.filter(
-        institution_type=institution_type,
-        school_code__iexact=school_code,
-    ).first()
+    if tenant.institution_type != institution_type:
+        return None
+    return tenant
 
 
 def _login_for_institution(request, institution_type, template_name):
     roles = SECONDARY_ROLES if institution_type == 'secondary' else TERTIARY_ROLES
     subdomain_institution = _institution_from_subdomain(request, institution_type)
+    if not getattr(request, 'edu_subdomain', ''):
+        messages.info(request, 'School users log in through their school subdomain portal.')
+        return redirect('edu:index')
+    if not subdomain_institution:
+        return render(request, 'edu/portal_not_found.html', status=404)
 
     if request.method == 'POST':
         school_code = request.POST.get('school_code', '').strip().upper()
@@ -1216,7 +1230,7 @@ def _get_tertiary_nav(role):
 def secondary_school_register(request):
     if request.method == 'POST':
         institution_name = request.POST.get('institution_name', '').strip()
-        school_code = request.POST.get('school_code', '').strip().upper()
+        school_code = Institution.normalize_subdomain(request.POST.get('school_code') or institution_name)
         admin_full_name = request.POST.get('admin_full_name', '').strip()
         admin_password = request.POST.get('admin_password', '').strip()
         admin_email = request.POST.get('admin_email', '').strip()
@@ -1228,6 +1242,10 @@ def secondary_school_register(request):
             messages.error(request, 'Please fill all required fields, including admin email.')
         elif not _email_is_available(admin_email):
             messages.error(request, 'That admin email address is already used by another account.')
+        elif school_code in RESERVED_EDU_SUBDOMAINS:
+            messages.error(request, 'That school subdomain is reserved. Please choose another one.')
+        elif Institution.objects.filter(school_code__iexact=school_code).exists():
+            messages.error(request, 'That school subdomain is already in use. Please choose another one.')
         elif missing_verification:
             messages.error(request, 'Please complete verification requirements: ' + ', '.join(missing_verification) + '.')
         else:
@@ -1302,8 +1320,11 @@ def secondary_school_register(request):
                 if not _activate_trial_access(institution, profile):
                     messages.error(request, 'This school has already used its free trial. Choose a package to continue.')
                     return redirect('edu:secondary_registration_payment', school_code=institution.school_code)
-                messages.success(request, f'Your 3-day free trial is active. School code: {institution.school_code}. Admin ID: {admin_username}.')
-                return redirect(_institution_portal_url(institution, admin_username))
+                return render(request, 'edu/registration_success.html', {
+                    'institution': institution,
+                    'admin_username': admin_username,
+                    'portal_url': _institution_portal_url(institution, admin_username),
+                })
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
 
@@ -2817,7 +2838,7 @@ def tertiary_create_user(request):
 def tertiary_school_register(request):
     if request.method == 'POST':
         institution_name = request.POST.get('institution_name', '').strip()
-        school_code = request.POST.get('school_code', '').strip().upper()
+        school_code = Institution.normalize_subdomain(request.POST.get('school_code') or institution_name)
         vc_full_name = request.POST.get('vc_full_name', '').strip()
         vc_password = request.POST.get('vc_password', '').strip()
         admin_email = request.POST.get('admin_email', '').strip()
@@ -2830,6 +2851,10 @@ def tertiary_school_register(request):
             messages.error(request, 'Please fill all required fields, including admin email.')
         elif not _email_is_available(admin_email):
             messages.error(request, 'That admin email address is already used by another account.')
+        elif school_code in RESERVED_EDU_SUBDOMAINS:
+            messages.error(request, 'That school subdomain is reserved. Please choose another one.')
+        elif Institution.objects.filter(school_code__iexact=school_code).exists():
+            messages.error(request, 'That school subdomain is already in use. Please choose another one.')
         elif missing_verification:
             messages.error(request, 'Please complete verification requirements: ' + ', '.join(missing_verification) + '.')
         else:
@@ -2906,8 +2931,11 @@ def tertiary_school_register(request):
                 if not _activate_trial_access(institution, profile):
                     messages.error(request, 'This institution has already used its free trial. Choose a package to continue.')
                     return redirect('edu:tertiary_registration_payment', school_code=institution.school_code)
-                messages.success(request, f'Your 3-day free trial is active. School code: {institution.school_code}. Admin ID: {vc_username}.')
-                return redirect(_institution_portal_url(institution, vc_username))
+                return render(request, 'edu/registration_success.html', {
+                    'institution': institution,
+                    'admin_username': vc_username,
+                    'portal_url': _institution_portal_url(institution, vc_username),
+                })
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
 

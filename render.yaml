@@ -17,7 +17,13 @@ services:
           name: vilastore-db
           property: connectionString
       - key: ALLOWED_HOSTS
-        value: vilastore.onrender.com,vilastore.store,www.vilastore.store
+        value: vilastore.onrender.com,vilastore.store,www.vilastore.store,.vilastore.store
+      - key: EDU_ROOT_DOMAIN
+        value: vilastore.store
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://vilastore.onrender.com,https://vilastore.store,https://www.vilastore.store,https://*.vilastore.store
+      - key: CORS_ALLOWED_ORIGIN_REGEXES
+        value: ^https://[a-z0-9-]+\.vilastore\.store$
       - key: MEDIA_ROOT
         value: /var/data/media
       - key: AI_INVENTORY_PROVIDER
