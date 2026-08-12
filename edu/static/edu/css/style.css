@@ -1160,6 +1160,7 @@ textarea {
 .pricing-section {
   padding: 0;
   overflow: hidden;
+  color: #0f172a;
 }
 
 .pricing-heading {
@@ -1167,30 +1168,32 @@ textarea {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 26px;
-  background: linear-gradient(135deg, hsl(var(--primary) / 0.12), hsl(var(--accent) / 0.12));
-  border-bottom: 1px solid hsl(var(--border));
+  padding: 30px 30px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .pricing-heading h2 {
   margin: 0;
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 30px;
+  font-size: 34px;
   line-height: 1.1;
+  color: #0f172a;
 }
 
 .pricing-heading p:not(.registration-eyebrow) {
   margin: 8px 0 0;
   max-width: 680px;
-  color: hsl(var(--muted-foreground));
+  color: #64748b;
+  font-size: 15px;
 }
 
 .pricing-save-badge {
   flex: 0 0 auto;
   border-radius: 999px;
   padding: 9px 12px;
-  background: hsl(var(--success) / 0.12);
-  color: hsl(var(--success));
+  background: #ecfdf5;
+  color: #047857;
   font-size: 12px;
   font-weight: 900;
 }
@@ -1207,7 +1210,7 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  margin: 18px 26px;
+  margin: 22px 30px 18px;
 }
 
 .pricing-switch {
@@ -1215,83 +1218,96 @@ textarea {
   grid-template-columns: repeat(2, minmax(120px, 1fr));
   gap: 4px;
   padding: 4px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 12px;
-  background: hsl(var(--background));
+  border: 1px solid #dbe3ee;
+  border-radius: 999px;
+  background: #f8fafc;
 }
 
 .pricing-switch button {
   min-height: 38px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 999px;
   background: transparent;
-  color: hsl(var(--muted-foreground));
+  color: #475569;
   font-weight: 900;
   cursor: pointer;
 }
 
+.pricing-switch button span {
+  display: inline-flex;
+  margin-left: 6px;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: #dcfce7;
+  color: #047857;
+  font-size: 10px;
+  vertical-align: middle;
+}
+
 .pricing-switch button.is-active {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  box-shadow: 0 8px 18px hsl(var(--primary) / 0.22);
+  background: #0f172a;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+}
+
+.pricing-switch button.is-active span {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
 }
 
 .pricing-save-chip {
   border-radius: 999px;
   padding: 9px 12px;
-  background: hsl(var(--success) / 0.11);
-  color: hsl(var(--success));
+  background: #f1f5f9;
+  color: #475569;
   font-size: 12px;
   font-weight: 900;
 }
 
 .pricing-table-shell {
-  margin: 0 26px;
-  overflow-x: auto;
-  border: 1px solid hsl(var(--border));
-  border-radius: 14px;
-  background: hsl(var(--background));
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+  margin: 0 30px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07);
 }
 
 .pricing-table {
   width: 100%;
-  min-width: 760px;
   border-collapse: separate;
   border-spacing: 0;
 }
 
 .pricing-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 16px 18px;
-  background: hsl(var(--foreground));
-  color: hsl(var(--background));
+  padding: 18px 22px;
+  background: #f8fafc;
+  color: #475569;
   font-size: 12px;
   font-weight: 900;
   text-align: left;
   text-transform: uppercase;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .pricing-table td {
-  padding: 16px 18px;
-  border-bottom: 1px solid hsl(var(--border));
-  color: hsl(var(--foreground));
-  font-size: 14px;
+  padding: 22px;
+  border-bottom: 1px solid #edf2f7;
+  color: #0f172a;
+  font-size: 15px;
   vertical-align: middle;
 }
 
 .pricing-table tbody tr:nth-child(even) {
-  background: hsl(var(--muted) / 0.28);
+  background: #fcfdff;
 }
 
 .pricing-table tbody tr:hover {
-  background: hsl(var(--primary) / 0.08);
+  background: #f8fafc;
 }
 
 .pricing-table tbody tr.is-popular {
-  background: hsl(var(--primary) / 0.06);
+  background: #f8fbff;
 }
 
 .pricing-table tbody tr:last-child td {
@@ -1302,9 +1318,9 @@ textarea {
   display: inline-flex;
   align-items: center;
   min-width: 98px;
-  color: hsl(var(--primary));
+  color: #0f172a;
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .table-popular-badge {
@@ -1312,8 +1328,8 @@ textarea {
   margin-left: 8px;
   border-radius: 999px;
   padding: 4px 7px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background: #e0f2fe;
+  color: #0369a1;
   font-size: 11px;
   font-weight: 900;
 }
@@ -1321,14 +1337,15 @@ textarea {
 .table-price strong {
   display: inline-block;
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1;
+  color: #0f172a;
 }
 
 .table-price span {
   display: inline-block;
   margin-left: 4px;
-  color: hsl(var(--muted-foreground));
+  color: #64748b;
   font-size: 12px;
   font-weight: 800;
 }
@@ -1337,11 +1354,11 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
-  border-radius: 9px;
-  padding: 0 12px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground)) !important;
+  min-height: 38px;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: #0f172a;
+  color: #ffffff !important;
   text-decoration: none;
   font-weight: 900;
   white-space: nowrap;
@@ -1476,12 +1493,50 @@ textarea {
     padding: 20px 16px;
   }
 
-  .pricing-table {
-    min-width: 680px;
+  .pricing-table,
+  .pricing-table tbody,
+  .pricing-table tr,
+  .pricing-table td {
+    display: block;
+    width: 100%;
   }
 
-  .pricing-table th,
+  .pricing-table thead {
+    display: none;
+  }
+
+  .pricing-table tr {
+    padding: 14px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .pricing-table tr:last-child {
+    border-bottom: 0;
+  }
+
   .pricing-table td {
-    padding: 13px 14px;
+    display: grid;
+    grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1.2fr);
+    gap: 12px;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 0;
+    font-size: 14px;
+  }
+
+  .pricing-table td::before {
+    content: attr(data-label);
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .table-price strong {
+    font-size: 19px;
+  }
+
+  .trial-link {
+    width: fit-content;
   }
 }

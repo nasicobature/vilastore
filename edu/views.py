@@ -21,18 +21,13 @@ from core.utils.notifications import send_email
 EDU_DEFAULT_BILLING_CYCLE = 'termly'
 EDU_DEFAULT_PACKAGE = 'starter'
 EDU_PRICING_PACKAGES = [
-    ('starter', 'Starter', '1 - 50 Students', Decimal('26600.00')),
-    ('basic', 'Basic', '51 - 100 Students', Decimal('38600.00')),
-    ('growth', 'Growth', '101 - 200 Students', Decimal('59000.00')),
-    ('standard', 'Standard', '201 - 350 Students', Decimal('86600.00')),
-    ('premium', 'Premium', '351 - 500 Students', Decimal('107000.00')),
-    ('enterprise', 'Enterprise', '501 - 750 Students', Decimal('137000.00')),
-    ('elite', 'Elite', '751 - 1,000 Students', Decimal('173000.00')),
-    ('apex', 'Apex', '1,001 - 1,500 Students', Decimal('285000.00')),
-    ('summit', 'Summit', '1,501 - 2,000 Students', Decimal('385000.00')),
-    ('exclusive', 'Exclusive', '2,001 - 2,500 Students', Decimal('485000.00')),
-    ('prestige', 'Prestige', '2,501 - 3,000 Students', Decimal('585000.00')),
-    ('ultimate', 'Ultimate', '3,001+ Students', None),
+    ('starter', 'Starter', '1 - 50 Students', Decimal('20000.00')),
+    ('basic', 'Basic', '51 - 100 Students', Decimal('30000.00')),
+    ('growth', 'Growth', '101 - 200 Students', Decimal('45000.00')),
+    ('standard', 'Standard', '201 - 350 Students', Decimal('65000.00')),
+    ('premium', 'Premium', '351 - 500 Students', Decimal('85000.00')),
+    ('enterprise', 'Enterprise', '501 - 750 Students', Decimal('110000.00')),
+    ('enterprise-plus', 'Enterprise Plus', '751+ Students', Decimal('150000.00')),
 ]
 
 
@@ -60,7 +55,7 @@ def _edu_pricing_packages():
         whatsapp_text = (
             f'Hi IntelS, I want to start a Free Trial on the {name} Package ({student_range.lower()}).'
             if not is_custom
-            else 'Hi IntelS, I would like to discuss the Ultimate package for our school of 3000+ students.'
+            else f'Hi IntelS, I would like to discuss the {name} package for our school.'
         )
         rows.append({
             'code': code,
@@ -1244,7 +1239,7 @@ def _confirm_edu_subscription_payment(request, institution, payment_route_name, 
         package_code = _normalize_edu_package(request.POST.get('subscription_package') or institution.subscription_package)
         plan = _edu_subscription_plans(package_code)[billing_cycle]
         if plan['package']['is_custom']:
-            messages.error(request, 'Please contact VilaStore to activate the Ultimate custom package.')
+            messages.error(request, 'Please contact VilaStore to activate this custom package.')
             return redirect(payment_route_name, **redirect_kwargs)
         payment_reference = request.POST.get('payment_reference', '').strip()
         payload, error = _verify_flutterwave_reference(payment_reference)

@@ -82,9 +82,9 @@
     <div class="pricing-control-row">
       <div class="pricing-switch" data-pricing-switch>
         <button type="button" class="is-active" data-pricing-cycle="term">Per Term</button>
-        <button type="button" data-pricing-cycle="session">Per Session</button>
+        <button type="button" data-pricing-cycle="session">Per Session <span>Save 10%</span></button>
       </div>
-      <span class="pricing-save-chip">Save 10% with session billing</span>
+      <span class="pricing-save-chip">Session price is 10% less than 3 separate terms</span>
     </div>
 
     <div class="pricing-table-shell" data-pricing-table>
@@ -106,16 +106,16 @@
               data-term-label="{% if package.is_custom %}{% else %}/ term{% endif %}"
               data-session-label="{% if package.is_custom %}{% else %}/ session{% endif %}"
             >
-              <td>
+              <td data-label="Package">
                 <strong class="table-package-name">{{ package.name }}</strong>
                 {% if forloop.counter == 3 %}<span class="table-popular-badge">Popular</span>{% endif %}
               </td>
-              <td>{{ package.student_range }}</td>
-              <td class="table-price">
+              <td data-label="Student Range">{{ package.student_range }}</td>
+              <td class="table-price" data-label="Price">
                 <strong data-price-value>{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }}{% endif %}</strong>
                 <span data-price-label>{% if package.is_custom %}{% else %}/ term{% endif %}</span>
               </td>
-              <td><a class="trial-link" href="{{ package.whatsapp_url }}" target="_blank" rel="noopener">{% if package.is_custom %}Contact Us{% else %}Start Free{% endif %}</a></td>
+              <td data-label="Zero-Stress Trial"><a class="trial-link" href="{{ package.whatsapp_url }}" target="_blank" rel="noopener">{% if package.is_custom %}Contact Us{% else %}Start Free{% endif %}</a></td>
             </tr>
           {% endfor %}
         </tbody>
