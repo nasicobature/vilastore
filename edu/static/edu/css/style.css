@@ -1021,11 +1021,45 @@ textarea {
 }
 
 .school-portal-section {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+  gap: 22px;
+  align-items: center;
   margin-top: 22px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 14px;
-  background: hsl(var(--card));
-  padding: 22px;
+  border: 1px solid hsl(var(--primary) / 0.22);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, hsl(var(--primary) / 0.12), transparent 42%),
+    hsl(var(--card));
+  padding: 26px;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08);
+}
+
+.portal-copy h2 {
+  margin: 10px 0 8px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.portal-copy p {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.7;
+}
+
+.portal-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .portal-search {
@@ -1033,6 +1067,10 @@ textarea {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: end;
+  padding: 16px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  background: hsl(var(--background));
 }
 
 .portal-search label span {
@@ -1046,9 +1084,10 @@ textarea {
 .subdomain-input {
   display: flex;
   align-items: center;
-  border: 1px solid hsl(var(--border));
+  min-height: 50px;
+  border: 1px solid hsl(var(--primary) / 0.32);
   border-radius: 10px;
-  background: hsl(var(--background));
+  background: hsl(var(--card));
   overflow: hidden;
 }
 
@@ -1056,14 +1095,19 @@ textarea {
   min-width: 0;
   flex: 1;
   border: 0;
-  padding: 12px;
+  padding: 14px;
   background: transparent;
   outline: none;
+  font-weight: 800;
 }
 
 .subdomain-input strong {
-  padding: 0 12px;
-  color: hsl(var(--muted-foreground));
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
   font-size: 13px;
   white-space: nowrap;
 }
@@ -1157,106 +1201,120 @@ textarea {
   gap: 14px;
 }
 
-.pricing-toggle {
+.pricing-control-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin: 18px 26px 14px;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 18px 26px;
+}
+
+.pricing-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--background));
+}
+
+.pricing-switch button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.pricing-switch button.is-active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 8px 18px hsl(var(--primary) / 0.22);
+}
+
+.pricing-save-chip {
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: hsl(var(--success) / 0.11);
+  color: hsl(var(--success));
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.pricing-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 26px;
+}
+
+.edu-price-card {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  min-height: 260px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  padding: 18px;
+  background: hsl(var(--background));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.edu-price-card.is-popular {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 18px 40px hsl(var(--primary) / 0.12);
+}
+
+.popular-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.price-card-top {
+  display: grid;
+  gap: 5px;
+  padding-right: 72px;
+}
+
+.price-card-top strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 21px;
+}
+
+.price-card-top span,
+.edu-price-card p {
   color: hsl(var(--muted-foreground));
   font-size: 13px;
+}
+
+.price-card-amount span {
+  display: block;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.price-card-amount small {
+  color: hsl(var(--muted-foreground));
   font-weight: 800;
 }
 
-.pricing-toggle span,
-.pricing-toggle strong,
-.pricing-toggle em {
-  border: 1px solid hsl(var(--border));
-  border-radius: 999px;
-  padding: 7px 10px;
-  background: hsl(var(--background));
-  font-style: normal;
-}
-
-.pricing-toggle strong {
-  border-color: hsl(var(--primary));
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-}
-
-.pricing-toggle em {
-  color: hsl(var(--success));
-  border-color: hsl(var(--success) / 0.28);
-  background: hsl(var(--success) / 0.1);
-}
-
-.pricing-table-wrap {
-  margin: 0 26px;
-  overflow-x: auto;
-  border: 1px solid hsl(var(--border));
-  border-radius: 12px;
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
-}
-
-.pricing-table {
-  width: 100%;
-  min-width: 760px;
-  border-collapse: collapse;
-  background: hsl(var(--background));
-}
-
-.pricing-table th,
-.pricing-table td {
-  padding: 15px 16px;
-  border-bottom: 1px solid hsl(var(--border));
-  text-align: left;
-  font-size: 13px;
-}
-
-.pricing-table th {
-  background: hsl(var(--foreground));
-  color: hsl(var(--background));
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
-.pricing-table tbody tr {
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-
-.pricing-table tbody tr:nth-child(even) {
-  background: hsl(var(--muted) / 0.28);
-}
-
-.pricing-table tbody tr:hover {
-  background: hsl(var(--primary) / 0.08);
-}
-
-.pricing-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.package-name {
-  display: inline-flex;
-  border-radius: 999px;
-  padding: 5px 9px;
-  background: hsl(var(--primary) / 0.1);
-  color: hsl(var(--primary));
-}
-
-.price-cell {
-  font-weight: 900;
-  color: hsl(var(--foreground));
-  white-space: nowrap;
-}
-
-.price-cell span {
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.price-cell.is-session {
-  color: hsl(var(--success));
+.edu-price-card p {
+  margin: 0;
+  line-height: 1.55;
 }
 
 .trial-link {
@@ -1271,11 +1329,6 @@ textarea {
   text-decoration: none;
   font-weight: 900;
   white-space: nowrap;
-}
-
-.pricing-table a {
-  color: hsl(var(--primary));
-  font-weight: 800;
 }
 
 .pricing-card {
@@ -1349,10 +1402,12 @@ textarea {
 
 @media (max-width: 980px) {
   .edu-hero,
+  .school-portal-section,
   .portal-options,
   .subscription-plan-grid,
   .trial-option-grid,
   .package-grid,
+  .pricing-card-grid,
   .pricing-grid,
   .pricing-notes,
   .coming-soon-grid {
@@ -1367,7 +1422,46 @@ textarea {
     display: grid;
   }
 
+  .pricing-control-row {
+    align-items: stretch;
+  }
+
+  .pricing-switch {
+    width: 100%;
+  }
+
   .edu-hero h1 {
     font-size: 32px;
+  }
+}
+
+@media (max-width: 560px) {
+  .portal-search {
+    grid-template-columns: 1fr;
+  }
+
+  .subdomain-input {
+    display: grid;
+  }
+
+  .subdomain-input strong {
+    min-height: 38px;
+    justify-content: center;
+  }
+
+  .pricing-heading,
+  .pricing-control-row,
+  .pricing-card-grid,
+  .pricing-notes {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
+  .pricing-heading {
+    padding: 20px 16px;
+  }
+
+  .price-card-amount span {
+    font-size: 24px;
   }
 }

@@ -21,6 +21,31 @@
     });
   });
 
+  const pricingSwitch = document.querySelector('[data-pricing-switch]');
+  const pricingCards = Array.from(document.querySelectorAll('[data-pricing-cards] .edu-price-card'));
+  if (pricingSwitch && pricingCards.length) {
+    const buttons = Array.from(pricingSwitch.querySelectorAll('[data-pricing-cycle]'));
+    const setPricingCycle = (cycle) => {
+      buttons.forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.pricingCycle === cycle);
+      });
+      pricingCards.forEach((card) => {
+        const value = card.querySelector('[data-price-value]');
+        const label = card.querySelector('[data-price-label]');
+        if (value) {
+          value.textContent = cycle === 'session' ? card.dataset.sessionPrice : card.dataset.termPrice;
+        }
+        if (label) {
+          label.textContent = cycle === 'session' ? card.dataset.sessionLabel : card.dataset.termLabel;
+        }
+      });
+    };
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => setPricingCycle(button.dataset.pricingCycle));
+    });
+    setPricingCycle('term');
+  }
+
   const wizardForms = document.querySelectorAll('[data-registration-wizard]');
   wizardForms.forEach((form) => {
     const panels = Array.from(form.querySelectorAll('[data-wizard-panel]'));
