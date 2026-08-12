@@ -25,11 +25,15 @@
   const pricingRows = Array.from(document.querySelectorAll('[data-pricing-table] tbody tr'));
   const pricingHeading = document.querySelector('[data-pricing-heading]');
   if (pricingSwitch && pricingRows.length) {
-    const buttons = Array.from(pricingSwitch.querySelectorAll('[data-pricing-cycle]'));
+    const checkbox = pricingSwitch.querySelector('[data-pricing-checkbox]');
+    const labels = Array.from(pricingSwitch.querySelectorAll('[data-pricing-cycle-label]'));
     const setPricingCycle = (cycle) => {
-      buttons.forEach((button) => {
-        button.classList.toggle('is-active', button.dataset.pricingCycle === cycle);
+      labels.forEach((label) => {
+        label.classList.toggle('is-active', label.dataset.pricingCycleLabel === cycle);
       });
+      if (checkbox) {
+        checkbox.checked = cycle === 'session';
+      }
       if (pricingHeading) {
         pricingHeading.textContent = cycle === 'session' ? 'Per Session Pricing' : 'Per Term Pricing';
       }
@@ -44,8 +48,11 @@
         }
       });
     };
-    buttons.forEach((button) => {
-      button.addEventListener('click', () => setPricingCycle(button.dataset.pricingCycle));
+    if (checkbox) {
+      checkbox.addEventListener('change', () => setPricingCycle(checkbox.checked ? 'session' : 'term'));
+    }
+    labels.forEach((label) => {
+      label.addEventListener('click', () => setPricingCycle(label.dataset.pricingCycleLabel));
     });
     setPricingCycle('term');
   }

@@ -72,19 +72,19 @@
   <section id="pricing" class="pricing-section">
     <div class="pricing-heading">
       <div>
-        <p class="registration-eyebrow">Simple Pricing</p>
         <h2>Simple Pricing. Built for Value.</h2>
-        <p>Free features are always free. The only thing that matters is your student range.</p>
+        <p>Free features are always free - the only thing that matters is your student range.</p>
       </div>
-      <div class="pricing-save-badge">Per Session Saves 10%</div>
     </div>
 
-    <div class="pricing-control-row">
-      <div class="pricing-switch" data-pricing-switch>
-        <button type="button" class="is-active" data-pricing-cycle="term">Per Term</button>
-        <button type="button" data-pricing-cycle="session">Per Session <span>Save 10%</span></button>
-      </div>
-      <span class="pricing-save-chip">Session price is 10% less than 3 separate terms</span>
+    <div class="pricing-control-row" data-pricing-switch>
+      <strong data-pricing-cycle-label="term" class="is-active">Per Term</strong>
+      <label class="billing-toggle" aria-label="Switch between per term and per session pricing">
+        <input type="checkbox" data-pricing-checkbox />
+        <span></span>
+      </label>
+      <strong data-pricing-cycle-label="session">Per Session</strong>
+      <span class="pricing-save-chip">Save 10%</span>
     </div>
 
     <div class="pricing-table-shell" data-pricing-table>
@@ -94,7 +94,7 @@
             <th>Package</th>
             <th>Student Range</th>
             <th><span data-pricing-heading>Per Term Pricing</span></th>
-            <th>Zero-Stress Trial</th>
+            <th>Trial</th>
           </tr>
         </thead>
         <tbody>
