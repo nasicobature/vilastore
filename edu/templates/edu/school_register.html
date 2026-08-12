@@ -108,41 +108,53 @@
               <em>Save 10%</em>
             </label>
           </div>
-          <div class="registration-package-grid">
-            {% for package in pricing_packages %}
-              {% if package.code != 'enterprise-plus' %}
-                <label class="registration-package-card">
-                  <input
-                    type="radio"
-                    name="subscription_package"
-                    value="{{ package.code }}"
-                    required
-                    data-review-label="Selected Package"
-                    data-package-option
-                    data-package-name="{{ package.name }}"
-                    data-student-limit="{{ package.student_limit }}"
-                    data-student-range="{{ package.student_range }}"
-                    data-term-price="NGN {{ package.term_amount_display }}"
-                    data-session-price="NGN {{ package.session_amount_display }}"
-                    {% if package.code == default_subscription_package %}checked{% endif %}
-                  />
-                  <span class="package-check" aria-hidden="true"><i data-lucide="check"></i></span>
-                  <span class="package-name">{{ package.name }}</span>
-                  <span class="package-range">{{ package.student_range }}</span>
-                  <strong class="package-price" data-package-price>NGN {{ package.term_amount_display }}</strong>
-                  <span class="package-cycle" data-package-billing-label>per term</span>
-                  <span class="package-meta">
-                    <i data-lucide="users"></i>
-                    Up to {{ package.student_limit }} students
-                  </span>
-                  <span class="package-meta">
-                    <i data-lucide="badge-check"></i>
-                    3-day free trial included
-                  </span>
-                  <span class="package-select-button" data-package-select-text>Select Package</span>
-                </label>
-              {% endif %}
-            {% endfor %}
+          <div class="registration-package-table-shell">
+            <table class="registration-package-table">
+              <thead>
+                <tr>
+                  <th>Package</th>
+                  <th>Student Range</th>
+                  <th>Price</th>
+                  <th>Trial</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for package in pricing_packages %}
+                  {% if package.code != 'enterprise-plus' %}
+                    <tr class="registration-package-row">
+                      <td data-label="Package">
+                        <label class="registration-package-choice">
+                          <input
+                            type="radio"
+                            name="subscription_package"
+                            value="{{ package.code }}"
+                            required
+                            data-review-label="Selected Package"
+                            data-package-option
+                            data-package-name="{{ package.name }}"
+                            data-student-limit="{{ package.student_limit }}"
+                            data-student-range="{{ package.student_range }}"
+                            data-term-price="NGN {{ package.term_amount_display }}"
+                            data-session-price="NGN {{ package.session_amount_display }}"
+                            {% if package.code == default_subscription_package %}checked{% endif %}
+                          />
+                          <span class="package-check" aria-hidden="true"><i data-lucide="check"></i></span>
+                          <strong class="package-name">{{ package.name }}</strong>
+                        </label>
+                      </td>
+                      <td data-label="Student Range"><span class="package-range">{{ package.student_range }}</span></td>
+                      <td data-label="Price">
+                        <strong class="package-price" data-package-price>NGN {{ package.term_amount_display }}</strong>
+                        <span class="package-cycle" data-package-billing-label>per term</span>
+                      </td>
+                      <td data-label="Trial"><span class="package-trial-pill">3 days free</span></td>
+                      <td data-label="Select"><span class="package-select-button" data-package-select-text>Select</span></td>
+                    </tr>
+                  {% endif %}
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
         </section>
 
@@ -201,6 +213,234 @@
     </div>
   </div>
 </div>
+
+<style>
+  [data-school-register-form] .package-step-heading {
+    text-align: center;
+    max-width: 760px;
+    margin-inline: auto;
+  }
+  [data-school-register-form] .registration-billing-toggle {
+    width: fit-content;
+    max-width: 100%;
+    display: flex;
+    gap: 6px;
+    margin: 0 auto 26px;
+    padding: 6px;
+    border: 1px solid hsl(var(--border));
+    border-radius: 999px;
+    background: hsl(var(--muted) / 0.55);
+  }
+  [data-school-register-form] .billing-toggle-option {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 18px;
+    border-radius: 999px;
+    color: hsl(var(--muted-foreground));
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  [data-school-register-form] .billing-toggle-option input,
+  [data-school-register-form] .registration-package-choice input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  [data-school-register-form] .billing-toggle-option:has(input:checked) {
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  }
+  [data-school-register-form] .billing-toggle-option em {
+    font-style: normal;
+    color: hsl(var(--success));
+    background: hsl(var(--success) / 0.1);
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+  }
+  [data-school-register-form] .registration-package-table-shell {
+    overflow: hidden;
+    border: 1px solid hsl(var(--border));
+    border-radius: 20px;
+    background: hsl(var(--card));
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  }
+  [data-school-register-form] .registration-package-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  [data-school-register-form] .registration-package-table th {
+    padding: 22px 24px;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-align: left;
+    text-transform: uppercase;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  [data-school-register-form] .registration-package-table td {
+    padding: 30px 24px;
+    color: #111827;
+    vertical-align: middle;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  [data-school-register-form] .registration-package-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  [data-school-register-form] .registration-package-row {
+    cursor: pointer;
+    transition: background 180ms ease;
+  }
+  [data-school-register-form] .registration-package-row:hover {
+    background: #f8fafc;
+  }
+  [data-school-register-form] .registration-package-row:has(input:checked) {
+    background: #f8fbff;
+    box-shadow: inset 4px 0 0 hsl(var(--primary));
+  }
+  [data-school-register-form] .registration-package-choice {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 34px;
+    cursor: pointer;
+  }
+  [data-school-register-form] .package-check {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border));
+    color: transparent;
+    background: hsl(var(--background));
+  }
+  [data-school-register-form] .registration-package-choice:has(input:checked) .package-check {
+    color: hsl(var(--primary-foreground));
+    background: hsl(var(--primary));
+    border-color: hsl(var(--primary));
+  }
+  [data-school-register-form] .package-check i {
+    width: 15px;
+    height: 15px;
+  }
+  [data-school-register-form] .package-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 19px;
+    font-weight: 800;
+    color: #0f172a;
+  }
+  [data-school-register-form] .package-range,
+  [data-school-register-form] .package-cycle {
+    display: block;
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  [data-school-register-form] .package-price {
+    display: block;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 21px;
+    line-height: 1.1;
+    color: #0f172a;
+  }
+  [data-school-register-form] .package-trial-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: hsl(var(--success) / 0.1);
+    color: hsl(var(--success));
+    font-size: 13px;
+    font-weight: 900;
+  }
+  [data-school-register-form] .package-select-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 98px;
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background));
+    font-size: 14px;
+    font-weight: 800;
+  }
+  [data-school-register-form] .registration-package-row:has(input:checked) .package-select-button {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+  @media (max-width: 760px) {
+    [data-school-register-form] .registration-billing-toggle {
+      width: 100%;
+      border-radius: 16px;
+    }
+    [data-school-register-form] .billing-toggle-option {
+      flex: 1 1 0;
+      padding: 0 10px;
+    }
+    [data-school-register-form] .registration-package-table,
+    [data-school-register-form] .registration-package-table tbody,
+    [data-school-register-form] .registration-package-table tr,
+    [data-school-register-form] .registration-package-table td {
+      display: block;
+      width: 100%;
+    }
+    [data-school-register-form] .registration-package-table thead {
+      display: none;
+    }
+    [data-school-register-form] .registration-package-row {
+      padding: 12px 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    [data-school-register-form] .registration-package-row:last-child {
+      border-bottom: 0;
+    }
+    [data-school-register-form] .registration-package-table td {
+      display: grid;
+      grid-template-columns: minmax(112px, 0.82fr) minmax(0, 1.18fr);
+      gap: 14px;
+      align-items: center;
+      padding: 12px 18px;
+      border-bottom: 0;
+    }
+    [data-school-register-form] .registration-package-table td::before {
+      content: attr(data-label);
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    [data-school-register-form] .registration-package-table td:first-child::before {
+      align-self: center;
+    }
+    [data-school-register-form] .package-name {
+      font-size: 18px;
+    }
+    [data-school-register-form] .package-price {
+      font-size: 19px;
+    }
+    [data-school-register-form] .package-select-button {
+      width: 100%;
+    }
+  }
+</style>
 
 <script>
   (function () {
@@ -298,7 +538,7 @@
     const syncPackagePrices = () => {
       const cycle = selectedBilling();
       packageInputs.forEach((input) => {
-        const card = input.closest('.registration-package-card');
+        const card = input.closest('.registration-package-row');
         const price = card ? card.querySelector('[data-package-price]') : null;
         const label = card ? card.querySelector('[data-package-billing-label]') : null;
         if (price) {
@@ -313,7 +553,7 @@
         studentLimitInput.value = `${Number(selectedPackage.dataset.studentLimit || 0).toLocaleString()} students`;
       }
       packageInputs.forEach((input) => {
-        const card = input.closest('.registration-package-card');
+        const card = input.closest('.registration-package-row');
         const buttonText = card ? card.querySelector('[data-package-select-text]') : null;
         if (buttonText) {
           buttonText.textContent = input.checked ? 'Selected' : 'Select Package';
@@ -326,6 +566,16 @@
     });
     packageInputs.forEach((input) => {
       input.addEventListener('change', syncPackagePrices);
+    });
+    form.querySelectorAll('.registration-package-row').forEach((row) => {
+      row.addEventListener('click', (event) => {
+        if (event.target.closest('a, button')) return;
+        const input = row.querySelector('[data-package-option]');
+        if (input && !input.checked) {
+          input.checked = true;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
     });
 
     checkAvailability();

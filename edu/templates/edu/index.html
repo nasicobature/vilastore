@@ -37,7 +37,7 @@
       <h2>Your Personal School Portal</h2>
       <p>Every school gets a unique subdomain portal on your domain. Staff, students, and parents log in with dedicated access.</p>
     </div>
-    <form class="portal-search" onsubmit="event.preventDefault(); const value = this.elements.school.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''); if (value) window.location.href = 'https://' + value + '.vilastore.store/';">
+    <form class="portal-search" onsubmit="event.preventDefault(); const value = this.elements.school.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''); if (value) window.location.href = '/edu/portal/' + value + '/';">
       <label>
         <span>School subdomain</span>
         <div class="subdomain-input">

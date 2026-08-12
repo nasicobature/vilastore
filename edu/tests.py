@@ -65,10 +65,16 @@ class EduPortalRoutingTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, 'class="wizard-form"')
             self.assertContains(response, "Choose the Right Plan for Your School")
-            self.assertContains(response, "registration-package-card")
+            self.assertContains(response, "registration-package-table")
             self.assertContains(response, "School Portal")
             self.assertContains(response, "Create School & Start Free Trial")
             self.assertContains(response, "NGN 30,000")
+
+    def test_edu_landing_portal_search_uses_main_domain_fallback(self):
+        response = self.client.get(reverse("edu:index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "window.location.href = '/edu/portal/' + value + '/'")
 
 
 class EduPortalVerificationRegistrationTests(TestCase):
@@ -179,6 +185,35 @@ class EduPortalVerificationRegistrationTests(TestCase):
         self.assertRedirects(
             response,
             "/dashboard/",
+            fetch_redirect_response=False,
+        )
+
+    def test_trial_school_admin_logs_in_from_main_domain_fallback_portal(self):
+        self.client.post(reverse("edu:secondary_register"), self._registration_payload(
+            institution_name="Fallback Login Academy",
+            school_code="fallbackloginacademy",
+            admin_email="fallback-login@example.com",
+        ))
+        institution = Institution.objects.get(name="Fallback Login Academy")
+        profile = Profile.objects.get(institution=institution, role="admin")
+
+        response = self.client.post(reverse("edu:school_portal_fallback", kwargs={"school_code": institution.school_code}), {
+            "username": profile.user.username,
+            "password": "StrongPass123!",
+        }, secure=True)
+        dashboard = self.client.get(
+            reverse("edu:school_portal_fallback_dashboard", kwargs={"school_code": institution.school_code}),
+            secure=True,
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("edu:school_portal_fallback_dashboard", kwargs={"school_code": institution.school_code}),
+            fetch_redirect_response=False,
+        )
+        self.assertRedirects(
+            dashboard,
+            reverse("edu:secondary_dashboard", kwargs={"role": "admin"}),
             fetch_redirect_response=False,
         )
 

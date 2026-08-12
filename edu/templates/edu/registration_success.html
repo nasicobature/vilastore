@@ -18,6 +18,12 @@
         <span class="block text-xs text-muted-foreground">Your Portal</span>
         <strong class="block mt-1 break-all">{{ portal_url }}</strong>
       </div>
+      {% if fallback_portal_url %}
+      <div class="rounded-xl border border-success/30 bg-success/10 p-4">
+        <span class="block text-xs text-muted-foreground">Working Portal Link</span>
+        <strong class="block mt-1 break-all">{{ fallback_portal_url }}</strong>
+      </div>
+      {% endif %}
       <div class="rounded-xl border border-border bg-background p-4">
         <span class="block text-xs text-muted-foreground">Administrator ID</span>
         <strong class="block mt-1">{{ admin_username }}</strong>
@@ -44,10 +50,16 @@
       </div>
     </div>
 
-    <a href="{{ portal_url }}" class="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-3 text-sm font-semibold hover:bg-primary/90">
+    <div class="mt-6 flex flex-col sm:flex-row gap-3">
+    <a href="{{ fallback_portal_url|default:portal_url }}" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-3 text-sm font-semibold hover:bg-primary/90">
       Go to My School Portal
       <i data-lucide="arrow-right" class="w-4 h-4"></i>
     </a>
+    <a href="{{ portal_url }}" class="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-5 py-3 text-sm font-semibold hover:bg-muted">
+      Try Subdomain Portal
+      <i data-lucide="external-link" class="w-4 h-4"></i>
+    </a>
+    </div>
   </div>
 </div>
 {% endblock %}

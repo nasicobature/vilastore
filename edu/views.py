@@ -167,6 +167,12 @@ def _institution_portal_url(institution, admin_id=None):
     return url
 
 
+def _institution_fallback_portal_url(institution):
+    if not institution or not institution.school_code:
+        return ''
+    return f'/edu/portal/{institution.school_code.lower()}/'
+
+
 def _edu_trial_student_limit():
     return EduSubscriptionSettings.current().trial_student_limit
 
@@ -608,6 +614,23 @@ def subdomain_dashboard(request):
     return redirect('edu:secondary_dashboard', role=profile.role)
 
 
+def school_portal_fallback(request, school_code):
+    institution = get_object_or_404(Institution, school_code__iexact=school_code)
+    request.edu_subdomain = institution.school_code
+    request.edu_institution = institution
+    request.edu_portal_fallback = True
+    template_name = 'edu/tertiary_login.html' if institution.institution_type == 'tertiary' else 'edu/secondary_login.html'
+    return _login_for_institution(request, institution.institution_type, template_name)
+
+
+def school_portal_fallback_dashboard(request, school_code):
+    institution = get_object_or_404(Institution, school_code__iexact=school_code)
+    request.edu_subdomain = institution.school_code
+    request.edu_institution = institution
+    request.edu_portal_fallback = True
+    return subdomain_dashboard(request)
+
+
 def _resolve_login_user(institution_type, school_code, identifier):
     User = get_user_model()
     user = User.objects.filter(username__iexact=identifier).first()
@@ -757,6 +780,8 @@ def _login_for_institution(request, institution_type, template_name):
                 else:
                     if profile.institution:
                         profile.institution.refresh_subscription_status()
+                    if getattr(request, 'edu_portal_fallback', False):
+                        return redirect(f'/edu/portal/{profile.institution.school_code.lower()}/dashboard/')
                     if getattr(request, 'edu_subdomain', ''):
                         return redirect('/dashboard/')
                     if profile.institution_type == 'tertiary':
@@ -1410,6 +1435,7 @@ def _register_school_with_trial(request, default_school_type='secondary'):
                     'institution': institution,
                     'admin_username': admin_username,
                     'portal_url': _institution_portal_url(institution),
+                    'fallback_portal_url': _institution_fallback_portal_url(institution),
                     'trial_days': EDU_TRIAL_DAYS,
                     'selected_package': _edu_package(subscription_package),
                     'selected_plan': _edu_subscription_plans(subscription_package)[billing_cycle],
