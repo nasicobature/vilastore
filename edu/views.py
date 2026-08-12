@@ -604,10 +604,14 @@ def subdomain_dashboard(request):
     if not institution:
         return render(request, 'edu/portal_not_found.html', status=404)
     if not request.user.is_authenticated:
+        if getattr(request, 'edu_portal_fallback', False):
+            return redirect(f'/edu/portal/{institution.school_code.lower()}/')
         return redirect('/')
     profile = getattr(request.user, 'profile', None)
     if not profile or profile.institution_id != institution.id:
         messages.error(request, 'Log in with an account for this school portal.')
+        if getattr(request, 'edu_portal_fallback', False):
+            return redirect(f'/edu/portal/{institution.school_code.lower()}/')
         return redirect('/')
     if profile.institution_type == 'tertiary':
         return redirect('edu:tertiary_dashboard', role=profile.role)
@@ -712,6 +716,39 @@ def _get_or_repair_edu_profile(user, institution_type, school_code):
     return None
 
 
+def _repair_trial_school_admin_login(profile):
+    institution = profile.institution if profile else None
+    if not institution:
+        return profile
+    if profile.is_approved and profile.email_verified:
+        return profile
+    if profile.created_via != 'school-register':
+        return profile
+    if profile.role not in {'admin', 'vc'}:
+        return profile
+    if institution.subscription_status != 'trial' or institution.verification_status != 'approved':
+        return profile
+    if institution.trial_end_date and institution.trial_end_date < timezone.localdate():
+        return profile
+    user_email = (profile.user.email or '').strip().lower()
+    admin_email = (institution.admin_email or '').strip().lower()
+    if user_email and admin_email and user_email != admin_email:
+        return profile
+
+    now = timezone.now()
+    update_fields = []
+    if not profile.is_approved:
+        profile.is_approved = True
+        profile.approved_at = profile.approved_at or now
+        update_fields.extend(['is_approved', 'approved_at'])
+    if not profile.email_verified:
+        profile.email_verified = True
+        update_fields.append('email_verified')
+    if update_fields:
+        profile.save(update_fields=update_fields)
+    return profile
+
+
 def _school_code_from_subdomain(request):
     return subdomain_from_host(request.get_host())
 
@@ -752,6 +789,7 @@ def _login_for_institution(request, institution_type, template_name):
         else:
             auth_login(request, user)
             profile = _get_or_repair_edu_profile(user, institution_type, school_code)
+            profile = _repair_trial_school_admin_login(profile)
             if profile and profile.institution_type != institution_type:
                 auth_logout(request)
                 messages.error(request, 'This account belongs to a different portal.')

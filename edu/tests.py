@@ -217,6 +217,52 @@ class EduPortalVerificationRegistrationTests(TestCase):
             fetch_redirect_response=False,
         )
 
+    def test_fallback_dashboard_requires_login_on_fallback_route(self):
+        institution = Institution.objects.create(
+            name="Fallback Required Academy",
+            school_code="fallbackrequired",
+            short_name="fallbackrequired",
+            institution_type="secondary",
+            verification_status="approved",
+        )
+
+        response = self.client.get(
+            reverse("edu:school_portal_fallback_dashboard", kwargs={"school_code": institution.school_code}),
+            secure=True,
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("edu:school_portal_fallback", kwargs={"school_code": institution.school_code}),
+            fetch_redirect_response=False,
+        )
+
+    def test_trial_school_admin_stale_approval_flags_are_repaired_on_login(self):
+        self.client.post(reverse("edu:secondary_register"), self._registration_payload(
+            institution_name="Stale Trial Academy",
+            school_code="staletrialacademy",
+            admin_email="stale-trial@example.com",
+        ))
+        institution = Institution.objects.get(name="Stale Trial Academy")
+        profile = Profile.objects.get(institution=institution, role="admin")
+        profile.is_approved = False
+        profile.email_verified = False
+        profile.save(update_fields=["is_approved", "email_verified"])
+
+        response = self.client.post(reverse("edu:school_portal_fallback", kwargs={"school_code": institution.school_code}), {
+            "username": profile.user.username,
+            "password": "StrongPass123!",
+        }, secure=True)
+        profile.refresh_from_db()
+
+        self.assertRedirects(
+            response,
+            reverse("edu:school_portal_fallback_dashboard", kwargs={"school_code": institution.school_code}),
+            fetch_redirect_response=False,
+        )
+        self.assertTrue(profile.is_approved)
+        self.assertTrue(profile.email_verified)
+
     def test_login_repairs_missing_profile_from_staff_record(self):
         institution = Institution.objects.create(
             name="Approved Repair Academy",
