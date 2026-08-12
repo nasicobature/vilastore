@@ -3,8 +3,8 @@
 {% block content %}
 <div class="min-h-screen flex items-center justify-center px-4 py-10">
   <div class="w-full max-w-3xl rounded-2xl border border-border bg-card p-6 md:p-8 shadow-sm">
-    <a href="{{ login_url }}" class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-6">
-      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to login
+    <a href="/edu/" class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-6">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to EduPortal
     </a>
 
     <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
@@ -15,7 +15,7 @@
           {% if payment_mode == 'renewal' %}
             Choose a billing cycle and renew access for your school.
           {% else %}
-            Your school registration has been submitted. Confirm the selected billing period and pay the EduPortal subscription now.
+            Your school registration has been submitted. Confirm the selected billing period and pay the EduPortal subscription now. Your portal subdomain is ready below.
           {% endif %}
         </p>
       </div>
@@ -45,6 +45,13 @@
       </div>
     </div>
 
+    {% if portal_url %}
+      <div class="mt-6 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm">
+        <span class="block text-muted-foreground">School portal</span>
+        <a href="{{ portal_url }}" class="font-semibold text-primary hover:underline">{{ portal_url }}</a>
+      </div>
+    {% endif %}
+
     {% if institution.subscription_active_until %}
       <div class="mt-6 rounded-xl border border-border bg-background px-4 py-3 text-sm">
         Current EduPortal access is active until <strong>{{ institution.subscription_active_until|date:"M j, Y" }}</strong>.
@@ -55,8 +62,8 @@
       <div class="mt-8 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm">
         Payment has been confirmed. VilaStore will approve the portal when setup is complete.
       </div>
-      <a href="{{ login_url }}" class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-5 py-3 text-sm font-semibold hover:bg-primary/90">
-        Open Login
+      <a href="{{ portal_url|default:login_url }}" class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-5 py-3 text-sm font-semibold hover:bg-primary/90">
+        Go to School Portal
       </a>
     {% else %}
       {% if not flutterwave_public_key %}

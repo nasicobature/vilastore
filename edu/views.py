@@ -152,6 +152,14 @@ def _profile_login_url(profile):
     return '/edu/secondary/login/'
 
 
+def _institution_portal_url(institution):
+    if not institution or not institution.school_code:
+        return ''
+    institution_type = institution.institution_type or 'secondary'
+    subdomain = institution.school_code.lower()
+    return f'https://{subdomain}.vilastore.store/edu/{institution_type}/login/'
+
+
 def _email_is_available(email, user=None):
     email = (email or '').strip()
     if not email:
@@ -1143,7 +1151,7 @@ def secondary_school_register(request):
                     department='',
                 )
 
-                messages.success(request, f'School registration submitted. Complete the EduPortal subscription payment now. School code: {institution.school_code}. Admin ID: {admin_username}')
+                messages.success(request, f'School registration submitted. Complete payment now. School code: {institution.school_code}. Admin ID: {admin_username}. Portal: {_institution_portal_url(institution)}')
                 return redirect('edu:secondary_registration_payment', school_code=institution.school_code)
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
@@ -1181,6 +1189,7 @@ def _edu_payment_context(institution, login_url, mode='registration'):
         'currency': institution.currency or 'NGN',
         'flutterwave_public_key': _flutterwave_public_key(),
         'login_url': login_url,
+        'portal_url': _institution_portal_url(institution),
         'payment_mode': mode,
         'allow_payment_form': mode == 'renewal' or institution.registration_payment_status != 'paid',
     }
@@ -2616,7 +2625,7 @@ def tertiary_school_register(request):
         vc_full_name = request.POST.get('vc_full_name', '').strip()
         vc_password = request.POST.get('vc_password', '').strip()
         admin_email = request.POST.get('admin_email', '').strip()
-        vc_role = request.POST.get('vc_role', 'vc')
+        vc_role = 'vc'
         billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
         subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
         missing_verification, verification_uploads = _missing_verification_requirements(request)
@@ -2696,7 +2705,7 @@ def tertiary_school_register(request):
                     department='',
                 )
 
-                messages.success(request, f'Institution registration submitted. Complete the EduPortal subscription payment now. School code: {institution.school_code}. ID: {vc_username}')
+                messages.success(request, f'Institution registration submitted. Complete payment now. School code: {institution.school_code}. Admin ID: {vc_username}. Portal: {_institution_portal_url(institution)}')
                 return redirect('edu:tertiary_registration_payment', school_code=institution.school_code)
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')

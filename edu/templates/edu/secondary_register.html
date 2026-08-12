@@ -3,8 +3,8 @@
 {% block content %}
 <div class="registration-shell">
   <div class="registration-container">
-    <a href="/edu/secondary/login/" class="registration-back">
-      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to login
+    <a href="/edu/" class="registration-back">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to EduPortal
     </a>
 
     <div class="registration-header">
@@ -14,7 +14,7 @@
       <div>
         <p class="registration-eyebrow">Secondary School Verification</p>
         <h1 class="registration-title">Create a verified school portal</h1>
-        <p class="registration-copy">Complete a simple setup, choose a package, and create the first admin account.</p>
+        <p class="registration-copy">Complete a simple setup. The person registering becomes the school admin.</p>
       </div>
     </div>
 
@@ -84,15 +84,15 @@
 
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
-            <h2>Admin Account</h2>
-            <p>This account will be used to manage the school portal.</p>
+            <h2>Your Admin Account</h2>
+            <p>Whoever completes this registration will manage the school portal.</p>
           </div>
           <div class="form-grid">
-            <label class="field-block">Admin Full Name *<input type="text" name="admin_full_name" required data-review-label="Admin Full Name" /></label>
+            <label class="field-block">Your Full Name *<input type="text" name="admin_full_name" required data-review-label="Admin Full Name" /></label>
             <div class="field-block generated-field">Admin ID<span>Generated after submit</span></div>
             <label class="field-block">Password *<input type="password" name="admin_password" required /></label>
-            <label class="field-block">Admin Email *<input type="email" name="admin_email" required data-review-label="Admin Email" /></label>
-            <label class="field-block">Admin Phone *<input type="text" name="admin_phone" required data-review-label="Admin Phone" /></label>
+            <label class="field-block">Your Email *<input type="email" name="admin_email" required data-review-label="Admin Email" /></label>
+            <label class="field-block">Your Phone *<input type="text" name="admin_phone" required data-review-label="Admin Phone" /></label>
           </div>
         </section>
 
@@ -130,7 +130,7 @@
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
             <h2>Review and Submit</h2>
-            <p>Confirm the summary, then submit the school for VilaStore verification.</p>
+            <p>Confirm the summary, then submit the school and continue to payment.</p>
           </div>
           <div class="review-grid" data-review-output></div>
           <div class="verification-notice">

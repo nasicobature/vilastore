@@ -3,8 +3,8 @@
 {% block content %}
 <div class="registration-shell">
   <div class="registration-container">
-    <a href="/edu/tertiary/login/" class="registration-back">
-      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to login
+    <a href="/edu/" class="registration-back">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to EduPortal
     </a>
 
     <div class="registration-header">
@@ -14,7 +14,7 @@
       <div>
         <p class="registration-eyebrow">Tertiary Institution Verification</p>
         <h1 class="registration-title">Create a verified institution portal</h1>
-        <p class="registration-copy">Complete a simple setup, choose a package, and create the VC/Provost account.</p>
+        <p class="registration-copy">Complete a simple setup. The person registering becomes the institution admin.</p>
       </div>
     </div>
 
@@ -84,21 +84,15 @@
 
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
-            <h2>VC/Provost Account</h2>
-            <p>This account will be used to manage the institution portal.</p>
+            <h2>Your Admin Account</h2>
+            <p>Whoever completes this registration will manage the institution portal.</p>
           </div>
           <div class="form-grid">
-            <label class="field-block">Full Name *<input type="text" name="vc_full_name" required data-review-label="VC/Provost Name" /></label>
-            <div class="field-block generated-field">VC/Provost ID<span>Generated after submit</span></div>
+            <label class="field-block">Your Full Name *<input type="text" name="vc_full_name" required data-review-label="Admin Name" /></label>
+            <div class="field-block generated-field">Admin ID<span>Generated after submit</span></div>
             <label class="field-block">Password *<input type="password" name="vc_password" required /></label>
-            <label class="field-block">Role *
-              <select name="vc_role" data-review-label="Role">
-                <option value="vc">VC</option>
-                <option value="provost">Provost</option>
-              </select>
-            </label>
-            <label class="field-block">Admin Email *<input type="email" name="admin_email" required data-review-label="Admin Email" /></label>
-            <label class="field-block">Admin Phone *<input type="text" name="admin_phone" required data-review-label="Admin Phone" /></label>
+            <label class="field-block">Your Email *<input type="email" name="admin_email" required data-review-label="Admin Email" /></label>
+            <label class="field-block">Your Phone *<input type="text" name="admin_phone" required data-review-label="Admin Phone" /></label>
           </div>
         </section>
 
@@ -136,7 +130,7 @@
         <section class="wizard-panel" data-wizard-panel>
           <div class="section-heading">
             <h2>Review and Submit</h2>
-            <p>Confirm the summary, then submit the institution for VilaStore verification.</p>
+            <p>Confirm the summary, then submit the institution and continue to payment.</p>
           </div>
           <div class="review-grid" data-review-output></div>
           <div class="verification-notice">

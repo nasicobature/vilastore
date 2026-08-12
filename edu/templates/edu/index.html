@@ -69,9 +69,13 @@
   </section>
 
   <section id="pricing" class="pricing-section">
-    <div class="section-heading">
-      <h2>Simple Pricing. Built for Value.</h2>
-      <p>Free features are always free. The only thing that matters is your student range.</p>
+    <div class="pricing-heading">
+      <div>
+        <p class="registration-eyebrow">Simple Pricing</p>
+        <h2>Simple Pricing. Built for Value.</h2>
+        <p>Free features are always free. The only thing that matters is your student range.</p>
+      </div>
+      <div class="pricing-save-badge">Per Session Saves 10%</div>
     </div>
 
     <div class="pricing-toggle">
@@ -94,11 +98,11 @@
         <tbody>
           {% for package in pricing_packages %}
             <tr>
-              <td><strong>{{ package.name }}</strong></td>
+              <td><strong class="package-name">{{ package.name }}</strong></td>
               <td>{{ package.student_range }}</td>
-              <td>{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }}{% endif %}</td>
-              <td>{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.session_amount_display }}{% endif %}</td>
-              <td><a href="{{ package.whatsapp_url }}" target="_blank" rel="noopener">{% if package.is_custom %}Contact Us{% else %}Start Free{% endif %}</a></td>
+              <td class="price-cell">{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }} <span>/ term</span>{% endif %}</td>
+              <td class="price-cell is-session">{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.session_amount_display }} <span>/ session</span>{% endif %}</td>
+              <td><a class="trial-link" href="{{ package.whatsapp_url }}" target="_blank" rel="noopener">{% if package.is_custom %}Contact Us{% else %}Start Free{% endif %}</a></td>
             </tr>
           {% endfor %}
         </tbody>
