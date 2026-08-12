@@ -22,21 +22,25 @@
   });
 
   const pricingSwitch = document.querySelector('[data-pricing-switch]');
-  const pricingCards = Array.from(document.querySelectorAll('[data-pricing-cards] .edu-price-card'));
-  if (pricingSwitch && pricingCards.length) {
+  const pricingRows = Array.from(document.querySelectorAll('[data-pricing-table] tbody tr'));
+  const pricingHeading = document.querySelector('[data-pricing-heading]');
+  if (pricingSwitch && pricingRows.length) {
     const buttons = Array.from(pricingSwitch.querySelectorAll('[data-pricing-cycle]'));
     const setPricingCycle = (cycle) => {
       buttons.forEach((button) => {
         button.classList.toggle('is-active', button.dataset.pricingCycle === cycle);
       });
-      pricingCards.forEach((card) => {
-        const value = card.querySelector('[data-price-value]');
-        const label = card.querySelector('[data-price-label]');
+      if (pricingHeading) {
+        pricingHeading.textContent = cycle === 'session' ? 'Per Session Pricing' : 'Per Term Pricing';
+      }
+      pricingRows.forEach((row) => {
+        const value = row.querySelector('[data-price-value]');
+        const label = row.querySelector('[data-price-label]');
         if (value) {
-          value.textContent = cycle === 'session' ? card.dataset.sessionPrice : card.dataset.termPrice;
+          value.textContent = cycle === 'session' ? row.dataset.sessionPrice : row.dataset.termPrice;
         }
         if (label) {
-          label.textContent = cycle === 'session' ? card.dataset.sessionLabel : card.dataset.termLabel;
+          label.textContent = cycle === 'session' ? row.dataset.sessionLabel : row.dataset.termLabel;
         }
       });
     };

@@ -87,28 +87,39 @@
       <span class="pricing-save-chip">Save 10% with session billing</span>
     </div>
 
-    <div class="pricing-card-grid" data-pricing-cards>
-      {% for package in pricing_packages %}
-        <article
-          class="edu-price-card {% if forloop.counter == 3 %}is-popular{% endif %} {% if package.is_custom %}is-custom{% endif %}"
-          data-term-price="{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }}{% endif %}"
-          data-session-price="{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.session_amount_display }}{% endif %}"
-          data-term-label="{% if package.is_custom %}{% else %}/ term{% endif %}"
-          data-session-label="{% if package.is_custom %}{% else %}/ session{% endif %}"
-        >
-          {% if forloop.counter == 3 %}<span class="popular-badge">Popular</span>{% endif %}
-          <div class="price-card-top">
-            <strong>{{ package.name }}</strong>
-            <span>{{ package.student_range }}</span>
-          </div>
-          <div class="price-card-amount">
-            <span data-price-value>{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }}{% endif %}</span>
-            <small data-price-label>{% if package.is_custom %}{% else %}/ term{% endif %}</small>
-          </div>
-          <p>{% if package.is_custom %}For schools above 3,000 students with custom support.{% else %}Includes the full EduPortal setup for this student range.{% endif %}</p>
-          <a class="trial-link" href="{{ package.whatsapp_url }}" target="_blank" rel="noopener">{% if package.is_custom %}Contact Us{% else %}Start Free{% endif %}</a>
-        </article>
-      {% endfor %}
+    <div class="pricing-table-shell" data-pricing-table>
+      <table class="pricing-table">
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Student Range</th>
+            <th><span data-pricing-heading>Per Term Pricing</span></th>
+            <th>Zero-Stress Trial</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for package in pricing_packages %}
+            <tr
+              class="{% if forloop.counter == 3 %}is-popular{% endif %}"
+              data-term-price="{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }}{% endif %}"
+              data-session-price="{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.session_amount_display }}{% endif %}"
+              data-term-label="{% if package.is_custom %}{% else %}/ term{% endif %}"
+              data-session-label="{% if package.is_custom %}{% else %}/ session{% endif %}"
+            >
+              <td>
+                <strong class="table-package-name">{{ package.name }}</strong>
+                {% if forloop.counter == 3 %}<span class="table-popular-badge">Popular</span>{% endif %}
+              </td>
+              <td>{{ package.student_range }}</td>
+              <td class="table-price">
+                <strong data-price-value>{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }}{% endif %}</strong>
+                <span data-price-label>{% if package.is_custom %}{% else %}/ term{% endif %}</span>
+              </td>
+              <td><a class="trial-link" href="{{ package.whatsapp_url }}" target="_blank" rel="noopener">{% if package.is_custom %}Contact Us{% else %}Start Free{% endif %}</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
 
     <div class="pricing-notes">

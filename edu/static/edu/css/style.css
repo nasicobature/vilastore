@@ -1245,76 +1245,92 @@ textarea {
   font-weight: 900;
 }
 
-.pricing-card-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+.pricing-table-shell {
   margin: 0 26px;
-}
-
-.edu-price-card {
-  position: relative;
-  display: grid;
-  gap: 14px;
-  align-content: start;
-  min-height: 260px;
+  overflow-x: auto;
   border: 1px solid hsl(var(--border));
   border-radius: 14px;
-  padding: 18px;
   background: hsl(var(--background));
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
 }
 
-.edu-price-card.is-popular {
-  border-color: hsl(var(--primary));
-  box-shadow: 0 18px 40px hsl(var(--primary) / 0.12);
+.pricing-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
-.popular-badge {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+.pricing-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 16px 18px;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  font-size: 12px;
+  font-weight: 900;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.pricing-table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.pricing-table tbody tr:nth-child(even) {
+  background: hsl(var(--muted) / 0.28);
+}
+
+.pricing-table tbody tr:hover {
+  background: hsl(var(--primary) / 0.08);
+}
+
+.pricing-table tbody tr.is-popular {
+  background: hsl(var(--primary) / 0.06);
+}
+
+.pricing-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table-package-name {
+  display: inline-flex;
+  align-items: center;
+  min-width: 98px;
+  color: hsl(var(--primary));
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px;
+}
+
+.table-popular-badge {
+  display: inline-flex;
+  margin-left: 8px;
   border-radius: 999px;
-  padding: 5px 8px;
+  padding: 4px 7px;
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
   font-size: 11px;
   font-weight: 900;
 }
 
-.price-card-top {
-  display: grid;
-  gap: 5px;
-  padding-right: 72px;
-}
-
-.price-card-top strong {
+.table-price strong {
+  display: inline-block;
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 21px;
+  font-size: 20px;
+  line-height: 1;
 }
 
-.price-card-top span,
-.edu-price-card p {
+.table-price span {
+  display: inline-block;
+  margin-left: 4px;
   color: hsl(var(--muted-foreground));
-  font-size: 13px;
-}
-
-.price-card-amount span {
-  display: block;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 28px;
-  font-weight: 900;
-  line-height: 1.05;
-}
-
-.price-card-amount small {
-  color: hsl(var(--muted-foreground));
+  font-size: 12px;
   font-weight: 800;
-}
-
-.edu-price-card p {
-  margin: 0;
-  line-height: 1.55;
 }
 
 .trial-link {
@@ -1407,7 +1423,6 @@ textarea {
   .subscription-plan-grid,
   .trial-option-grid,
   .package-grid,
-  .pricing-card-grid,
   .pricing-grid,
   .pricing-notes,
   .coming-soon-grid {
@@ -1451,7 +1466,7 @@ textarea {
 
   .pricing-heading,
   .pricing-control-row,
-  .pricing-card-grid,
+  .pricing-table-shell,
   .pricing-notes {
     margin-left: 16px;
     margin-right: 16px;
@@ -1461,7 +1476,12 @@ textarea {
     padding: 20px 16px;
   }
 
-  .price-card-amount span {
-    font-size: 24px;
+  .pricing-table {
+    min-width: 680px;
+  }
+
+  .pricing-table th,
+  .pricing-table td {
+    padding: 13px 14px;
   }
 }
