@@ -7,24 +7,33 @@
       <i data-lucide="check-circle-2" class="w-7 h-7 text-success"></i>
     </div>
     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Registration Successful</p>
-    <h1 class="font-display text-3xl font-bold mt-2">Your school portal has been created.</h1>
+    <h1 class="font-display text-3xl font-bold mt-2">Your School Portal Is Ready!</h1>
+    <h2 class="font-display text-xl font-semibold mt-3">{{ institution.name }}</h2>
     <p class="text-muted-foreground mt-3">
-      Your 3-day free trial is active. Use the administrator ID below to log in through your school subdomain.
+      Your 3-day free trial has started. Use the administrator ID below to log in from your school portal.
     </p>
 
     <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
       <div class="rounded-xl border border-border bg-background p-4">
-        <span class="block text-xs text-muted-foreground">School Portal</span>
+        <span class="block text-xs text-muted-foreground">Your Portal</span>
         <strong class="block mt-1 break-all">{{ portal_url }}</strong>
       </div>
       <div class="rounded-xl border border-border bg-background p-4">
         <span class="block text-xs text-muted-foreground">Administrator ID</span>
         <strong class="block mt-1">{{ admin_username }}</strong>
       </div>
+      <div class="rounded-xl border border-border bg-background p-4">
+        <span class="block text-xs text-muted-foreground">Trial Status</span>
+        <strong class="block mt-1">Active</strong>
+      </div>
+      <div class="rounded-xl border border-border bg-background p-4">
+        <span class="block text-xs text-muted-foreground">Trial Period</span>
+        <strong class="block mt-1">{{ trial_days|default:3 }} Days</strong>
+      </div>
     </div>
 
     <a href="{{ portal_url }}" class="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-3 text-sm font-semibold hover:bg-primary/90">
-      Go to School Portal
+      Go to My School Portal
       <i data-lucide="arrow-right" class="w-4 h-4"></i>
     </a>
   </div>

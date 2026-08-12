@@ -416,6 +416,10 @@ textarea {
   list-style: none;
 }
 
+.wizard-steps-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .wizard-step {
   display: flex;
   align-items: center;
@@ -524,6 +528,10 @@ textarea {
   outline: none;
 }
 
+.field-block input[type="file"] {
+  padding: 10px;
+}
+
 .field-block input:focus,
 .field-block select:focus {
   box-shadow: 0 0 0 2px hsl(var(--ring));
@@ -541,6 +549,101 @@ textarea {
 .generated-field span {
   color: hsl(var(--muted-foreground));
   font-weight: 500;
+}
+
+.portal-preview-card,
+.trial-start-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, hsl(var(--primary) / 0.08), transparent 42%),
+    hsl(var(--background));
+}
+
+.portal-preview-card {
+  display: grid;
+  align-items: start;
+}
+
+.portal-preview-card span,
+.trial-start-card span {
+  color: hsl(var(--primary));
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.portal-preview-card strong,
+.trial-start-card strong {
+  display: block;
+  margin-top: 5px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px;
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.portal-preview-card small,
+.trial-start-card small {
+  display: block;
+  margin-top: 7px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+
+.trial-start-card i {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  color: hsl(var(--success));
+}
+
+.subdomain-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border: 1px solid hsl(var(--input));
+  border-radius: 10px;
+  background: hsl(var(--background));
+  overflow: hidden;
+}
+
+.subdomain-input-row input {
+  border: 0;
+  border-radius: 0;
+}
+
+.subdomain-input-row input:focus {
+  box-shadow: none;
+}
+
+.subdomain-input-row span {
+  padding: 0 12px;
+  color: hsl(var(--muted-foreground));
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.availability-message {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.availability-message.is-available {
+  color: hsl(var(--success));
+}
+
+.availability-message.is-unavailable {
+  color: hsl(var(--destructive));
 }
 
 .document-rules {

@@ -14,6 +14,8 @@ RESERVED_EDU_SUBDOMAINS = {
     'edu',
     'app',
     'support',
+    'login',
+    'register',
     'dashboard',
 }
 EDU_PACKAGE_LIMITS = {

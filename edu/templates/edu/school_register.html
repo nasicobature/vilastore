@@ -1,0 +1,236 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="registration-shell">
+  <div class="registration-container">
+    <a href="/edu/" class="registration-back">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Edu Portal
+    </a>
+
+    <div class="registration-header">
+      <div class="registration-mark bg-primary">
+        <i data-lucide="school" class="text-primary-foreground"></i>
+      </div>
+      <div>
+        <p class="registration-eyebrow">Register School</p>
+        <h1 class="registration-title">Create your school portal</h1>
+        <p class="registration-copy">Complete the school profile, create the first admin account, choose your portal name, and start the 3-day free trial.</p>
+      </div>
+    </div>
+
+    <div class="registration-card">
+      <ol class="wizard-steps wizard-steps-four" data-wizard-steps>
+        <li class="wizard-step is-active" data-step-indicator="0"><span>1</span><strong>School</strong></li>
+        <li class="wizard-step" data-step-indicator="1"><span>2</span><strong>Admin</strong></li>
+        <li class="wizard-step" data-step-indicator="2"><span>3</span><strong>Portal</strong></li>
+        <li class="wizard-step" data-step-indicator="3"><span>4</span><strong>Trial</strong></li>
+      </ol>
+
+      <form method="post" enctype="multipart/form-data" class="wizard-form" data-registration-wizard data-school-register-form novalidate>
+        {% csrf_token %}
+        <div class="wizard-alert" data-wizard-error hidden></div>
+
+        <section class="wizard-panel is-active" data-wizard-panel>
+          <div class="section-heading">
+            <h2>School Information</h2>
+            <p>Add the basic school details. No CAC, TIN, license number, owner NIN, or document upload is required.</p>
+          </div>
+          <div class="form-grid">
+            <label class="field-block field-wide">School Name *
+              <input type="text" name="institution_name" required data-school-name data-review-label="School Name" />
+            </label>
+            <label class="field-block">School Type *
+              <select name="institution_type" required data-review-label="School Type">
+                {% for value, label in type_choices %}
+                  <option value="{{ value }}" {% if value == default_school_type %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="field-block">State *
+              <input type="text" name="state" required data-review-label="State" />
+            </label>
+            <label class="field-block">LGA *
+              <input type="text" name="lga" required data-review-label="LGA" />
+            </label>
+            <label class="field-block">School Phone *
+              <input type="text" name="phone_number" required data-review-label="School Phone" />
+            </label>
+            <label class="field-block">School Email *
+              <input type="email" name="email" required data-review-label="School Email" />
+            </label>
+            <label class="field-block field-wide">School Address *
+              <input type="text" name="address" required data-review-label="School Address" />
+            </label>
+            <label class="field-block field-wide">School Logo
+              <input type="file" name="logo" accept="image/*" data-review-label="School Logo" />
+            </label>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-wizard-panel>
+          <div class="section-heading">
+            <h2>Administrator Account</h2>
+            <p>The person registered here becomes the first School Admin for this portal.</p>
+          </div>
+          <div class="form-grid">
+            <label class="field-block field-wide">Administrator Full Name *
+              <input type="text" name="admin_full_name" required data-review-label="Administrator Full Name" />
+            </label>
+            <label class="field-block">Email *
+              <input type="email" name="admin_email" required data-review-label="Administrator Email" />
+            </label>
+            <label class="field-block">Phone Number *
+              <input type="text" name="admin_phone" required data-review-label="Administrator Phone" />
+            </label>
+            <label class="field-block">Password *
+              <input type="password" name="admin_password" required minlength="6" />
+            </label>
+            <label class="field-block">Confirm Password *
+              <input type="password" name="confirm_password" required minlength="6" />
+            </label>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-wizard-panel>
+          <div class="section-heading">
+            <h2>School Portal</h2>
+            <p>Your portal name is generated from the school name, and you can edit it before creating the school.</p>
+          </div>
+          <div class="portal-preview-card">
+            <span>Your School Portal</span>
+            <strong data-portal-preview>yourschool.vilastore.store</strong>
+            <small>Staff, students, and parents will log in from this school-specific portal.</small>
+          </div>
+          <div class="form-grid">
+            <label class="field-block field-wide">School subdomain *
+              <div class="subdomain-input-row">
+                <input type="text" name="school_code" required placeholder="brightfuture" data-school-code data-review-label="School Portal" />
+                <span>.vilastore.store</span>
+              </div>
+              <small class="availability-message" data-subdomain-message>Enter a school name to generate your portal.</small>
+            </label>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-wizard-panel>
+          <div class="section-heading">
+            <h2>Start Your 3-Day Free Trial</h2>
+            <p>3 days free. No payment required. You can choose a paid package after exploring the portal.</p>
+          </div>
+          <div class="trial-start-card">
+            <div>
+              <span>Free Trial</span>
+              <strong>3 days free</strong>
+              <small>No package payment is required during registration.</small>
+            </div>
+            <i data-lucide="badge-check"></i>
+          </div>
+          <div class="review-grid" data-review-output></div>
+          <div class="verification-notice">
+            <i data-lucide="shield-check"></i>
+            <div>
+              <strong>Create School & Start Free Trial</strong>
+              <p>The school, admin account, unique portal, and trial activation are saved together.</p>
+            </div>
+          </div>
+        </section>
+
+        <div class="wizard-actions">
+          <button type="button" class="wizard-btn wizard-btn-secondary" data-wizard-prev>Back</button>
+          <button type="button" class="wizard-btn wizard-btn-primary" data-wizard-next>Continue</button>
+          <button type="submit" class="wizard-btn wizard-btn-primary" data-wizard-submit data-subdomain-submit hidden>Create School & Start Free Trial</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const form = document.querySelector('[data-school-register-form]');
+    if (!form) return;
+
+    const schoolName = form.querySelector('[data-school-name]');
+    const schoolCode = form.querySelector('[data-school-code]');
+    const portalPreview = form.querySelector('[data-portal-preview]');
+    const message = form.querySelector('[data-subdomain-message]');
+    const submitButton = form.querySelector('[data-subdomain-submit]');
+    const checkUrl = "{% url 'edu:subdomain_check' %}";
+    let userEditedCode = false;
+    let availabilityTimer = null;
+    let latestAvailability = false;
+
+    const slugify = (value) => (value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 63);
+
+    const setAvailability = (state, text) => {
+      latestAvailability = state === 'available';
+      if (message) {
+        message.textContent = text;
+        message.classList.toggle('is-available', state === 'available');
+        message.classList.toggle('is-unavailable', state === 'unavailable');
+      }
+      if (submitButton) {
+        submitButton.disabled = !latestAvailability;
+      }
+    };
+
+    const updatePreview = () => {
+      const subdomain = slugify(schoolCode.value);
+      schoolCode.value = subdomain;
+      if (portalPreview) {
+        portalPreview.textContent = subdomain ? `${subdomain}.vilastore.store` : 'yourschool.vilastore.store';
+      }
+      return subdomain;
+    };
+
+    const checkAvailability = () => {
+      const subdomain = updatePreview();
+      window.clearTimeout(availabilityTimer);
+      if (!subdomain) {
+        setAvailability('unavailable', 'Enter a school portal name.');
+        return;
+      }
+      setAvailability('checking', 'Checking portal availability...');
+      availabilityTimer = window.setTimeout(() => {
+        fetch(`${checkUrl}?subdomain=${encodeURIComponent(subdomain)}`)
+          .then((response) => response.json())
+          .then((data) => {
+            const state = data.available ? 'available' : 'unavailable';
+            setAvailability(state, data.available ? 'Portal name available.' : data.message);
+            if (data.subdomain && data.subdomain !== schoolCode.value) {
+              schoolCode.value = data.subdomain;
+              updatePreview();
+            }
+          })
+          .catch(() => setAvailability('unavailable', 'Could not check availability. Please try again.'));
+      }, 280);
+    };
+
+    if (schoolName && schoolCode) {
+      schoolName.addEventListener('input', () => {
+        if (!userEditedCode) {
+          schoolCode.value = slugify(schoolName.value);
+        }
+        checkAvailability();
+      });
+      schoolCode.addEventListener('input', () => {
+        userEditedCode = true;
+        checkAvailability();
+      });
+    }
+
+    form.addEventListener('submit', (event) => {
+      if (!latestAvailability) {
+        event.preventDefault();
+        setAvailability('unavailable', 'Check and choose an available portal name before registration.');
+      }
+    });
+
+    checkAvailability();
+  })();
+</script>
+{% endblock %}

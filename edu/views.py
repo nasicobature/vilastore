@@ -13,11 +13,11 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import EDU_PACKAGE_LIMITS, RESERVED_EDU_SUBDOMAINS, EduSubscriptionSettings, Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
 from .tenant import subdomain_from_host
-from .verification import create_document_verifications
 from core.utils.notifications import send_email
 
 
@@ -1227,115 +1227,174 @@ def _get_tertiary_nav(role):
     return items
 
 
-def secondary_school_register(request):
+def edu_subdomain_availability(request):
+    raw_subdomain = request.GET.get('subdomain') or request.GET.get('school_name') or ''
+    subdomain = Institution.normalize_subdomain(raw_subdomain)
+    available = bool(subdomain)
+    message = 'Portal name available.'
+
+    if not subdomain:
+        message = 'Enter a school portal name.'
+    elif subdomain in RESERVED_EDU_SUBDOMAINS:
+        available = False
+        message = 'This portal name is reserved. Choose another.'
+    elif Institution.objects.filter(school_code__iexact=subdomain).exists():
+        available = False
+        message = 'Portal name already taken. Choose another.'
+
+    return JsonResponse({
+        'available': available,
+        'subdomain': subdomain,
+        'portal_url': f'https://{subdomain}.vilastore.store' if subdomain else '',
+        'message': message,
+    })
+
+
+def _school_register_context(default_school_type='secondary'):
+    return {
+        'type_choices': Institution.TYPE_CHOICES,
+        'default_school_type': default_school_type,
+        'reserved_subdomains': sorted(RESERVED_EDU_SUBDOMAINS),
+    }
+
+
+def _validation_error_messages(exc):
+    if hasattr(exc, 'message_dict'):
+        return [message for messages_list in exc.message_dict.values() for message in messages_list]
+    if hasattr(exc, 'messages'):
+        return exc.messages
+    return [str(exc)]
+
+
+def _register_school_with_trial(request, default_school_type='secondary'):
     if request.method == 'POST':
         institution_name = request.POST.get('institution_name', '').strip()
+        institution_type = request.POST.get('institution_type', default_school_type).strip()
+        if institution_type not in {'secondary', 'tertiary'}:
+            institution_type = default_school_type
         school_code = Institution.normalize_subdomain(request.POST.get('school_code') or institution_name)
+        address = request.POST.get('address', '').strip()
+        state = request.POST.get('state', '').strip()
+        lga = request.POST.get('lga', '').strip()
+        school_phone = request.POST.get('phone_number', '').strip()
+        school_email = request.POST.get('email', '').strip()
         admin_full_name = request.POST.get('admin_full_name', '').strip()
-        admin_password = request.POST.get('admin_password', '').strip()
         admin_email = request.POST.get('admin_email', '').strip()
-        billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
-        subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
-        missing_verification, verification_uploads = _missing_verification_requirements(request)
+        admin_phone = request.POST.get('admin_phone', '').strip()
+        admin_password = request.POST.get('admin_password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
 
-        if not all([institution_name, admin_full_name, admin_password, admin_email]):
-            messages.error(request, 'Please fill all required fields, including admin email.')
+        required_values = [
+            institution_name,
+            institution_type,
+            address,
+            state,
+            lga,
+            school_phone,
+            school_email,
+            admin_full_name,
+            admin_email,
+            admin_phone,
+            admin_password,
+            confirm_password,
+            school_code,
+        ]
+
+        if not all(required_values):
+            messages.error(request, 'Please complete all required school, administrator, and portal fields.')
+        elif admin_password != confirm_password:
+            messages.error(request, 'Password and confirm password do not match.')
         elif not _email_is_available(admin_email):
-            messages.error(request, 'That admin email address is already used by another account.')
+            messages.error(request, 'That administrator email address is already used by another account.')
         elif school_code in RESERVED_EDU_SUBDOMAINS:
-            messages.error(request, 'That school subdomain is reserved. Please choose another one.')
+            messages.error(request, 'That school portal name is reserved. Please choose another one.')
         elif Institution.objects.filter(school_code__iexact=school_code).exists():
-            messages.error(request, 'That school subdomain is already in use. Please choose another one.')
-        elif missing_verification:
-            messages.error(request, 'Please complete verification requirements: ' + ', '.join(missing_verification) + '.')
+            messages.error(request, 'Portal name already taken. Choose another.')
         else:
             try:
-                institution = Institution.objects.create(
-                    name=institution_name,
-                    school_code=school_code or None,
-                    short_name=request.POST.get('short_name', '').strip(),
-                    institution_type='secondary',
-                    ownership_type=request.POST.get('ownership_type', 'private'),
-                    year_established=request.POST.get('year_established') or None,
-                    country=request.POST.get('country', 'Nigeria').strip() or 'Nigeria',
-                    state=request.POST.get('state', '').strip(),
-                    city=request.POST.get('city', '').strip(),
-                    address=request.POST.get('address', '').strip(),
-                    postal_code=request.POST.get('postal_code', '').strip(),
-                    phone_number=request.POST.get('phone_number', '').strip(),
-                    email=request.POST.get('email', '').strip(),
-                    website=request.POST.get('website', '').strip(),
-                    grading_system=request.POST.get('grading_system', 'percentage'),
-                    max_grade=request.POST.get('max_grade') or 100,
-                    currency=request.POST.get('currency', 'NGN').strip() or 'NGN',
-                    payment_provider=request.POST.get('payment_provider', '').strip(),
-                    payment_public_key=request.POST.get('payment_public_key', '').strip(),
-                    payment_secret_key=request.POST.get('payment_secret_key', '').strip(),
-                    allow_online_payment=bool(request.POST.get('allow_online_payment')),
-                    subscription_package=subscription_package,
-                    subscription_status='pending',
-                    student_limit=_edu_package_limit(subscription_package),
-                    subscription_billing_cycle=billing_cycle,
-                    registration_payment_amount=_edu_subscription_amount(billing_cycle, subscription_package),
-                    registration_payment_status='pending',
-                    admin_email=admin_email,
-                    admin_phone=request.POST.get('admin_phone', '').strip(),
-                    theme_color=request.POST.get('theme_color', '').strip(),
-                    logo=request.FILES.get('logo'),
-                    favicon=request.FILES.get('favicon'),
-                    verification_status='pending',
-                    **verification_uploads,
-                )
-                create_document_verifications(institution)
+                with transaction.atomic():
+                    subscription_package = EDU_DEFAULT_PACKAGE
+                    billing_cycle = EDU_DEFAULT_BILLING_CYCLE
+                    admin_role = 'vc' if institution_type == 'tertiary' else 'admin'
+                    staff_prefix = 'TERSTF' if institution_type == 'tertiary' else 'SECSTF'
+                    institution = Institution.objects.create(
+                        name=institution_name,
+                        school_code=school_code,
+                        short_name=school_code[:20],
+                        institution_type=institution_type,
+                        ownership_type='private',
+                        country='Nigeria',
+                        state=state,
+                        city=lga,
+                        address=address,
+                        phone_number=school_phone,
+                        email=school_email,
+                        has_faculties=institution_type == 'tertiary',
+                        has_departments=institution_type == 'tertiary',
+                        grading_system='percentage',
+                        max_grade=100,
+                        currency='NGN',
+                        subscription_package=subscription_package,
+                        subscription_status='pending',
+                        student_limit=_edu_package_limit(subscription_package),
+                        subscription_billing_cycle=billing_cycle,
+                        registration_payment_amount=_edu_subscription_amount(billing_cycle, subscription_package),
+                        registration_payment_status='pending',
+                        admin_email=admin_email,
+                        admin_phone=admin_phone,
+                        logo=request.FILES.get('logo'),
+                        verification_status='pending',
+                    )
 
-                User = get_user_model()
-                admin_username = _generate_user_id(institution)
-                user = User.objects.create_user(
-                    username=admin_username,
-                    email=institution.admin_email,
-                    password=admin_password,
-                )
-                user.is_active = True
-                user.save()
+                    User = get_user_model()
+                    admin_username = _generate_user_id(institution)
+                    user = User.objects.create_user(
+                        username=admin_username,
+                        email=admin_email,
+                        password=admin_password,
+                    )
+                    user.is_active = True
+                    user.save()
 
-                profile, _ = Profile.objects.get_or_create(user=user)
-                profile.institution = institution
-                profile.institution_type = 'secondary'
-                profile.role = 'admin'
-                profile.created_via = 'school-register'
-                profile.is_approved = False
-                profile.approved_by = None
-                profile.approved_at = None
-                profile.save()
+                    profile, _ = Profile.objects.get_or_create(user=user)
+                    profile.institution = institution
+                    profile.institution_type = institution_type
+                    profile.role = admin_role
+                    profile.created_via = 'school-register'
+                    profile.is_approved = False
+                    profile.approved_by = None
+                    profile.approved_at = None
+                    profile.save()
 
-                Staff.objects.create(
-                    institution=institution,
-                    user=user,
-                    full_name=admin_full_name,
-                    staff_id=_generate_staff_id('SECSTF', institution),
-                    role='admin',
-                    department='',
-                )
+                    Staff.objects.create(
+                        institution=institution,
+                        user=user,
+                        full_name=admin_full_name,
+                        staff_id=_generate_staff_id(staff_prefix, institution),
+                        role=admin_role,
+                        department='',
+                    )
 
-                if not _activate_trial_access(institution, profile):
-                    messages.error(request, 'This school has already used its free trial. Choose a package to continue.')
-                    return redirect('edu:secondary_registration_payment', school_code=institution.school_code)
+                    if not _activate_trial_access(institution, profile):
+                        raise ValidationError('This school has already used its free trial. Choose a package to continue.')
+
                 return render(request, 'edu/registration_success.html', {
                     'institution': institution,
                     'admin_username': admin_username,
-                    'portal_url': _institution_portal_url(institution, admin_username),
+                    'portal_url': _institution_portal_url(institution),
+                    'trial_days': EDU_TRIAL_DAYS,
                 })
             except IntegrityError:
-                messages.error(request, 'School code or username already exists.')
+                messages.error(request, 'School portal name or administrator ID already exists.')
+            except ValidationError as exc:
+                for message in _validation_error_messages(exc):
+                    messages.error(request, message)
 
-    return render(request, 'edu/secondary_register.html', {
-        'ownership_choices': Institution.OWNERSHIP_CHOICES,
-        'grading_choices': Institution.GRADING_CHOICES,
-        'pricing_packages': _edu_pricing_packages(),
-        'subscription_plans': _edu_subscription_plans(),
-        'default_subscription_package': EDU_DEFAULT_PACKAGE,
-        'default_subscription_cycle': EDU_DEFAULT_BILLING_CYCLE,
-    })
+    return render(request, 'edu/school_register.html', _school_register_context(default_school_type))
+
+
+def secondary_school_register(request):
+    return _register_school_with_trial(request, 'secondary')
 
 
 def _extend_subscription_until(institution, billing_cycle):
@@ -2836,117 +2895,7 @@ def tertiary_create_user(request):
 
 
 def tertiary_school_register(request):
-    if request.method == 'POST':
-        institution_name = request.POST.get('institution_name', '').strip()
-        school_code = Institution.normalize_subdomain(request.POST.get('school_code') or institution_name)
-        vc_full_name = request.POST.get('vc_full_name', '').strip()
-        vc_password = request.POST.get('vc_password', '').strip()
-        admin_email = request.POST.get('admin_email', '').strip()
-        vc_role = 'vc'
-        billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
-        subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
-        missing_verification, verification_uploads = _missing_verification_requirements(request)
-
-        if not all([institution_name, vc_full_name, vc_password, admin_email]):
-            messages.error(request, 'Please fill all required fields, including admin email.')
-        elif not _email_is_available(admin_email):
-            messages.error(request, 'That admin email address is already used by another account.')
-        elif school_code in RESERVED_EDU_SUBDOMAINS:
-            messages.error(request, 'That school subdomain is reserved. Please choose another one.')
-        elif Institution.objects.filter(school_code__iexact=school_code).exists():
-            messages.error(request, 'That school subdomain is already in use. Please choose another one.')
-        elif missing_verification:
-            messages.error(request, 'Please complete verification requirements: ' + ', '.join(missing_verification) + '.')
-        else:
-            try:
-                institution = Institution.objects.create(
-                    name=institution_name,
-                    school_code=school_code or None,
-                    short_name=request.POST.get('short_name', '').strip(),
-                    institution_type='tertiary',
-                    ownership_type=request.POST.get('ownership_type', 'private'),
-                    year_established=request.POST.get('year_established') or None,
-                    country=request.POST.get('country', 'Nigeria').strip() or 'Nigeria',
-                    state=request.POST.get('state', '').strip(),
-                    city=request.POST.get('city', '').strip(),
-                    address=request.POST.get('address', '').strip(),
-                    postal_code=request.POST.get('postal_code', '').strip(),
-                    phone_number=request.POST.get('phone_number', '').strip(),
-                    email=request.POST.get('email', '').strip(),
-                    website=request.POST.get('website', '').strip(),
-                    has_faculties=True,
-                    has_departments=True,
-                    grading_system=request.POST.get('grading_system', 'percentage'),
-                    max_grade=request.POST.get('max_grade') or 100,
-                    currency=request.POST.get('currency', 'NGN').strip() or 'NGN',
-                    payment_provider=request.POST.get('payment_provider', '').strip(),
-                    payment_public_key=request.POST.get('payment_public_key', '').strip(),
-                    payment_secret_key=request.POST.get('payment_secret_key', '').strip(),
-                    allow_online_payment=bool(request.POST.get('allow_online_payment')),
-                    subscription_package=subscription_package,
-                    subscription_status='pending',
-                    student_limit=_edu_package_limit(subscription_package),
-                    subscription_billing_cycle=billing_cycle,
-                    registration_payment_amount=_edu_subscription_amount(billing_cycle, subscription_package),
-                    registration_payment_status='pending',
-                    admin_email=admin_email,
-                    admin_phone=request.POST.get('admin_phone', '').strip(),
-                    theme_color=request.POST.get('theme_color', '').strip(),
-                    logo=request.FILES.get('logo'),
-                    favicon=request.FILES.get('favicon'),
-                    verification_status='pending',
-                    **verification_uploads,
-                )
-                create_document_verifications(institution)
-
-                User = get_user_model()
-                vc_username = _generate_user_id(institution)
-                user = User.objects.create_user(
-                    username=vc_username,
-                    email=institution.admin_email,
-                    password=vc_password,
-                )
-                user.is_active = True
-                user.save()
-
-                profile, _ = Profile.objects.get_or_create(user=user)
-                profile.institution = institution
-                profile.institution_type = 'tertiary'
-                profile.role = vc_role if vc_role in ['vc', 'provost'] else 'vc'
-                profile.created_via = 'school-register'
-                profile.is_approved = False
-                profile.approved_by = None
-                profile.approved_at = None
-                profile.save()
-
-                Staff.objects.create(
-                    institution=institution,
-                    user=user,
-                    full_name=vc_full_name,
-                    staff_id=_generate_staff_id('TERSTF', institution),
-                    role=profile.role,
-                    department='',
-                )
-
-                if not _activate_trial_access(institution, profile):
-                    messages.error(request, 'This institution has already used its free trial. Choose a package to continue.')
-                    return redirect('edu:tertiary_registration_payment', school_code=institution.school_code)
-                return render(request, 'edu/registration_success.html', {
-                    'institution': institution,
-                    'admin_username': vc_username,
-                    'portal_url': _institution_portal_url(institution, vc_username),
-                })
-            except IntegrityError:
-                messages.error(request, 'School code or username already exists.')
-
-    return render(request, 'edu/tertiary_register.html', {
-        'ownership_choices': Institution.OWNERSHIP_CHOICES,
-        'grading_choices': Institution.GRADING_CHOICES,
-        'pricing_packages': _edu_pricing_packages(),
-        'subscription_plans': _edu_subscription_plans(),
-        'default_subscription_package': EDU_DEFAULT_PACKAGE,
-        'default_subscription_cycle': EDU_DEFAULT_BILLING_CYCLE,
-    })
+    return _register_school_with_trial(request, 'tertiary')
 
 
 def logout(request):
