@@ -1,5 +1,6 @@
 from decimal import Decimal
 from datetime import timedelta
+from functools import wraps
 import os
 import secrets
 
@@ -14,7 +15,7 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .models import EDU_PACKAGE_LIMITS, Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
+from .models import EDU_PACKAGE_LIMITS, EduSubscriptionSettings, Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
 from .verification import create_document_verifications
 from core.utils.notifications import send_email
 
@@ -141,7 +142,7 @@ EDU_REGISTRATION_FEE = _edu_subscription_amount(EDU_DEFAULT_BILLING_CYCLE, EDU_D
 
 EMAIL_TOKEN_HOURS = 48
 PASSWORD_RESET_HOURS = 2
-EDU_TRIAL_DAYS = 2
+EDU_TRIAL_DAYS = 3
 
 
 def _edu_abs_url(request, path):
@@ -165,64 +166,93 @@ def _institution_portal_url(institution, admin_id=None):
     return url
 
 
+def _edu_trial_student_limit():
+    return EduSubscriptionSettings.current().trial_student_limit
+
+
 def _activate_trial_access(institution, profile):
+    if institution.has_used_free_trial:
+        return False
     now = timezone.now()
     today = timezone.localdate()
-    institution.registration_payment_status = 'paid'
-    institution.registration_payment_reference = '2-day-trial'
-    institution.registration_payment_paid_at = now
+    institution.registration_payment_status = 'pending'
+    institution.registration_payment_reference = '3-day-free-trial'
+    institution.registration_payment_paid_at = None
     institution.subscription_status = 'trial'
     institution.subscription_start_date = today
-    institution.subscription_expiry_date = today + timedelta(days=EDU_TRIAL_DAYS)
-    institution.subscription_active_until = institution.subscription_expiry_date
-    institution.subscription_last_payment_reference = '2-day-trial'
-    institution.subscription_last_paid_at = now
+    institution.trial_start_date = today
+    institution.trial_end_date = today + timedelta(days=EDU_TRIAL_DAYS)
+    institution.subscription_expiry_date = institution.trial_end_date
+    institution.subscription_active_until = institution.trial_end_date
+    institution.trial_student_limit = _edu_trial_student_limit()
+    institution.has_used_free_trial = True
+    institution.subscription_last_payment_reference = '3-day-free-trial'
+    institution.subscription_last_paid_at = None
     institution.verification_status = 'approved'
     institution.verified_at = now
-    institution.sync_package_limit()
     institution.save(update_fields=[
         'registration_payment_status',
         'registration_payment_reference',
         'registration_payment_paid_at',
         'subscription_status',
         'subscription_start_date',
+        'trial_start_date',
+        'trial_end_date',
         'subscription_expiry_date',
         'subscription_active_until',
+        'trial_student_limit',
+        'has_used_free_trial',
         'subscription_last_payment_reference',
         'subscription_last_paid_at',
         'verification_status',
         'verified_at',
-        'student_limit',
     ])
     profile.is_approved = True
     profile.email_verified = True
     profile.approved_at = now
     profile.save(update_fields=['is_approved', 'email_verified', 'approved_at'])
+    return True
 
 
 def _subscription_expiry_date(institution):
+    if institution.subscription_status in {'trial', 'trial_expired'}:
+        return institution.trial_end_date or institution.subscription_expiry_date or institution.subscription_active_until
     return institution.subscription_expiry_date or institution.subscription_active_until
 
 
 def _subscription_is_expired(institution):
+    if not institution:
+        return True
+    institution.refresh_subscription_status()
+    if institution.subscription_status in {'trial_expired', 'expired'}:
+        return True
     expiry = _subscription_expiry_date(institution)
-    return bool(expiry and expiry < timezone.localdate())
+    return bool(institution.subscription_status == 'active' and expiry and expiry < timezone.localdate())
 
 
 def _subscription_usage(institution):
+    institution.refresh_subscription_status()
     used = Student.objects.filter(institution=institution).count()
     limit = institution.current_student_limit
     is_expired = _subscription_is_expired(institution)
+    trial_days_remaining = institution.trial_days_remaining
     return {
         'package_code': institution.subscription_package,
         'package_name': institution.package_name,
-        'status': 'expired' if is_expired else institution.subscription_status,
+        'status': institution.subscription_status,
+        'status_display': institution.get_subscription_status_display(),
         'billing_cycle': institution.subscription_billing_cycle,
         'student_limit': limit,
         'students_used': used,
         'students_remaining': max(limit - used, 0),
         'expiry_date': _subscription_expiry_date(institution),
+        'trial_start_date': institution.trial_start_date,
+        'trial_end_date': institution.trial_end_date,
+        'trial_days_remaining': trial_days_remaining,
+        'trial_message': f"{trial_days_remaining} day{'s' if trial_days_remaining != 1 else ''} remaining in your free trial.",
         'is_expired': is_expired,
+        'is_trial': institution.subscription_status == 'trial',
+        'is_trial_expired': institution.subscription_status == 'trial_expired',
     }
 
 
@@ -236,8 +266,10 @@ def _student_limit_message(institution):
 
 def _student_capacity_message(institution):
     usage = _subscription_usage(institution)
+    if usage['is_trial_expired']:
+        return 'Your 3-day free trial has ended. Choose a package to continue using VilaStore Edu Portal.'
     if usage['is_expired']:
-        return 'Your EduPortal trial or subscription has expired. Renew or upgrade your package to add more students.'
+        return 'Your Edu Portal subscription has expired. Renew or upgrade your package to add more students.'
     return _student_limit_message(institution)
 
 
@@ -248,14 +280,28 @@ def _can_add_students(institution, count=1):
 
 def _expired_subscription_response(request, profile):
     institution = profile.institution
-    if institution and institution.subscription_status != 'expired':
-        institution.subscription_status = 'expired'
-        institution.save(update_fields=['subscription_status'])
-    messages.error(request, 'Your Edu Portal trial or subscription has expired. Renew your package to continue.')
+    if institution:
+        institution.refresh_subscription_status()
+    if institution and institution.subscription_status == 'trial_expired':
+        messages.error(request, 'Your 3-day free trial has ended. Choose a package to continue using VilaStore Edu Portal.')
+    else:
+        messages.error(request, 'Your Edu Portal subscription has expired. Renew your package to continue.')
     if profile.role in ['admin', 'vc', 'provost']:
         return redirect('edu:subscription_renewal')
     auth_logout(request)
     return redirect('edu:index')
+
+
+def edu_portal_access_required(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        profile = getattr(request.user, 'profile', None)
+        if profile and profile.institution:
+            profile.institution.refresh_subscription_status()
+            if not profile.institution.has_active_subscription_access:
+                return _expired_subscription_response(request, profile)
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 
 def _email_is_available(email, user=None):
@@ -658,10 +704,6 @@ def _login_for_institution(request, institution_type, template_name):
                 if not school_code or not profile.institution or profile.institution.school_code.upper() != school_code:
                     auth_logout(request)
                     messages.error(request, 'Invalid school code.')
-                elif profile.institution and profile.institution.subscription_active_until and profile.institution.subscription_active_until < timezone.localdate():
-                    auth_logout(request)
-                    payment_url = f"/edu/{profile.institution_type}/register/{profile.institution.school_code}/payment/"
-                    messages.error(request, f'Your EduPortal trial or subscription has ended. Please renew to continue using the portal: {payment_url}')
                 elif not profile.is_approved:
                     auth_logout(request)
                     if profile.institution and profile.institution.registration_payment_status != 'paid':
@@ -681,6 +723,8 @@ def _login_for_institution(request, institution_type, template_name):
                     _send_edu_verification_email(request, profile)
                     messages.error(request, 'Please verify your email address before login. We sent a fresh verification link to your email.')
                 else:
+                    if profile.institution:
+                        profile.institution.refresh_subscription_status()
                     if profile.institution_type == 'tertiary':
                         return redirect('edu:tertiary_dashboard', role=profile.role)
                     return redirect('edu:secondary_dashboard', role=profile.role)
@@ -1178,7 +1222,6 @@ def secondary_school_register(request):
         admin_email = request.POST.get('admin_email', '').strip()
         billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
         subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
-        registration_access = request.POST.get('registration_access', 'trial')
         missing_verification, verification_uploads = _missing_verification_requirements(request)
 
         if not all([institution_name, admin_full_name, admin_password, admin_email]):
@@ -1256,13 +1299,10 @@ def secondary_school_register(request):
                     department='',
                 )
 
-                if registration_access == 'pay':
-                    _send_edu_verification_email(request, profile)
-                    messages.success(request, f'School registration submitted. Complete payment now. School code: {institution.school_code}. Admin ID: {admin_username}. Portal: {_institution_portal_url(institution)}')
+                if not _activate_trial_access(institution, profile):
+                    messages.error(request, 'This school has already used its free trial. Choose a package to continue.')
                     return redirect('edu:secondary_registration_payment', school_code=institution.school_code)
-
-                _activate_trial_access(institution, profile)
-                messages.success(request, f'Your 2-day trial is active. School code: {institution.school_code}. Admin ID: {admin_username}.')
+                messages.success(request, f'Your 3-day free trial is active. School code: {institution.school_code}. Admin ID: {admin_username}.')
                 return redirect(_institution_portal_url(institution, admin_username))
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')
@@ -1301,7 +1341,8 @@ def _edu_payment_context(institution, login_url, mode='registration'):
     package_code = _normalize_edu_package(institution.subscription_package)
     plan = _edu_subscription_plans(package_code)[cycle]
     amount = Decimal(plan['amount'])
-    subscription_expired = bool(institution.subscription_active_until and institution.subscription_active_until < timezone.localdate())
+    institution.refresh_subscription_status()
+    subscription_expired = _subscription_is_expired(institution)
     return {
         'institution': institution,
         'amount': amount,
@@ -2783,7 +2824,6 @@ def tertiary_school_register(request):
         vc_role = 'vc'
         billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
         subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
-        registration_access = request.POST.get('registration_access', 'trial')
         missing_verification, verification_uploads = _missing_verification_requirements(request)
 
         if not all([institution_name, vc_full_name, vc_password, admin_email]):
@@ -2863,12 +2903,10 @@ def tertiary_school_register(request):
                     department='',
                 )
 
-                if registration_access == 'pay':
-                    messages.success(request, f'Institution registration submitted. Complete payment now. School code: {institution.school_code}. Admin ID: {vc_username}. Portal: {_institution_portal_url(institution)}')
+                if not _activate_trial_access(institution, profile):
+                    messages.error(request, 'This institution has already used its free trial. Choose a package to continue.')
                     return redirect('edu:tertiary_registration_payment', school_code=institution.school_code)
-
-                _activate_trial_access(institution, profile)
-                messages.success(request, f'Your 2-day trial is active. School code: {institution.school_code}. Admin ID: {vc_username}.')
+                messages.success(request, f'Your 3-day free trial is active. School code: {institution.school_code}. Admin ID: {vc_username}.')
                 return redirect(_institution_portal_url(institution, vc_username))
             except IntegrityError:
                 messages.error(request, 'School code or username already exists.')

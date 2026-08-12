@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils import timezone
 from .models import (
+    EduSubscriptionSettings,
     Institution,
     InstitutionDocumentVerification,
     Faculty,
@@ -35,8 +36,8 @@ class InstitutionDocumentVerificationInline(admin.TabularInline):
 
 @admin.register(Institution)
 class InstitutionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'institution_type', 'city', 'country', 'subscription_billing_cycle', 'registration_payment_status', 'subscription_active_until', 'verification_status', 'verified_at')
-    list_filter = ('institution_type', 'verification_status', 'registration_payment_status', 'subscription_billing_cycle')
+    list_display = ('name', 'institution_type', 'city', 'country', 'subscription_status', 'subscription_package', 'student_limit', 'trial_student_limit', 'subscription_active_until', 'verification_status', 'verified_at')
+    list_filter = ('institution_type', 'verification_status', 'registration_payment_status', 'subscription_status', 'subscription_package', 'subscription_billing_cycle')
     search_fields = ('name', 'school_code', 'email', 'admin_email')
     readonly_fields = ('created_at', 'verified_at')
     inlines = (InstitutionDocumentVerificationInline,)
@@ -62,7 +63,10 @@ class InstitutionAdmin(admin.ModelAdmin):
         }),
         ('Registration Payment', {
             'fields': (
-                'subscription_billing_cycle', 'registration_payment_status', 'registration_payment_amount',
+                'subscription_package', 'subscription_status', 'subscription_billing_cycle', 'student_limit',
+                'trial_start_date', 'trial_end_date', 'trial_student_limit', 'has_used_free_trial',
+                'subscription_start_date', 'subscription_expiry_date',
+                'registration_payment_status', 'registration_payment_amount',
                 'registration_payment_reference', 'registration_payment_paid_at',
                 'subscription_active_until', 'subscription_last_payment_reference', 'subscription_last_paid_at',
             )
@@ -98,6 +102,18 @@ class InstitutionAdmin(admin.ModelAdmin):
                 created_via='school-register',
                 is_approved=False,
             ).update(is_approved=True, approved_by=request.user, approved_at=timezone.now())
+
+
+@admin.register(EduSubscriptionSettings)
+class EduSubscriptionSettingsAdmin(admin.ModelAdmin):
+    list_display = ('trial_student_limit', 'updated_at')
+    readonly_fields = ('updated_at',)
+
+    def has_add_permission(self, request):
+        return not EduSubscriptionSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(InstitutionDocumentVerification)

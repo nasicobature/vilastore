@@ -12,7 +12,9 @@
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{% if payment_mode == 'renewal' %}Subscription Renewal{% else %}Subscription Payment{% endif %}</p>
         <h1 class="font-display text-3xl font-bold mt-2">{% if payment_mode == 'renewal' %}Renew EduPortal access{% else %}Complete EduPortal subscription{% endif %}</h1>
         <p class="text-sm text-muted-foreground mt-3 max-w-xl">
-          {% if payment_mode == 'renewal' %}
+          {% if subscription_usage.is_trial_expired %}
+            Your 3-day free trial has ended. Choose a package to continue using VilaStore Edu Portal.
+          {% elif payment_mode == 'renewal' %}
             Choose a billing cycle and renew access for your school.
           {% else %}
             Your school registration has been submitted. Confirm the selected billing period and pay the EduPortal subscription now. Your portal subdomain is ready below.
@@ -54,7 +56,13 @@
 
     {% if institution.subscription_active_until %}
       <div class="mt-6 rounded-xl border border-border bg-background px-4 py-3 text-sm">
-        Current EduPortal access is active until <strong>{{ institution.subscription_active_until|date:"M j, Y" }}</strong>.
+        {% if subscription_usage.is_trial_expired %}
+          Your 3-day free trial ended on <strong>{{ subscription_usage.expiry_date|date:"M j, Y" }}</strong>.
+        {% elif subscription_usage.is_trial %}
+          <strong>{{ subscription_usage.trial_message }}</strong> Trial ends on <strong>{{ subscription_usage.expiry_date|date:"M j, Y" }}</strong>.
+        {% else %}
+          Current EduPortal access is active until <strong>{{ institution.subscription_active_until|date:"M j, Y" }}</strong>.
+        {% endif %}
       </div>
     {% endif %}
 

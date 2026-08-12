@@ -51,7 +51,8 @@ class Institution(models.Model):
         ('failed', 'Failed'),
     ]
     SUBSCRIPTION_STATUS_CHOICES = [
-        ('trial', 'Trial'),
+        ('trial', 'Free Trial'),
+        ('trial_expired', 'Trial Expired'),
         ('active', 'Active'),
         ('expired', 'Expired'),
         ('pending', 'Pending'),
@@ -106,6 +107,10 @@ class Institution(models.Model):
     subscription_expiry_date = models.DateField(null=True, blank=True)
     subscription_billing_cycle = models.CharField(max_length=20, choices=SUBSCRIPTION_BILLING_CHOICES, default='termly')
     student_limit = models.PositiveIntegerField(default=50)
+    trial_start_date = models.DateField(null=True, blank=True)
+    trial_end_date = models.DateField(null=True, blank=True)
+    trial_student_limit = models.PositiveIntegerField(default=20)
+    has_used_free_trial = models.BooleanField(default=False)
     subscription_active_until = models.DateField(null=True, blank=True)
     subscription_last_payment_reference = models.CharField(max_length=120, blank=True)
     subscription_last_paid_at = models.DateTimeField(null=True, blank=True)
@@ -152,6 +157,8 @@ class Institution(models.Model):
 
     @property
     def current_student_limit(self):
+        if self.subscription_status == 'trial':
+            return self.trial_student_limit
         return self.student_limit or self.package_student_limit
 
     @property
@@ -169,11 +176,61 @@ class Institution(models.Model):
         expiry = self.subscription_expiry_date or self.subscription_active_until
         return bool(expiry and expiry < timezone.localdate())
 
+    @property
+    def is_trial_expired(self):
+        return bool(self.subscription_status == 'trial' and self.trial_end_date and self.trial_end_date <= timezone.localdate())
+
+    @property
+    def trial_days_remaining(self):
+        if self.subscription_status != 'trial' or not self.trial_end_date:
+            return 0
+        return max((self.trial_end_date - timezone.localdate()).days, 0)
+
+    @property
+    def has_active_subscription_access(self):
+        if self.subscription_status == 'trial':
+            return not self.is_trial_expired
+        if self.subscription_status == 'active':
+            return not self.is_subscription_expired
+        return False
+
+    def refresh_subscription_status(self, save=True):
+        if self.subscription_status == 'trial' and self.is_trial_expired:
+            self.subscription_status = 'trial_expired'
+        elif self.subscription_status == 'active' and self.is_subscription_expired:
+            self.subscription_status = 'expired'
+        else:
+            return False
+        if save and self.pk:
+            self.save(update_fields=['subscription_status'])
+        return True
+
     def sync_package_limit(self):
         self.student_limit = self.package_student_limit
 
     def __str__(self):
         return f"{self.name} ({self.get_institution_type_display()})"
+
+
+class EduSubscriptionSettings(models.Model):
+    trial_student_limit = models.PositiveIntegerField(default=20)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Edu Subscription Settings'
+        verbose_name_plural = 'Edu Subscription Settings'
+
+    @classmethod
+    def current(cls):
+        settings, _ = cls.objects.get_or_create(pk=1)
+        return settings
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return 'Edu Subscription Settings'
 
 
 class InstitutionDocumentVerification(models.Model):
@@ -344,6 +401,16 @@ class Student(models.Model):
             original = Student.objects.filter(pk=self.pk).values('institution_id').first()
             if original and original['institution_id'] == self.institution_id:
                 return
+        self.institution.refresh_subscription_status()
+        if self.institution.subscription_status in {'trial_expired', 'expired'}:
+            message = (
+                'Your 3-day free trial has ended. Choose a package to continue using VilaStore Edu Portal.'
+                if self.institution.subscription_status == 'trial_expired'
+                else 'Your Edu Portal subscription has expired. Renew your package to continue using VilaStore Edu Portal.'
+            )
+            raise ValidationError({
+                'institution': message
+            })
         existing_students = Student.objects.filter(institution=self.institution).exclude(pk=self.pk).count()
         limit = self.institution.current_student_limit
         if existing_students >= limit:
