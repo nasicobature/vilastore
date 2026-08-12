@@ -8,12 +8,13 @@ from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .models import Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
+from .models import EDU_PACKAGE_LIMITS, Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
 from .verification import create_document_verifications
 from core.utils.notifications import send_email
 
@@ -21,13 +22,13 @@ from core.utils.notifications import send_email
 EDU_DEFAULT_BILLING_CYCLE = 'termly'
 EDU_DEFAULT_PACKAGE = 'starter'
 EDU_PRICING_PACKAGES = [
-    ('starter', 'Starter', '1 - 50 Students', Decimal('20000.00')),
-    ('basic', 'Basic', '51 - 100 Students', Decimal('30000.00')),
-    ('growth', 'Growth', '101 - 200 Students', Decimal('45000.00')),
-    ('standard', 'Standard', '201 - 350 Students', Decimal('65000.00')),
-    ('premium', 'Premium', '351 - 500 Students', Decimal('85000.00')),
-    ('enterprise', 'Enterprise', '501 - 750 Students', Decimal('110000.00')),
-    ('enterprise-plus', 'Enterprise Plus', '751+ Students', Decimal('150000.00')),
+    ('starter', 'Starter', '1 - 50 Students', EDU_PACKAGE_LIMITS['starter'], Decimal('20000.00')),
+    ('basic', 'Basic', '51 - 100 Students', EDU_PACKAGE_LIMITS['basic'], Decimal('30000.00')),
+    ('growth', 'Growth', '101 - 200 Students', EDU_PACKAGE_LIMITS['growth'], Decimal('45000.00')),
+    ('standard', 'Standard', '201 - 350 Students', EDU_PACKAGE_LIMITS['standard'], Decimal('65000.00')),
+    ('premium', 'Premium', '351 - 500 Students', EDU_PACKAGE_LIMITS['premium'], Decimal('85000.00')),
+    ('enterprise', 'Enterprise', '501 - 750 Students', EDU_PACKAGE_LIMITS['enterprise'], Decimal('110000.00')),
+    ('enterprise-plus', 'Enterprise Plus', '751+ Students', EDU_PACKAGE_LIMITS['enterprise-plus'], Decimal('150000.00')),
 ]
 
 
@@ -47,9 +48,13 @@ def _normalize_edu_package(value):
     return EDU_DEFAULT_PACKAGE
 
 
+def _edu_package_limit(package_code):
+    return EDU_PACKAGE_LIMITS.get(_normalize_edu_package(package_code), EDU_PACKAGE_LIMITS[EDU_DEFAULT_PACKAGE])
+
+
 def _edu_pricing_packages():
     rows = []
-    for code, name, student_range, term_amount in EDU_PRICING_PACKAGES:
+    for code, name, student_range, student_limit, term_amount in EDU_PRICING_PACKAGES:
         is_custom = term_amount is None
         session_amount = None if is_custom else _session_price(term_amount)
         whatsapp_text = (
@@ -61,6 +66,7 @@ def _edu_pricing_packages():
             'code': code,
             'name': name,
             'student_range': student_range,
+            'student_limit': student_limit,
             'term_amount': term_amount,
             'term_amount_display': 'Custom Pricing' if is_custom else _format_edu_price(term_amount),
             'session_amount': session_amount,
@@ -161,28 +167,95 @@ def _institution_portal_url(institution, admin_id=None):
 
 def _activate_trial_access(institution, profile):
     now = timezone.now()
+    today = timezone.localdate()
     institution.registration_payment_status = 'paid'
     institution.registration_payment_reference = '2-day-trial'
     institution.registration_payment_paid_at = now
-    institution.subscription_active_until = timezone.localdate() + timedelta(days=EDU_TRIAL_DAYS)
+    institution.subscription_status = 'trial'
+    institution.subscription_start_date = today
+    institution.subscription_expiry_date = today + timedelta(days=EDU_TRIAL_DAYS)
+    institution.subscription_active_until = institution.subscription_expiry_date
     institution.subscription_last_payment_reference = '2-day-trial'
     institution.subscription_last_paid_at = now
     institution.verification_status = 'approved'
     institution.verified_at = now
+    institution.sync_package_limit()
     institution.save(update_fields=[
         'registration_payment_status',
         'registration_payment_reference',
         'registration_payment_paid_at',
+        'subscription_status',
+        'subscription_start_date',
+        'subscription_expiry_date',
         'subscription_active_until',
         'subscription_last_payment_reference',
         'subscription_last_paid_at',
         'verification_status',
         'verified_at',
+        'student_limit',
     ])
     profile.is_approved = True
     profile.email_verified = True
     profile.approved_at = now
     profile.save(update_fields=['is_approved', 'email_verified', 'approved_at'])
+
+
+def _subscription_expiry_date(institution):
+    return institution.subscription_expiry_date or institution.subscription_active_until
+
+
+def _subscription_is_expired(institution):
+    expiry = _subscription_expiry_date(institution)
+    return bool(expiry and expiry < timezone.localdate())
+
+
+def _subscription_usage(institution):
+    used = Student.objects.filter(institution=institution).count()
+    limit = institution.current_student_limit
+    is_expired = _subscription_is_expired(institution)
+    return {
+        'package_code': institution.subscription_package,
+        'package_name': institution.package_name,
+        'status': 'expired' if is_expired else institution.subscription_status,
+        'billing_cycle': institution.subscription_billing_cycle,
+        'student_limit': limit,
+        'students_used': used,
+        'students_remaining': max(limit - used, 0),
+        'expiry_date': _subscription_expiry_date(institution),
+        'is_expired': is_expired,
+    }
+
+
+def _student_limit_message(institution):
+    usage = _subscription_usage(institution)
+    return (
+        f"You have reached the {usage['student_limit']}-student limit for your "
+        f"{usage['package_name']} package. Upgrade your package to add more students."
+    )
+
+
+def _student_capacity_message(institution):
+    usage = _subscription_usage(institution)
+    if usage['is_expired']:
+        return 'Your EduPortal trial or subscription has expired. Renew or upgrade your package to add more students.'
+    return _student_limit_message(institution)
+
+
+def _can_add_students(institution, count=1):
+    usage = _subscription_usage(institution)
+    return not usage['is_expired'] and usage['students_used'] + count <= usage['student_limit']
+
+
+def _expired_subscription_response(request, profile):
+    institution = profile.institution
+    if institution and institution.subscription_status != 'expired':
+        institution.subscription_status = 'expired'
+        institution.save(update_fields=['subscription_status'])
+    messages.error(request, 'Your Edu Portal trial or subscription has expired. Renew your package to continue.')
+    if profile.role in ['admin', 'vc', 'provost']:
+        return redirect('edu:subscription_renewal')
+    auth_logout(request)
+    return redirect('edu:index')
 
 
 def _email_is_available(email, user=None):
@@ -1139,6 +1212,8 @@ def secondary_school_register(request):
                     payment_secret_key=request.POST.get('payment_secret_key', '').strip(),
                     allow_online_payment=bool(request.POST.get('allow_online_payment')),
                     subscription_package=subscription_package,
+                    subscription_status='pending',
+                    student_limit=_edu_package_limit(subscription_package),
                     subscription_billing_cycle=billing_cycle,
                     registration_payment_amount=_edu_subscription_amount(billing_cycle, subscription_package),
                     registration_payment_status='pending',
@@ -1209,6 +1284,18 @@ def _extend_subscription_until(institution, billing_cycle):
     return start_date + timedelta(days=plan['duration_days'])
 
 
+def _package_change_warning(institution, package_code):
+    new_limit = _edu_package_limit(package_code)
+    current_students = Student.objects.filter(institution=institution).count()
+    if current_students > new_limit:
+        package = _edu_package(package_code)
+        return (
+            f"This school already has {current_students} students. The {package['name']} "
+            f"package allows {new_limit}, so no new students can be added until the count is reduced or the package is upgraded."
+        )
+    return ''
+
+
 def _edu_payment_context(institution, login_url, mode='registration'):
     cycle = _normalize_edu_billing_cycle(institution.subscription_billing_cycle)
     package_code = _normalize_edu_package(institution.subscription_package)
@@ -1229,6 +1316,7 @@ def _edu_payment_context(institution, login_url, mode='registration'):
         'portal_url': _institution_portal_url(institution),
         'payment_mode': mode,
         'subscription_expired': subscription_expired,
+        'subscription_usage': _subscription_usage(institution),
         'allow_payment_form': mode == 'renewal' or institution.registration_payment_status != 'paid' or subscription_expired,
     }
 
@@ -1273,17 +1361,26 @@ def _confirm_edu_subscription_payment(request, institution, payment_route_name, 
             return redirect(payment_route_name, **redirect_kwargs)
 
         paid_at = timezone.now()
+        start_date = timezone.localdate()
         institution.subscription_package = package_code
         institution.subscription_billing_cycle = billing_cycle
+        institution.subscription_status = 'active'
+        institution.subscription_start_date = start_date
+        institution.sync_package_limit()
         institution.registration_payment_amount = expected_amount
         institution.registration_payment_reference = payment_reference
         institution.registration_payment_paid_at = paid_at
         institution.subscription_active_until = _extend_subscription_until(institution, billing_cycle)
+        institution.subscription_expiry_date = institution.subscription_active_until
         institution.subscription_last_payment_reference = payment_reference
         institution.subscription_last_paid_at = paid_at
         update_fields = [
             'subscription_package',
             'subscription_billing_cycle',
+            'subscription_status',
+            'subscription_start_date',
+            'subscription_expiry_date',
+            'student_limit',
             'registration_payment_amount',
             'registration_payment_reference',
             'registration_payment_paid_at',
@@ -1295,6 +1392,9 @@ def _confirm_edu_subscription_payment(request, institution, payment_route_name, 
             institution.registration_payment_status = 'paid'
             update_fields.append('registration_payment_status')
         institution.save(update_fields=update_fields)
+        warning = _package_change_warning(institution, package_code)
+        if warning:
+            messages.warning(request, warning)
         if institution.verification_status == 'approved':
             Profile.objects.filter(
                 institution=institution,
@@ -1444,6 +1544,10 @@ def secondary_create_user(request):
             _send_edu_verification_email(request, profile)
 
             if role == 'student':
+                if not _can_add_students(creator_profile.institution):
+                    user.delete()
+                    messages.error(request, _student_capacity_message(creator_profile.institution))
+                    return redirect('edu:secondary_dashboard', role=creator_profile.role)
                 academic_class = AcademicClass.objects.filter(id=class_id).first()
                 Student.objects.create(
                     institution=creator_profile.institution,
@@ -1466,6 +1570,8 @@ def secondary_create_user(request):
             messages.success(request, f'Account created successfully. ID: {username}. Verification email sent.')
         except IntegrityError:
             messages.error(request, 'Username already exists.')
+        except ValidationError as exc:
+            messages.error(request, '; '.join(exc.messages))
 
     return redirect('edu:secondary_dashboard', role=creator_profile.role)
 
@@ -2360,6 +2466,9 @@ def secondary_add_student(request):
             return redirect('edu:secondary_page', role=creator_profile.role, page='register')
 
         academic_class = AcademicClass.objects.filter(id=class_id, institution=creator_profile.institution).first()
+        if not _can_add_students(creator_profile.institution):
+            messages.error(request, _student_capacity_message(creator_profile.institution))
+            return redirect('edu:secondary_page', role=creator_profile.role, page='register')
         try:
             User = get_user_model()
             username = _generate_user_id(creator_profile.institution)
@@ -2404,6 +2513,8 @@ def secondary_add_student(request):
             messages.success(request, f'Student registered. ID: {username}. Verification email sent.')
         except IntegrityError:
             messages.error(request, 'Could not create student.')
+        except ValidationError as exc:
+            messages.error(request, '; '.join(exc.messages))
 
     return redirect('edu:secondary_page', role=creator_profile.role, page='register')
 
@@ -2632,6 +2743,10 @@ def tertiary_create_user(request):
             _send_edu_verification_email(request, profile)
 
             if role == 'student':
+                if not _can_add_students(creator_profile.institution):
+                    user.delete()
+                    messages.error(request, _student_capacity_message(creator_profile.institution))
+                    return redirect('edu:tertiary_dashboard', role=creator_profile.role)
                 Student.objects.create(
                     institution=creator_profile.institution,
                     user=user,
@@ -2652,6 +2767,8 @@ def tertiary_create_user(request):
             messages.success(request, f'Account created successfully. ID: {username}. Verification email sent.')
         except IntegrityError:
             messages.error(request, 'Username already exists.')
+        except ValidationError as exc:
+            messages.error(request, '; '.join(exc.messages))
 
     return redirect('edu:tertiary_dashboard', role=creator_profile.role)
 
@@ -2702,6 +2819,8 @@ def tertiary_school_register(request):
                     payment_secret_key=request.POST.get('payment_secret_key', '').strip(),
                     allow_online_payment=bool(request.POST.get('allow_online_payment')),
                     subscription_package=subscription_package,
+                    subscription_status='pending',
+                    student_limit=_edu_package_limit(subscription_package),
                     subscription_billing_cycle=billing_cycle,
                     registration_payment_amount=_edu_subscription_amount(billing_cycle, subscription_package),
                     registration_payment_status='pending',
@@ -2816,6 +2935,9 @@ def secondary_page(request, role, page):
     role = profile.role
 
     institution = profile.institution
+    if _subscription_is_expired(institution):
+        return _expired_subscription_response(request, profile)
+
     today = timezone.localdate()
     students = Student.objects.filter(institution=institution).select_related('academic_class')[:5]
     fee_summary = _school_fee_summary(institution)
@@ -3489,6 +3611,7 @@ def secondary_page(request, role, page):
         'active_page': page,
         'nav_placeholders': nav_placeholders,
         'user_name': request.user.get_username(),
+        'subscription_usage': _subscription_usage(institution),
         'stats': stats,
         'students': students,
         'students_all': students_all,
@@ -3603,6 +3726,8 @@ def tertiary_page(request, role, page):
     role = profile.role
 
     institution = profile.institution
+    if _subscription_is_expired(institution):
+        return _expired_subscription_response(request, profile)
 
     stats = [
         {"label": "Faculties", "value": "7"},
@@ -3641,6 +3766,7 @@ def tertiary_page(request, role, page):
         'active_page': page,
         'nav_placeholders': nav_placeholders,
         'user_name': request.user.get_username(),
+        'subscription_usage': _subscription_usage(institution),
         'stats': stats,
         'recent_results': recent_results,
         'pending_profiles': pending_profiles,

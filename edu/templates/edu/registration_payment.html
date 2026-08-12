@@ -74,8 +74,29 @@
       <form method="post" id="eduRegistrationPaymentForm" class="mt-8 space-y-5">
         {% csrf_token %}
         <div>
+          <p class="text-sm font-semibold mb-3">Choose package</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {% for package in pricing_packages %}
+              <label class="rounded-xl border border-border bg-background p-4 cursor-pointer hover:border-primary/50 {% if selected_package.code == package.code %}ring-2 ring-primary/40{% endif %}">
+                <input
+                  type="radio"
+                  name="subscription_package"
+                  value="{{ package.code }}"
+                  class="mr-2"
+                  data-term-amount="{{ package.term_amount|floatformat:0 }}"
+                  data-session-amount="{{ package.session_amount|floatformat:0 }}"
+                  data-package-name="{{ package.name }}"
+                  data-student-range="{{ package.student_range }}"
+                  {% if selected_package.code == package.code %}checked{% endif %}
+                >
+                <span class="font-semibold">{{ package.name }}</span>
+                <span class="block text-xs text-muted-foreground mt-1">{{ package.student_range }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div>
           <p class="text-sm font-semibold mb-3">Choose billing period</p>
-          <input type="hidden" name="subscription_package" value="{{ selected_package.code }}">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             {% for key, plan in subscription_plans.items %}
               <label class="rounded-xl border border-border bg-background p-4 cursor-pointer hover:border-primary/50 {% if selected_plan.cycle == plan.cycle %}ring-2 ring-primary/40{% endif %}">
@@ -123,17 +144,24 @@
     const planDisplay = document.getElementById("eduPlanDisplay");
     const currency = window.EDU_REGISTRATION_CURRENCY || "NGN";
     function syncSelectedPlan() {
-      const selected = document.querySelector('input[name="subscription_billing_cycle"]:checked');
-      if (!selected) return;
-      window.EDU_REGISTRATION_AMOUNT = Number(selected.dataset.amount || 0);
+      const selectedCycle = document.querySelector('input[name="subscription_billing_cycle"]:checked');
+      const selectedPackage = document.querySelector('input[name="subscription_package"]:checked');
+      if (!selectedCycle || !selectedPackage) return;
+      const amount = selectedCycle.value === "session"
+        ? Number(selectedPackage.dataset.sessionAmount || 0)
+        : Number(selectedPackage.dataset.termAmount || 0);
+      window.EDU_REGISTRATION_AMOUNT = amount;
       if (amountDisplay) {
         amountDisplay.textContent = `${currency} ${Number(window.EDU_REGISTRATION_AMOUNT || 0).toLocaleString()}`;
       }
       if (planDisplay) {
-        planDisplay.textContent = `${selected.dataset.planName || ""} - ${selected.dataset.duration || ""}`;
+        planDisplay.textContent = `${selectedPackage.dataset.packageName || ""} - ${selectedCycle.dataset.planName || ""}`;
       }
     }
     document.querySelectorAll('input[name="subscription_billing_cycle"]').forEach((input) => {
+      input.addEventListener("change", syncSelectedPlan);
+    });
+    document.querySelectorAll('input[name="subscription_package"]').forEach((input) => {
       input.addEventListener("change", syncSelectedPlan);
     });
     syncSelectedPlan();

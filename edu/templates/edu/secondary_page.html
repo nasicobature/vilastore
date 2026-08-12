@@ -70,6 +70,24 @@
         {{ teacher_results_map|json_script:"teacher-results-map" }}
       {% endif %}
       {{ term_map|json_script:"academic-term-map" }}
+      {% if subscription_usage %}
+        <div class="rounded-2xl border border-border bg-card p-4 md:p-5">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">Subscription</p>
+              <h2 class="font-display text-xl font-bold mt-1">{{ subscription_usage.package_name }} Package</h2>
+              <p class="text-sm text-muted-foreground mt-1">
+                {{ subscription_usage.students_used }} / {{ subscription_usage.student_limit }} students used - {{ subscription_usage.students_remaining }} remaining
+              </p>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Billing</span><br><strong>{{ subscription_usage.billing_cycle|title }}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Status</span><br><strong>{{ subscription_usage.status|title }}</strong></div>
+              <div class="rounded-xl border border-border bg-background px-4 py-3"><span class="text-muted-foreground">Expires</span><br><strong>{% if subscription_usage.expiry_date %}{{ subscription_usage.expiry_date|date:"M j, Y" }}{% else %}-{% endif %}</strong></div>
+            </div>
+          </div>
+        </div>
+      {% endif %}
 
       {% if active_page == 'dashboard' %}
         {% if role == 'examiner' %}

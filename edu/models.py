@@ -1,7 +1,28 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from decimal import Decimal
+
+
+EDU_PACKAGE_LIMITS = {
+    'starter': 50,
+    'basic': 100,
+    'growth': 200,
+    'standard': 350,
+    'premium': 500,
+    'enterprise': 750,
+    'enterprise-plus': 751,
+}
+EDU_PACKAGE_NAMES = {
+    'starter': 'Starter',
+    'basic': 'Basic',
+    'growth': 'Growth',
+    'standard': 'Standard',
+    'premium': 'Premium',
+    'enterprise': 'Enterprise',
+    'enterprise-plus': 'Enterprise Plus',
+}
 
 
 class Institution(models.Model):
@@ -28,6 +49,12 @@ class Institution(models.Model):
         ('pending', 'Pending Payment'),
         ('paid', 'Paid'),
         ('failed', 'Failed'),
+    ]
+    SUBSCRIPTION_STATUS_CHOICES = [
+        ('trial', 'Trial'),
+        ('active', 'Active'),
+        ('expired', 'Expired'),
+        ('pending', 'Pending'),
     ]
     SUBSCRIPTION_BILLING_CHOICES = [
         ('termly', 'Per Term'),
@@ -74,7 +101,11 @@ class Institution(models.Model):
     registration_payment_reference = models.CharField(max_length=120, blank=True)
     registration_payment_paid_at = models.DateTimeField(null=True, blank=True)
     subscription_package = models.CharField(max_length=40, default='starter')
+    subscription_status = models.CharField(max_length=20, choices=SUBSCRIPTION_STATUS_CHOICES, default='pending')
+    subscription_start_date = models.DateField(null=True, blank=True)
+    subscription_expiry_date = models.DateField(null=True, blank=True)
     subscription_billing_cycle = models.CharField(max_length=20, choices=SUBSCRIPTION_BILLING_CHOICES, default='termly')
+    student_limit = models.PositiveIntegerField(default=50)
     subscription_active_until = models.DateField(null=True, blank=True)
     subscription_last_payment_reference = models.CharField(max_length=120, blank=True)
     subscription_last_paid_at = models.DateTimeField(null=True, blank=True)
@@ -105,7 +136,41 @@ class Institution(models.Model):
     def save(self, *args, **kwargs):
         if not self.school_code:
             self.school_code = self._generate_code()
+        if not self.student_limit:
+            self.student_limit = self.package_student_limit
+        if self.subscription_expiry_date and not self.subscription_active_until:
+            self.subscription_active_until = self.subscription_expiry_date
         super().save(*args, **kwargs)
+
+    @property
+    def package_name(self):
+        return EDU_PACKAGE_NAMES.get(self.subscription_package, self.subscription_package.replace('-', ' ').title())
+
+    @property
+    def package_student_limit(self):
+        return EDU_PACKAGE_LIMITS.get(self.subscription_package, EDU_PACKAGE_LIMITS['starter'])
+
+    @property
+    def current_student_limit(self):
+        return self.student_limit or self.package_student_limit
+
+    @property
+    def student_usage_count(self):
+        if not self.pk:
+            return 0
+        return self.students.count()
+
+    @property
+    def student_remaining_capacity(self):
+        return max(self.current_student_limit - self.student_usage_count, 0)
+
+    @property
+    def is_subscription_expired(self):
+        expiry = self.subscription_expiry_date or self.subscription_active_until
+        return bool(expiry and expiry < timezone.localdate())
+
+    def sync_package_limit(self):
+        self.student_limit = self.package_student_limit
 
     def __str__(self):
         return f"{self.name} ({self.get_institution_type_display()})"
@@ -270,6 +335,28 @@ class Student(models.Model):
     next_of_kin_relationship = models.CharField(max_length=50, blank=True)
     photo = models.ImageField(upload_to='students/photos/', blank=True, null=True)
     created_at = models.DateTimeField(default=timezone.now)
+
+    def clean(self):
+        super().clean()
+        if not self.institution_id:
+            return
+        if self.pk:
+            original = Student.objects.filter(pk=self.pk).values('institution_id').first()
+            if original and original['institution_id'] == self.institution_id:
+                return
+        existing_students = Student.objects.filter(institution=self.institution).exclude(pk=self.pk).count()
+        limit = self.institution.current_student_limit
+        if existing_students >= limit:
+            raise ValidationError({
+                'institution': (
+                    f"You have reached the {limit}-student limit for your "
+                    f"{self.institution.package_name} package. Upgrade your package to add more students."
+                )
+            })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.full_name} ({self.student_id})"
