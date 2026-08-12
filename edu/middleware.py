@@ -13,7 +13,7 @@ class EduTenantMiddleware:
         if request.edu_subdomain and not self._is_shared_asset_or_health_path(request.path):
             if not request.edu_institution:
                 return render(request, 'edu/portal_not_found.html', status=404)
-            if request.path != '/' and not request.path.startswith('/edu/'):
+            if request.path not in {'/', '/dashboard/'} and not request.path.startswith('/edu/'):
                 return redirect('/')
         return self.get_response(request)
 

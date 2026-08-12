@@ -7,6 +7,7 @@ from . import api
 
 urlpatterns = [
     path("healthz/", views.healthz, name="healthz"),
+    path("dashboard/", views.edu_subdomain_dashboard, name="edu_subdomain_dashboard"),
     path("service-worker.js", views.service_worker, name="service_worker"),
     path("privacy-policy/", views.privacy_policy, name="privacy_policy"),
     path("account-deletion/", views.account_deletion, name="account_deletion"),

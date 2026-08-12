@@ -64,7 +64,8 @@ class EduPortalRoutingTests(TestCase):
         for response in (secondary, tertiary):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, 'class="wizard-form"')
-            self.assertContains(response, "Choose Your Package")
+            self.assertContains(response, "Choose the Right Plan for Your School")
+            self.assertContains(response, "registration-package-card")
             self.assertContains(response, "School Portal")
             self.assertContains(response, "Create School & Start Free Trial")
             self.assertContains(response, "NGN 30,000")
@@ -177,7 +178,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
 
         self.assertRedirects(
             response,
-            reverse("edu:secondary_dashboard", kwargs={"role": "admin"}),
+            "/dashboard/",
             fetch_redirect_response=False,
         )
 
@@ -214,7 +215,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         self.assertTrue(profile.is_approved)
         self.assertRedirects(
             response,
-            reverse("edu:secondary_dashboard", kwargs={"role": "admin"}),
+            "/dashboard/",
             fetch_redirect_response=False,
         )
 
@@ -245,7 +246,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
 
         self.assertRedirects(
             response,
-            reverse("edu:secondary_dashboard", kwargs={"role": "admin"}),
+            "/dashboard/",
             fetch_redirect_response=False,
         )
 

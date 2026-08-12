@@ -27,6 +27,8 @@ class SubscriptionRequiredMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        if getattr(request, "edu_subdomain", ""):
+            return self.get_response(request)
         if request.user.is_authenticated and not subscription_is_active(request.user):
             path = request.path or ""
             if not path.startswith(EXEMPT_PATH_PREFIXES):

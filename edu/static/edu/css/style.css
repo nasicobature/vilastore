@@ -878,6 +878,196 @@ textarea {
   font-style: normal;
 }
 
+.package-step-heading {
+  text-align: center;
+  margin-inline: auto;
+  max-width: 760px;
+}
+
+.package-step-heading h2 {
+  font-size: 30px;
+}
+
+.registration-billing-toggle {
+  width: fit-content;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 auto 26px;
+  padding: 6px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.55);
+}
+
+.billing-toggle-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  color: hsl(var(--muted-foreground));
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.billing-toggle-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.billing-toggle-option:has(input:checked) {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.billing-toggle-option em {
+  font-style: normal;
+  color: hsl(var(--success));
+  background: hsl(var(--success) / 0.1);
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.registration-package-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.registration-package-card {
+  position: relative;
+  display: flex;
+  min-height: 330px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  background: hsl(var(--card));
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.registration-package-card:hover {
+  transform: translateY(-3px);
+  border-color: hsl(var(--primary) / 0.45);
+  box-shadow: 0 24px 55px rgba(15, 23, 42, 0.12);
+}
+
+.registration-package-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.registration-package-card:has(input:checked) {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.14), 0 24px 55px rgba(15, 23, 42, 0.13);
+}
+
+.package-check {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  color: transparent;
+  background: hsl(var(--background));
+}
+
+.package-check i {
+  width: 16px;
+  height: 16px;
+}
+
+.registration-package-card:has(input:checked) .package-check {
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+}
+
+.package-name {
+  padding-right: 40px;
+  color: hsl(var(--foreground));
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.package-range {
+  color: hsl(var(--muted-foreground));
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.package-price {
+  margin-top: 10px;
+  color: hsl(var(--foreground));
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.package-cycle {
+  margin-bottom: 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: lowercase;
+}
+
+.package-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.package-meta i {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: hsl(var(--primary));
+}
+
+.package-select-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: auto;
+  border-radius: 10px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.registration-package-card:has(input:checked) .package-select-button {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
 .subscription-plan-card {
   display: grid;
   gap: 8px;
@@ -956,6 +1146,12 @@ textarea {
   display: none !important;
 }
 
+@media (max-width: 980px) {
+  .registration-package-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
   .registration-shell {
     padding: 20px 12px;
@@ -989,6 +1185,33 @@ textarea {
   .upload-grid,
   .review-grid {
     grid-template-columns: 1fr;
+  }
+
+  .package-step-heading h2 {
+    font-size: 24px;
+  }
+
+  .registration-billing-toggle {
+    width: 100%;
+    border-radius: 16px;
+  }
+
+  .billing-toggle-option {
+    flex: 1 1 0;
+    padding: 0 10px;
+  }
+
+  .registration-package-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .registration-package-card {
+    min-height: 300px;
+    padding: 18px;
+  }
+
+  .package-price {
+    font-size: 30px;
   }
 
   .field-wide {

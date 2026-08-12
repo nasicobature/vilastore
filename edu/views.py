@@ -591,6 +591,23 @@ def subdomain_portal_home(request):
     return _login_for_institution(request, institution.institution_type, template_name)
 
 
+def subdomain_dashboard(request):
+    institution = getattr(request, 'edu_institution', None)
+    if not getattr(request, 'edu_subdomain', ''):
+        return redirect('edu:index')
+    if not institution:
+        return render(request, 'edu/portal_not_found.html', status=404)
+    if not request.user.is_authenticated:
+        return redirect('/')
+    profile = getattr(request.user, 'profile', None)
+    if not profile or profile.institution_id != institution.id:
+        messages.error(request, 'Log in with an account for this school portal.')
+        return redirect('/')
+    if profile.institution_type == 'tertiary':
+        return redirect('edu:tertiary_dashboard', role=profile.role)
+    return redirect('edu:secondary_dashboard', role=profile.role)
+
+
 def _resolve_login_user(institution_type, school_code, identifier):
     User = get_user_model()
     user = User.objects.filter(username__iexact=identifier).first()
@@ -740,6 +757,8 @@ def _login_for_institution(request, institution_type, template_name):
                 else:
                     if profile.institution:
                         profile.institution.refresh_subscription_status()
+                    if getattr(request, 'edu_subdomain', ''):
+                        return redirect('/dashboard/')
                     if profile.institution_type == 'tertiary':
                         return redirect('edu:tertiary_dashboard', role=profile.role)
                     return redirect('edu:secondary_dashboard', role=profile.role)
