@@ -1,8 +1,8 @@
 <div class="edu-pricing-panel" data-edu-pricing data-pricing-mode="{{ pricing_mode|default:'public' }}">
   <div class="pricing-heading">
     <div>
-      <h2>Simple Pricing. Built for Schools.</h2>
-      <p>Choose a plan based on the number of students in your school. Start with a 3-day free trial.</p>
+      <h2>Simple Pricing. Built for Value.</h2>
+      <p>Free features are always free. The only thing that matters is your student range.</p>
     </div>
   </div>
 
@@ -11,57 +11,76 @@
       <input type="radio" name="{{ billing_input_name|default:'pricing_billing_cycle' }}" value="termly" data-billing-cycle {% if selected_billing_cycle|default:default_subscription_cycle != 'session' %}checked{% endif %} />
       <span>Per Term</span>
     </label>
+    <span class="billing-switch-track" aria-hidden="true"><span></span></span>
     <label class="billing-toggle-option">
       <input type="radio" name="{{ billing_input_name|default:'pricing_billing_cycle' }}" value="session" data-billing-cycle {% if selected_billing_cycle|default:default_subscription_cycle == 'session' %}checked{% endif %} />
       <span>Per Session</span>
-      <em>Save 10%</em>
     </label>
+    <em class="billing-save-badge">Save 10%</em>
   </div>
 
-  <div class="edu-pricing-card-grid">
-    {% for package in pricing_packages %}
-      <label
-        class="edu-package-card {% if package.code == selected_package_code|default:default_subscription_package %}is-selected{% endif %}"
-        data-package-card
-        data-package-code="{{ package.code }}"
-        data-term-price="NGN {{ package.term_amount_display }}"
-        data-session-price="NGN {{ package.session_amount_display }}"
-      >
-        {% if pricing_mode == 'registration' or pricing_mode == 'payment' %}
-          <input
-            type="radio"
-            name="subscription_package"
-            value="{{ package.code }}"
-            required
-            data-review-label="Selected Package"
-            data-package-option
-            data-package-name="{{ package.name }}"
-            data-student-limit="{{ package.student_limit }}"
-            data-student-range="{{ package.student_range }}"
+  <div class="edu-pricing-table-shell">
+    <table class="edu-pricing-table">
+      <thead>
+        <tr>
+          <th>Package</th>
+          <th>Student Range</th>
+          <th>Price</th>
+          <th>{% if pricing_mode == 'registration' or pricing_mode == 'payment' %}Select{% else %}Trial{% endif %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for package in pricing_packages %}
+          <tr
+            class="edu-package-card {% if package.code == selected_package_code|default:default_subscription_package %}is-selected{% endif %}"
+            data-package-card
+            data-package-code="{{ package.code }}"
             data-term-price="NGN {{ package.term_amount_display }}"
             data-session-price="NGN {{ package.session_amount_display }}"
-            data-term-amount="{{ package.term_amount|floatformat:0 }}"
-            data-session-amount="{{ package.session_amount|floatformat:0 }}"
-            {% if package.code == selected_package_code|default:default_subscription_package %}checked{% endif %}
-          />
-        {% endif %}
-        <span class="package-check" aria-hidden="true"><i data-lucide="check"></i></span>
-        <span class="package-name">{{ package.name }}</span>
-        <span class="package-range">{{ package.student_range }}</span>
-        <strong class="package-price" data-package-price>NGN {{ package.term_amount_display }}</strong>
-        <span class="package-cycle" data-package-billing-label>per term</span>
-        <span class="package-meta"><i data-lucide="users"></i>{% if package.is_unlimited %}Unlimited students above 750{% else %}Up to {{ package.student_limit }} students{% endif %}</span>
-        <span class="package-meta"><i data-lucide="badge-check"></i>3-day free trial included</span>
-        {% if pricing_mode == 'registration' or pricing_mode == 'payment' %}
-          <span class="package-select-button" data-package-select-text>Select Package</span>
-        {% else %}
-          <a
-            class="package-select-button"
-            data-package-cta
-            href="/edu/register/?package={{ package.code }}&billing={{ selected_billing_cycle|default:default_subscription_cycle }}"
-          >Start 3-Day Free Trial</a>
-        {% endif %}
-      </label>
-    {% endfor %}
+          >
+            <td data-label="Package">
+              {% if pricing_mode == 'registration' or pricing_mode == 'payment' %}
+                <input
+                  type="radio"
+                  name="subscription_package"
+                  value="{{ package.code }}"
+                  required
+                  data-review-label="Selected Package"
+                  data-package-option
+                  data-package-name="{{ package.name }}"
+                  data-student-limit="{{ package.student_limit }}"
+                  data-student-range="{{ package.student_range }}"
+                  data-term-price="NGN {{ package.term_amount_display }}"
+                  data-session-price="NGN {{ package.session_amount_display }}"
+                  data-term-amount="{{ package.term_amount|floatformat:0 }}"
+                  data-session-amount="{{ package.session_amount|floatformat:0 }}"
+                  {% if package.code == selected_package_code|default:default_subscription_package %}checked{% endif %}
+                />
+              {% endif %}
+              <span class="package-check" aria-hidden="true"><i data-lucide="check"></i></span>
+              <span class="package-name">{{ package.name }}</span>
+            </td>
+            <td data-label="Student Range">
+              <span class="package-range">{{ package.student_range }}</span>
+            </td>
+            <td data-label="Price">
+              <strong class="package-price" data-package-price>NGN {{ package.term_amount_display }}</strong>
+              <span class="package-cycle" data-package-billing-label>per term</span>
+            </td>
+            <td data-label="{% if pricing_mode == 'registration' or pricing_mode == 'payment' %}Select{% else %}Trial{% endif %}">
+              {% if pricing_mode == 'registration' or pricing_mode == 'payment' %}
+                <span class="package-select-button" data-package-select-text>Select Package</span>
+              {% else %}
+                <a
+                  class="package-select-button"
+                  data-package-cta
+                  href="/edu/register/?package={{ package.code }}&billing={{ selected_billing_cycle|default:default_subscription_cycle }}"
+                >Start 3-Day Free Trial</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>

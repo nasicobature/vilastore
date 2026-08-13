@@ -40,7 +40,7 @@ class EduPortalRoutingTests(TestCase):
     def test_index_shows_launch_pricing_and_coming_soon_modules(self):
         response = self.client.get(reverse("edu:index"))
 
-        self.assertContains(response, "Simple Pricing. Built for Schools.")
+        self.assertContains(response, "Simple Pricing. Built for Value.")
         self.assertContains(response, "Per Term")
         self.assertContains(response, "Per Session")
         self.assertContains(response, "NGN 20,000")
@@ -68,8 +68,8 @@ class EduPortalRoutingTests(TestCase):
         for response in (secondary, tertiary):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, 'class="wizard-form"')
-            self.assertContains(response, "Simple Pricing. Built for Schools.")
-            self.assertContains(response, "edu-pricing-card-grid")
+            self.assertContains(response, "Simple Pricing. Built for Value.")
+            self.assertContains(response, "edu-pricing-table")
             self.assertContains(response, "Enterprise Plus")
             self.assertContains(response, "School Portal")
             self.assertContains(response, "vilastore.store/edu/portal/yourschool")
