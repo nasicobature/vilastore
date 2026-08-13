@@ -88,11 +88,15 @@ class EduPortalRoutingTests(TestCase):
         self.assertIn('value="session" data-billing-cycle checked', html)
         self.assertIn('value="enterprise-plus"', html)
 
-    def test_edu_landing_portal_search_uses_school_lookup(self):
+    def test_edu_landing_nav_has_one_school_login_link(self):
         response = self.client.get(reverse("edu:index"))
+        html = response.content.decode()
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f'action="{reverse("edu:school_portal_lookup")}"')
+        self.assertEqual(html.count("School Login"), 1)
+        self.assertContains(response, f'href="{reverse("edu:school_portal_lookup")}"')
+        self.assertContains(response, "data-edu-nav-toggle")
+        self.assertNotContains(response, 'class="portal-search"')
 
     def test_school_portal_lookup_redirects_existing_school_to_subdomain(self):
         Institution.objects.create(

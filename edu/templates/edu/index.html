@@ -7,16 +7,20 @@
       <span class="edu-brand-mark"><i data-lucide="graduation-cap"></i></span>
       <strong>VilaStore Edu</strong>
     </a>
-    <nav>
-      <a href="/edu/">Home</a>
-      <a href="#features">Features</a>
-      <a href="#pricing">Pricing</a>
-      <a href="#how-it-works">How It Works</a>
-      <a href="#contact">Contact</a>
-    </nav>
-    <div class="edu-nav-actions">
-      <a href="{% url 'edu:school_portal_lookup' %}" class="wizard-btn wizard-btn-secondary">School Login</a>
-      <a href="/edu/register/" class="wizard-btn wizard-btn-primary">Start Free Trial</a>
+    <button type="button" class="edu-menu-toggle" data-edu-nav-toggle aria-label="Open Edu navigation" aria-expanded="false">
+      <i data-lucide="menu"></i>
+    </button>
+    <div class="edu-nav-menu" data-edu-nav-menu>
+      <nav>
+        <a href="/edu/">Home</a>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#how-it-works">How It Works</a>
+      </nav>
+      <div class="edu-nav-actions">
+        <a href="{% url 'edu:school_portal_lookup' %}" class="wizard-btn wizard-btn-secondary">School Login</a>
+        <a href="/edu/register/" class="wizard-btn wizard-btn-primary">Start Free Trial</a>
+      </div>
     </div>
   </header>
 
@@ -32,7 +36,7 @@
       </p>
       <div class="edu-hero-actions">
         <a href="/edu/register/" class="wizard-btn wizard-btn-primary">Start 3-Day Free Trial</a>
-        <a href="{% url 'edu:school_portal_lookup' %}" class="wizard-btn wizard-btn-secondary">School Login</a>
+        <a href="#pricing" class="wizard-btn wizard-btn-secondary">View Pricing</a>
       </div>
     </div>
 
@@ -55,16 +59,11 @@
       <h2>Your Personal School Portal</h2>
       <p>Every school gets a unique portal address on your domain. Staff, students, and parents log in with dedicated access.</p>
     </div>
-    <form class="portal-search" method="get" action="{% url 'edu:school_portal_lookup' %}">
-      <label>
-        <span>School portal name</span>
-        <div class="subdomain-input">
-          <input type="text" name="school" placeholder="yourschool" aria-label="School portal name" />
-          <strong>.vilastore.store</strong>
-        </div>
-      </label>
-      <button type="submit" class="wizard-btn wizard-btn-primary">Continue</button>
-    </form>
+    <div class="portal-steps">
+      <span><i data-lucide="badge-check"></i> Register your school</span>
+      <span><i data-lucide="globe-2"></i> Choose a unique portal name</span>
+      <span><i data-lucide="lock-keyhole"></i> Log in from your secure school portal</span>
+    </div>
   </section>
 
   <section id="pricing" class="pricing-section">

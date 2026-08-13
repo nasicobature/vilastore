@@ -21,6 +21,15 @@
     });
   });
 
+  const eduNavToggle = document.querySelector('[data-edu-nav-toggle]');
+  const eduNav = eduNavToggle ? eduNavToggle.closest('.edu-site-nav') : null;
+  if (eduNavToggle && eduNav) {
+    eduNavToggle.addEventListener('click', () => {
+      const isOpen = eduNav.classList.toggle('is-open');
+      eduNavToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+  }
+
   const pricingSwitch = document.querySelector('[data-pricing-switch]');
   const pricingRows = Array.from(document.querySelectorAll('[data-pricing-table] tbody tr'));
   const pricingHeading = document.querySelector('[data-pricing-heading]');
