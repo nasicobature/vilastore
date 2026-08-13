@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 :root {
   --background: 210 20% 98%;
@@ -2404,3 +2404,599 @@ textarea {
     width: 100%;
   }
 }
+
+/* Edu production UI override: placed last so the rendered /edu and /edu/register pages use it. */
+.edu-product-page {
+  width: min(100% - 32px, 1180px);
+  margin: 0 auto;
+  padding: 18px 0 56px;
+}
+
+.edu-site-nav {
+  position: sticky;
+  top: 12px;
+  z-index: 50;
+  border-radius: 18px;
+}
+
+.edu-brand strong {
+  color: #111827;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 19px;
+  letter-spacing: 0;
+}
+
+.edu-hero {
+  align-items: stretch;
+  gap: 28px;
+  margin-top: 18px;
+}
+
+.edu-hero-copy,
+.edu-launch-panel,
+.school-portal-section,
+.coming-soon-section {
+  border-color: #e2e8f0;
+  border-radius: 22px;
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.07);
+}
+
+.edu-hero-copy,
+.edu-launch-panel,
+.school-portal-section,
+.coming-soon-section {
+  padding: clamp(24px, 4vw, 42px);
+}
+
+.edu-hero h1 {
+  max-width: 620px;
+  color: #111827;
+  letter-spacing: 0;
+}
+
+.edu-hero-copy > p:not(.registration-eyebrow),
+.edu-launch-panel p,
+.portal-copy p {
+  max-width: 620px;
+  line-height: 1.65;
+}
+
+.launch-feature-grid span,
+.portal-steps span,
+.coming-soon-grid span {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #1f2937;
+}
+
+.school-portal-section {
+  align-items: center;
+  margin-top: 28px;
+  background: #ffffff;
+}
+
+.portal-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: hsl(var(--primary));
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.portal-copy h2 {
+  margin-top: 10px;
+  color: #111827;
+}
+
+.pricing-section {
+  margin-top: 30px;
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.07);
+}
+
+.edu-pricing-panel {
+  padding: clamp(18px, 4vw, 30px) 0 clamp(20px, 4vw, 34px);
+  background: #ffffff;
+}
+
+.pricing-heading {
+  padding: 10px clamp(18px, 4vw, 34px) 20px;
+  text-align: center;
+}
+
+.pricing-heading h2 {
+  color: #0f172a;
+  font-size: clamp(32px, 5.2vw, 52px);
+  letter-spacing: 0;
+}
+
+.pricing-heading p:not(.registration-eyebrow) {
+  max-width: 820px;
+  color: #667085;
+  font-size: clamp(18px, 2.7vw, 28px);
+}
+
+.edu-pricing-toggle {
+  margin: 0 auto clamp(26px, 5vw, 48px);
+}
+
+.edu-pricing-table-shell {
+  margin-inline: clamp(14px, 4vw, 38px);
+  border: 1px solid #dfe6ef;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+}
+
+.edu-pricing-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.edu-pricing-table th {
+  padding: 28px clamp(18px, 3vw, 34px);
+  background: #f8fafc;
+  border-bottom: 1px solid #dfe6ef;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.edu-pricing-table td {
+  height: 112px;
+  padding: 28px clamp(18px, 3vw, 34px);
+  border-bottom: 1px solid #dfe6ef;
+  color: #1f2937;
+  vertical-align: middle;
+}
+
+.edu-pricing-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.edu-pricing-table tbody tr {
+  background: #ffffff;
+}
+
+.edu-pricing-panel[data-pricing-mode="registration"] .edu-pricing-table tbody tr,
+.edu-pricing-panel[data-pricing-mode="payment"] .edu-pricing-table tbody tr {
+  cursor: pointer;
+}
+
+.edu-package-card:hover {
+  background: #fbfdff;
+}
+
+.edu-package-card.is-selected,
+.edu-package-card:has(input:checked) {
+  background: #eef5ff;
+  box-shadow: inset 4px 0 0 hsl(var(--primary));
+}
+
+.edu-package-card input,
+.edu-package-card input[hidden] {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.edu-package-card .package-check {
+  display: none !important;
+}
+
+.edu-package-card .package-name {
+  padding-right: 0;
+  color: #111827;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(17px, 2vw, 24px);
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.edu-package-card .package-range {
+  color: #273449;
+  font-size: clamp(16px, 2vw, 23px);
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.edu-package-card .package-price {
+  display: block;
+  margin: 0;
+  color: #111827;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(18px, 2.2vw, 26px);
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.edu-package-card .package-cycle {
+  display: block;
+  margin-top: 5px;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: lowercase;
+}
+
+.edu-package-card .package-select-button {
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid #d6deea;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.edu-package-card.is-selected .package-select-button,
+.edu-package-card:has(input:checked) .package-select-button {
+  border-color: #bdd1ff;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table th:nth-child(1),
+.edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table td:nth-child(1) {
+  width: 28%;
+}
+
+.edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table th:nth-child(2),
+.edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table td:nth-child(2) {
+  width: 40%;
+}
+
+.edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table th:nth-child(3),
+.edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table td:nth-child(3) {
+  width: 32%;
+}
+
+@media (max-width: 900px) {
+  .edu-product-page {
+    width: min(100% - 24px, 560px);
+    padding-top: 12px;
+  }
+
+  .edu-site-nav {
+    position: sticky;
+    top: 8px;
+    display: flex !important;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px;
+  }
+
+  .edu-brand {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .edu-brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .edu-brand strong {
+    font-size: 17px;
+    white-space: nowrap;
+  }
+
+  .edu-menu-toggle {
+    display: inline-grid !important;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    margin-left: auto;
+    border-radius: 12px;
+    background: #f1f5f9;
+  }
+
+  .edu-nav-menu {
+    position: absolute !important;
+    top: calc(100% + 10px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 100 !important;
+    display: none !important;
+    padding: 14px !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 16px !important;
+    background: #ffffff !important;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16) !important;
+  }
+
+  .edu-site-nav.is-open .edu-nav-menu {
+    display: grid !important;
+    gap: 12px !important;
+  }
+
+  .edu-site-nav nav,
+  .edu-nav-actions {
+    display: grid !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .edu-site-nav nav a {
+    display: block;
+    padding: 12px;
+    border-radius: 12px;
+    background: #f8fafc;
+    color: #111827;
+  }
+
+  .edu-nav-actions .wizard-btn {
+    width: 100%;
+  }
+
+  .edu-hero,
+  .school-portal-section {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .edu-hero-copy,
+  .edu-launch-panel,
+  .school-portal-section,
+  .coming-soon-section {
+    border-radius: 20px;
+    padding: 24px;
+  }
+
+  .edu-hero h1 {
+    font-size: 34px;
+    line-height: 1.05;
+  }
+
+  .edu-hero-copy > p:not(.registration-eyebrow),
+  .edu-launch-panel p,
+  .portal-copy p {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+
+  .edu-hero-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .launch-feature-grid {
+    gap: 10px;
+  }
+
+  .launch-feature-grid span,
+  .portal-steps span {
+    min-height: 58px;
+    padding: 14px;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .registration-shell {
+    padding: 18px 12px 42px;
+  }
+
+  .registration-card {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .wizard-panel .edu-pricing-panel {
+    margin-inline: -6px;
+  }
+
+  .registration-billing-toggle {
+    gap: 10px;
+    margin-bottom: 26px;
+  }
+
+  .billing-toggle-option {
+    min-height: 34px;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+
+  .billing-switch-track {
+    width: 58px;
+    height: 34px;
+  }
+
+  .billing-switch-track span {
+    top: 4px;
+    left: 4px;
+    width: 26px;
+    height: 26px;
+  }
+
+  .registration-billing-toggle:has(input[value="session"]:checked) .billing-switch-track span {
+    transform: translateX(24px);
+  }
+
+  .billing-save-badge {
+    padding: 7px 10px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .pricing-heading {
+    padding: 6px 14px 18px;
+  }
+
+  .pricing-heading h2 {
+    font-size: 30px;
+    line-height: 1.12;
+  }
+
+  .pricing-heading p:not(.registration-eyebrow) {
+    font-size: 17px;
+    line-height: 1.55;
+  }
+
+  .edu-pricing-table-shell {
+    margin-inline: 10px;
+    border-radius: 20px;
+  }
+
+  .edu-pricing-table,
+  .edu-pricing-table thead,
+  .edu-pricing-table tbody,
+  .edu-pricing-table tr {
+    display: revert !important;
+    width: auto !important;
+  }
+
+  .edu-pricing-table {
+    display: table !important;
+    width: 100% !important;
+    table-layout: fixed;
+  }
+
+  .edu-pricing-table thead {
+    display: table-header-group !important;
+  }
+
+  .edu-pricing-table tbody {
+    display: table-row-group !important;
+  }
+
+  .edu-pricing-table tr {
+    display: table-row !important;
+    padding: 0 !important;
+  }
+
+  .edu-pricing-table th,
+  .edu-pricing-table td {
+    display: table-cell !important;
+    width: auto !important;
+    min-height: 0 !important;
+    height: 84px;
+    padding: 16px 10px !important;
+    border-bottom: 1px solid #dfe6ef;
+    vertical-align: middle;
+  }
+
+  .edu-pricing-table th {
+    height: 58px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+
+  .edu-pricing-table td::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  .edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table th:nth-child(1),
+  .edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table td:nth-child(1) {
+    width: 28% !important;
+  }
+
+  .edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table th:nth-child(2),
+  .edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table td:nth-child(2) {
+    width: 39% !important;
+  }
+
+  .edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table th:nth-child(3),
+  .edu-pricing-panel[data-pricing-mode="public"] .edu-pricing-table td:nth-child(3) {
+    width: 33% !important;
+  }
+
+  .edu-pricing-panel[data-pricing-mode="registration"] .edu-pricing-table th:nth-child(1),
+  .edu-pricing-panel[data-pricing-mode="registration"] .edu-pricing-table td:nth-child(1),
+  .edu-pricing-panel[data-pricing-mode="payment"] .edu-pricing-table th:nth-child(1),
+  .edu-pricing-panel[data-pricing-mode="payment"] .edu-pricing-table td:nth-child(1) {
+    width: 24% !important;
+  }
+
+  .edu-pricing-panel[data-pricing-mode="registration"] .edu-pricing-table th:nth-child(2),
+  .edu-pricing-panel[data-pricing-mode="registration"] .edu-pricing-table td:nth-child(2),
+  .edu-pricing-panel[data-pricing-mode="payment"] .edu-pricing-table th:nth-child(2),
+  .edu-pricing-panel[data-pricing-mode="payment"] .edu-pricing-table td:nth-child(2) {
+    width: 28% !important;
+  }
+
+  .edu-pricing-panel[data-pricing-mode="registration"] .edu-pricing-table th:nth-child(3),
+  .edu-pricing-panel[data-pricing-mode="registration"] .edu-pricing-table td:nth-child(3),
+  .edu-pricing-panel[data-pricing-mode="payment"] .edu-pricing-table th:nth-child(3),
+  .edu-pricing-panel[data-pricing-mode="payment"] .edu-pricing-table td:nth-child(3) {
+    width: 25% !important;
+  }
+
+  .edu-pricing-panel[data-pricing-mode="registration"] .edu-pricing-table th:nth-child(4),
+  .edu-pricing-panel[data-pricing-mode="registration"] .edu-pricing-table td:nth-child(4),
+  .edu-pricing-panel[data-pricing-mode="payment"] .edu-pricing-table th:nth-child(4),
+  .edu-pricing-panel[data-pricing-mode="payment"] .edu-pricing-table td:nth-child(4) {
+    width: 23% !important;
+  }
+
+  .edu-package-card .package-name {
+    font-size: 14px;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .edu-package-card .package-range {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .edu-package-card .package-price {
+    font-size: 14px;
+    line-height: 1.18;
+  }
+
+  .edu-package-card .package-cycle {
+    margin-top: 4px;
+    font-size: 11px;
+  }
+
+  .edu-package-card .package-select-button {
+    width: 100%;
+    min-height: 34px;
+    padding: 8px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    white-space: normal;
+  }
+
+  .wizard-actions {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 390px) {
+  .edu-product-page {
+    width: min(100% - 18px, 560px);
+  }
+
+  .edu-pricing-table th,
+  .edu-pricing-table td {
+    padding-inline: 8px !important;
+  }
+
+  .edu-package-card .package-name,
+  .edu-package-card .package-range,
+  .edu-package-card .package-price {
+    font-size: 13px;
+  }
+}
+

@@ -183,9 +183,9 @@
           if (seenRadioGroups.has(field.name)) return '';
           seenRadioGroups.add(field.name);
           const checked = form.querySelector(`input[type="radio"][name="${field.name}"]:checked`);
-          const label = checked ? checked.closest('label') : null;
-          const title = label ? label.querySelector('.plan-card-title, .package-name') : null;
-          const amount = label ? label.querySelector('.package-price, strong') : null;
+          const optionShell = checked ? checked.closest('label, [data-package-card]') : null;
+          const title = optionShell ? optionShell.querySelector('.plan-card-title, .package-name') : null;
+          const amount = optionShell ? optionShell.querySelector('.package-price, strong') : null;
           const display = [title ? title.textContent.trim() : checked?.value, amount ? amount.textContent.trim() : '']
             .filter(Boolean)
             .join(' - ');
