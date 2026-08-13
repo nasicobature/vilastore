@@ -607,7 +607,7 @@ textarea {
 
 .subdomain-input-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   border: 1px solid hsl(var(--input));
   border-radius: 10px;
@@ -1534,6 +1534,10 @@ textarea {
   white-space: nowrap;
 }
 
+.subdomain-input strong:first-child {
+  border-right: 1px solid hsl(var(--border));
+}
+
 .portal-option {
   display: flex;
   align-items: center;
@@ -2179,9 +2183,15 @@ textarea {
 
   .subdomain-input {
     display: grid;
+    grid-template-columns: 1fr;
   }
 
-  .subdomain-input strong {
+  .subdomain-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .subdomain-input strong,
+  .subdomain-input-row span {
     min-height: 38px;
     justify-content: center;
   }

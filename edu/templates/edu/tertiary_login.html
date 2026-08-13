@@ -12,13 +12,13 @@
         <div class="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center mx-auto mb-3">
           <i data-lucide="graduation-cap" class="text-secondary-foreground"></i>
         </div>
-        <h2 class="font-display text-2xl font-bold">{% if subdomain_institution %}{{ subdomain_institution.name }}{% else %}School Portal{% endif %}</h2>
+        <h2 class="font-display text-2xl font-bold">{% if portal_institution %}{{ portal_institution.name }}{% elif subdomain_institution %}{{ subdomain_institution.name }}{% else %}School Portal{% endif %}</h2>
         <p class="text-sm text-muted-foreground mt-1">Welcome to your school portal.</p>
       </div>
 
       <form method="post" class="space-y-4">
         {% csrf_token %}
-        {% if subdomain_institution %}
+        {% if portal_institution or subdomain_institution %}
           <input type="hidden" name="school_code" value="{{ resolved_school_code }}" />
           <div class="rounded-xl border border-border bg-background px-4 py-3 text-sm">
             <span class="block text-muted-foreground">School Portal</span>

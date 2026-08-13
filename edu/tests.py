@@ -72,7 +72,7 @@ class EduPortalRoutingTests(TestCase):
             self.assertContains(response, "edu-pricing-card-grid")
             self.assertContains(response, "Enterprise Plus")
             self.assertContains(response, "School Portal")
-            self.assertContains(response, "yourschool.vilastore.store")
+            self.assertContains(response, "vilastore.store/edu/portal/yourschool")
             self.assertContains(response, "Create School & Start Free Trial")
             self.assertContains(response, "NGN 30,000")
 
@@ -98,7 +98,7 @@ class EduPortalRoutingTests(TestCase):
         self.assertContains(response, "data-edu-nav-toggle")
         self.assertNotContains(response, 'class="portal-search"')
 
-    def test_school_portal_lookup_redirects_existing_school_to_subdomain(self):
+    def test_school_portal_lookup_redirects_existing_school_to_path_portal(self):
         Institution.objects.create(
             name="Lookup Academy",
             school_code="lookupacademy",
@@ -112,8 +112,8 @@ class EduPortalRoutingTests(TestCase):
             "school_email": "lookup@example.com",
         })
 
-        self.assertRedirects(response, "https://lookupacademy.vilastore.store/", fetch_redirect_response=False)
-        self.assertContains(forgot, "https://lookupacademy.vilastore.store/")
+        self.assertRedirects(response, "https://vilastore.store/edu/portal/lookupacademy", fetch_redirect_response=False)
+        self.assertContains(forgot, "https://vilastore.store/edu/portal/lookupacademy")
 
 
 class EduPortalVerificationRegistrationTests(TestCase):
@@ -159,7 +159,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         institution = Institution.objects.get(name="Trial Package Academy")
         profile = Profile.objects.get(institution=institution, role="admin")
         self.assertEqual(institution.school_code, "trialpackageacademy")
-        self.assertContains(response, "https://trialpackageacademy.vilastore.store/")
+        self.assertContains(response, "https://vilastore.store/edu/portal/trialpackageacademy")
         self.assertEqual(institution.subscription_package, "basic")
         self.assertEqual(institution.subscription_billing_cycle, "session")
         self.assertEqual(institution.student_limit, 100)
@@ -205,7 +205,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         ))
 
         self.assertContains(taken, "This school portal already exists.")
-        self.assertContains(taken, "https://existingacademy.vilastore.store/")
+        self.assertContains(taken, "https://vilastore.store/edu/portal/existingacademy")
         self.assertContains(reserved, "That school portal name is reserved.")
 
     def test_subdomain_availability_endpoint(self):
@@ -220,11 +220,11 @@ class EduPortalVerificationRegistrationTests(TestCase):
         reserved = self.client.get(reverse("edu:subdomain_check"), {"subdomain": "register"})
 
         self.assertTrue(available.json()["available"])
-        self.assertEqual(available.json()["portal_url"], "https://new-school.vilastore.store/")
+        self.assertEqual(available.json()["portal_url"], "https://vilastore.store/edu/portal/new-school")
         self.assertFalse(taken.json()["available"])
         self.assertFalse(reserved.json()["available"])
 
-    def test_trial_school_admin_logs_in_from_school_subdomain(self):
+    def test_trial_school_admin_logs_in_from_school_portal_path(self):
         self.client.post(reverse("edu:secondary_register"), self._registration_payload(
             institution_name="Trial Login Academy",
             school_code="trialloginacademy",
@@ -232,17 +232,14 @@ class EduPortalVerificationRegistrationTests(TestCase):
         ))
         institution = Institution.objects.get(name="Trial Login Academy")
         profile = Profile.objects.get(institution=institution, role="admin")
-        host = f"{institution.school_code}.vilastore.store"
-
-        response = self.client.post(reverse("edu:secondary_login"), {
-            "school_code": institution.school_code,
+        response = self.client.post(reverse("edu:school_portal_fallback", kwargs={"school_code": institution.school_code}), {
             "username": profile.user.username,
             "password": "StrongPass123!",
-        }, HTTP_HOST=host, secure=True)
+        }, secure=True)
 
         self.assertRedirects(
             response,
-            "/dashboard/",
+            reverse("edu:school_portal_fallback_dashboard", kwargs={"school_code": institution.school_code}),
             fetch_redirect_response=False,
         )
 
@@ -291,7 +288,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
 
         self.assertRedirects(
             response,
-            reverse("edu:school_portal_fallback", kwargs={"school_code": institution.school_code}),
+            reverse("edu:school_portal_fallback_no_slash", kwargs={"school_code": institution.school_code}),
             fetch_redirect_response=False,
         )
 
@@ -342,11 +339,10 @@ class EduPortalVerificationRegistrationTests(TestCase):
             role="admin",
         )
 
-        response = self.client.post(reverse("edu:secondary_login"), {
-            "school_code": institution.school_code,
+        response = self.client.post(reverse("edu:school_portal_fallback", kwargs={"school_code": institution.school_code}), {
             "username": "repair-admin",
             "password": "StrongPass123!",
-        }, HTTP_HOST=f"{institution.school_code}.vilastore.store", secure=True)
+        }, secure=True)
 
         profile = Profile.objects.get(user=user)
         self.assertEqual(profile.institution, institution)
@@ -354,7 +350,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         self.assertTrue(profile.is_approved)
         self.assertRedirects(
             response,
-            "/dashboard/",
+            reverse("edu:school_portal_fallback_dashboard", kwargs={"school_code": institution.school_code}),
             fetch_redirect_response=False,
         )
 
@@ -377,15 +373,14 @@ class EduPortalVerificationRegistrationTests(TestCase):
         profile.email_verified = True
         profile.save()
 
-        response = self.client.post(reverse("edu:secondary_login"), {
-            "school_code": institution.school_code,
+        response = self.client.post(reverse("edu:school_portal_fallback", kwargs={"school_code": institution.school_code}), {
             "username": "approved-admin",
             "password": "StrongPass123!",
-        }, HTTP_HOST=f"{institution.school_code}.vilastore.store", secure=True)
+        }, secure=True)
 
         self.assertRedirects(
             response,
-            "/dashboard/",
+            reverse("edu:school_portal_fallback_dashboard", kwargs={"school_code": institution.school_code}),
             fetch_redirect_response=False,
         )
 

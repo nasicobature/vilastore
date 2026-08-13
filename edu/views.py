@@ -17,7 +17,6 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import EDU_PACKAGE_LIMITS, RESERVED_EDU_SUBDOMAINS, EduSubscriptionSettings, Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
-from .tenant import subdomain_from_host
 from core.utils.notifications import send_email
 
 
@@ -161,16 +160,21 @@ def _profile_login_url(profile):
 def _institution_portal_url(institution, admin_id=None):
     if not institution or not institution.school_code:
         return ''
-    url = f'https://{institution.school_code.lower()}.vilastore.store/'
+    url = f'https://vilastore.store/edu/portal/{institution.school_code.lower()}'
     if admin_id:
         url += f'?admin_id={requests.utils.quote(admin_id)}'
     return url
 
 
-def _institution_fallback_portal_url(institution):
+def _institution_portal_path(institution):
     if not institution or not institution.school_code:
         return ''
-    return f'/edu/portal/{institution.school_code.lower()}/'
+    return f'/edu/portal/{institution.school_code.lower()}'
+
+
+def _institution_portal_dashboard_path(institution):
+    path = _institution_portal_path(institution)
+    return f'{path}/dashboard/' if path else ''
 
 
 def _edu_trial_student_limit():
@@ -312,8 +316,6 @@ def edu_portal_access_required(view_func):
     def wrapper(request, *args, **kwargs):
         profile = getattr(request.user, 'profile', None)
         tenant = getattr(request, 'edu_institution', None)
-        if getattr(request, 'edu_subdomain', '') and not tenant:
-            return render(request, 'edu/portal_not_found.html', status=404)
         if tenant and profile and profile.institution_id != tenant.id:
             auth_logout(request)
             messages.error(request, 'This account does not belong to this school portal.')
@@ -638,52 +640,34 @@ def school_portal_lookup(request):
     })
 
 
-def subdomain_portal_home(request):
-    institution = getattr(request, 'edu_institution', None)
-    if not getattr(request, 'edu_subdomain', ''):
-        return redirect('edu:index')
-    if not institution:
-        return render(request, 'edu/portal_not_found.html', status=404)
-    template_name = 'edu/tertiary_login.html' if institution.institution_type == 'tertiary' else 'edu/secondary_login.html'
-    return _login_for_institution(request, institution.institution_type, template_name)
-
-
-def subdomain_dashboard(request):
-    institution = getattr(request, 'edu_institution', None)
-    if not getattr(request, 'edu_subdomain', ''):
-        return redirect('edu:index')
-    if not institution:
-        return render(request, 'edu/portal_not_found.html', status=404)
+def school_portal_dashboard(request, school_code):
+    normalized_code = Institution.normalize_subdomain(school_code)
+    institution = get_object_or_404(Institution, school_code__iexact=normalized_code)
+    request.edu_institution = institution
+    request.edu_portal_path = True
     if not request.user.is_authenticated:
-        if getattr(request, 'edu_portal_fallback', False):
-            return redirect(f'/edu/portal/{institution.school_code.lower()}/')
-        return redirect('/')
+        return redirect(_institution_portal_path(institution))
     profile = getattr(request.user, 'profile', None)
     if not profile or profile.institution_id != institution.id:
         messages.error(request, 'Log in with an account for this school portal.')
-        if getattr(request, 'edu_portal_fallback', False):
-            return redirect(f'/edu/portal/{institution.school_code.lower()}/')
-        return redirect('/')
+        return redirect(_institution_portal_path(institution))
     if profile.institution_type == 'tertiary':
         return redirect('edu:tertiary_dashboard', role=profile.role)
     return redirect('edu:secondary_dashboard', role=profile.role)
 
 
 def school_portal_fallback(request, school_code):
-    institution = get_object_or_404(Institution, school_code__iexact=school_code)
-    request.edu_subdomain = institution.school_code
+    normalized_code = Institution.normalize_subdomain(school_code)
+    institution = get_object_or_404(Institution, school_code__iexact=normalized_code)
     request.edu_institution = institution
-    request.edu_portal_fallback = True
+    request.edu_portal_path = True
     template_name = 'edu/tertiary_login.html' if institution.institution_type == 'tertiary' else 'edu/secondary_login.html'
     return _login_for_institution(request, institution.institution_type, template_name)
 
 
 def school_portal_fallback_dashboard(request, school_code):
-    institution = get_object_or_404(Institution, school_code__iexact=school_code)
-    request.edu_subdomain = institution.school_code
-    request.edu_institution = institution
-    request.edu_portal_fallback = True
-    return subdomain_dashboard(request)
+    normalized_code = Institution.normalize_subdomain(school_code)
+    return school_portal_dashboard(request, normalized_code)
 
 
 def _resolve_login_user(institution_type, school_code, identifier):
@@ -800,11 +784,7 @@ def _repair_trial_school_admin_login(profile):
     return profile
 
 
-def _school_code_from_subdomain(request):
-    return subdomain_from_host(request.get_host())
-
-
-def _institution_from_subdomain(request, institution_type):
+def _institution_from_portal_request(request, institution_type):
     tenant = getattr(request, 'edu_institution', None)
     if not tenant:
         return None
@@ -815,17 +795,15 @@ def _institution_from_subdomain(request, institution_type):
 
 def _login_for_institution(request, institution_type, template_name):
     roles = SECONDARY_ROLES if institution_type == 'secondary' else TERTIARY_ROLES
-    subdomain_institution = _institution_from_subdomain(request, institution_type)
-    if not getattr(request, 'edu_subdomain', ''):
+    portal_institution = _institution_from_portal_request(request, institution_type)
+    if not portal_institution:
         messages.info(request, 'School users log in through their school portal link.')
         return redirect('edu:index')
-    if not subdomain_institution:
-        return render(request, 'edu/portal_not_found.html', status=404)
 
     if request.method == 'POST':
         school_code = request.POST.get('school_code', '').strip().upper()
-        if subdomain_institution:
-            school_code = subdomain_institution.school_code.upper()
+        if portal_institution:
+            school_code = portal_institution.school_code.upper()
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
         resolved_user = _resolve_login_user(institution_type, school_code, username)
@@ -869,10 +847,8 @@ def _login_for_institution(request, institution_type, template_name):
                 else:
                     if profile.institution:
                         profile.institution.refresh_subscription_status()
-                    if getattr(request, 'edu_portal_fallback', False):
-                        return redirect(f'/edu/portal/{profile.institution.school_code.lower()}/dashboard/')
-                    if getattr(request, 'edu_subdomain', ''):
-                        return redirect('/dashboard/')
+                    if getattr(request, 'edu_portal_path', False):
+                        return redirect(_institution_portal_dashboard_path(profile.institution))
                     if profile.institution_type == 'tertiary':
                         return redirect('edu:tertiary_dashboard', role=profile.role)
                     return redirect('edu:secondary_dashboard', role=profile.role)
@@ -882,8 +858,9 @@ def _login_for_institution(request, institution_type, template_name):
     return render(request, template_name, {
         'institution': institution_type,
         'roles': roles,
-        'subdomain_institution': subdomain_institution,
-        'resolved_school_code': subdomain_institution.school_code if subdomain_institution else '',
+        'portal_institution': portal_institution,
+        'subdomain_institution': portal_institution,
+        'resolved_school_code': portal_institution.school_code if portal_institution else '',
         'initial_username': request.GET.get('admin_id', '').strip(),
     })
 
@@ -1379,7 +1356,7 @@ def edu_subdomain_availability(request):
     return JsonResponse({
         'available': available,
         'subdomain': subdomain,
-        'portal_url': f'https://{subdomain}.vilastore.store/' if subdomain else '',
+        'portal_url': f'https://vilastore.store/edu/portal/{subdomain}' if subdomain else '',
         'message': message,
     })
 
@@ -1530,7 +1507,6 @@ def _register_school_with_trial(request, default_school_type='secondary'):
                     'institution': institution,
                     'admin_username': admin_username,
                     'portal_url': _institution_portal_url(institution),
-                    'fallback_portal_url': _institution_fallback_portal_url(institution),
                     'trial_days': EDU_TRIAL_DAYS,
                     'selected_package': _edu_package(subscription_package),
                     'selected_plan': _edu_subscription_plans(subscription_package)[billing_cycle],

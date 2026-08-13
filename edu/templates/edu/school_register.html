@@ -115,14 +115,14 @@
           </div>
           <div class="portal-preview-card">
             <span>Your School Portal</span>
-            <strong data-portal-preview>yourschool.vilastore.store</strong>
+            <strong data-portal-preview>vilastore.store/edu/portal/yourschool</strong>
             <small>Staff, students, and parents will log in from this school-specific portal.</small>
           </div>
           <div class="form-grid">
             <label class="field-block field-wide">School portal name *
               <div class="subdomain-input-row">
+                <span>vilastore.store/edu/portal/</span>
                 <input type="text" name="school_code" required placeholder="brightfuture" data-school-code data-review-label="School Portal" />
-                <span>.vilastore.store</span>
               </div>
               <small class="availability-message" data-subdomain-message>Enter a school name to generate your portal.</small>
             </label>
@@ -434,7 +434,7 @@
       const subdomain = slugify(schoolCode.value);
       schoolCode.value = subdomain;
       if (portalPreview) {
-        portalPreview.textContent = subdomain ? `${subdomain}.vilastore.store` : 'yourschool.vilastore.store';
+        portalPreview.textContent = subdomain ? `vilastore.store/edu/portal/${subdomain}` : 'vilastore.store/edu/portal/yourschool';
       }
       return subdomain;
     };
