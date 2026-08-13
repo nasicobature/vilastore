@@ -79,7 +79,7 @@
                 {% if subscription_usage.is_trial %}Free Trial{% elif subscription_usage.is_trial_expired %}Trial Expired{% else %}{{ subscription_usage.package_name }} Package{% endif %}
               </h2>
               <p class="text-sm text-muted-foreground mt-1">
-                {{ subscription_usage.students_used }} / {{ subscription_usage.student_limit }} students used - {{ subscription_usage.students_remaining }} remaining
+                {{ subscription_usage.students_used }} / {{ subscription_usage.student_limit_display }} students used{% if subscription_usage.is_unlimited %} - unlimited capacity{% else %} - {{ subscription_usage.students_remaining }} remaining{% endif %}
               </p>
               {% if subscription_usage.is_trial %}
                 <p class="text-sm font-semibold text-primary mt-2">{{ subscription_usage.trial_message }}</p>

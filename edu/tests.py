@@ -40,13 +40,17 @@ class EduPortalRoutingTests(TestCase):
     def test_index_shows_launch_pricing_and_coming_soon_modules(self):
         response = self.client.get(reverse("edu:index"))
 
-        self.assertContains(response, "Simple Pricing. Built for Value.")
+        self.assertContains(response, "Simple Pricing. Built for Schools.")
         self.assertContains(response, "Per Term")
         self.assertContains(response, "Per Session")
         self.assertContains(response, "NGN 20,000")
         self.assertContains(response, "NGN 30,000")
+        self.assertContains(response, "Enterprise Plus")
+        self.assertContains(response, "751+ Students")
+        self.assertEqual(response.content.decode().count('data-package-card'), 7)
         self.assertContains(response, "Save 10%")
         self.assertContains(response, "Coming Soon Modules")
+        self.assertContains(response, reverse("edu:school_portal_lookup"))
 
     def test_general_edu_login_pages_redirect_to_main_site(self):
         secondary = self.client.get(reverse("edu:secondary_login"))
@@ -64,18 +68,48 @@ class EduPortalRoutingTests(TestCase):
         for response in (secondary, tertiary):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, 'class="wizard-form"')
-            self.assertContains(response, "Choose the Right Plan for Your School")
-            self.assertContains(response, "registration-package-table")
+            self.assertContains(response, "Simple Pricing. Built for Schools.")
+            self.assertContains(response, "edu-pricing-card-grid")
+            self.assertContains(response, "Enterprise Plus")
             self.assertContains(response, "School Portal")
-            self.assertContains(response, "/edu/portal/yourschool/")
+            self.assertContains(response, "yourschool.vilastore.store")
             self.assertContains(response, "Create School & Start Free Trial")
             self.assertContains(response, "NGN 30,000")
 
-    def test_edu_landing_portal_search_uses_main_domain_fallback(self):
+    def test_registration_preselects_package_and_billing_from_pricing_link(self):
+        response = self.client.get(reverse("edu:secondary_register"), {
+            "package": "enterprise-plus",
+            "billing": "session",
+        })
+
+        html = response.content.decode()
+        self.assertContains(response, "Enterprise Plus")
+        self.assertIn('value="enterprise-plus"', html)
+        self.assertIn('value="session" data-billing-cycle checked', html)
+        self.assertIn('value="enterprise-plus"', html)
+
+    def test_edu_landing_portal_search_uses_school_lookup(self):
         response = self.client.get(reverse("edu:index"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "window.location.href = '/edu/portal/' + value + '/'")
+        self.assertContains(response, f'action="{reverse("edu:school_portal_lookup")}"')
+
+    def test_school_portal_lookup_redirects_existing_school_to_subdomain(self):
+        Institution.objects.create(
+            name="Lookup Academy",
+            school_code="lookupacademy",
+            institution_type="secondary",
+            email="lookup@example.com",
+        )
+
+        response = self.client.get(reverse("edu:school_portal_lookup"), {"school": "Lookup Academy"})
+        forgot = self.client.post(reverse("edu:school_portal_lookup"), {
+            "school_name": "Lookup Academy",
+            "school_email": "lookup@example.com",
+        })
+
+        self.assertRedirects(response, "https://lookupacademy.vilastore.store/", fetch_redirect_response=False)
+        self.assertContains(forgot, "https://lookupacademy.vilastore.store/")
 
 
 class EduPortalVerificationRegistrationTests(TestCase):
@@ -121,8 +155,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         institution = Institution.objects.get(name="Trial Package Academy")
         profile = Profile.objects.get(institution=institution, role="admin")
         self.assertEqual(institution.school_code, "trialpackageacademy")
-        self.assertContains(response, "/edu/portal/trialpackageacademy/")
-        self.assertNotContains(response, "trialpackageacademy.vilastore.store")
+        self.assertContains(response, "https://trialpackageacademy.vilastore.store/")
         self.assertEqual(institution.subscription_package, "basic")
         self.assertEqual(institution.subscription_billing_cycle, "session")
         self.assertEqual(institution.student_limit, 100)
@@ -133,6 +166,22 @@ class EduPortalVerificationRegistrationTests(TestCase):
         self.assertEqual(profile.user.email, "admin@example.com")
         self.assertTrue(profile.is_approved)
         self.assertTrue(profile.email_verified)
+
+    def test_registration_accepts_enterprise_plus_package(self):
+        response = self.client.post(reverse("edu:secondary_register"), self._registration_payload(
+            institution_name="Enterprise Plus Academy",
+            school_code="enterpriseplusacademy",
+            admin_email="enterprise-plus@example.com",
+            subscription_package="enterprise-plus",
+            subscription_billing_cycle="termly",
+        ))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enterprise Plus")
+        self.assertContains(response, "751+ Students")
+        institution = Institution.objects.get(name="Enterprise Plus Academy")
+        self.assertEqual(institution.subscription_package, "enterprise-plus")
+        self.assertEqual(institution.student_limit, 751)
 
     def test_registration_rejects_taken_or_reserved_subdomain(self):
         Institution.objects.create(
@@ -152,7 +201,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         ))
 
         self.assertContains(taken, "This school portal already exists.")
-        self.assertContains(taken, "/edu/portal/existingacademy/")
+        self.assertContains(taken, "https://existingacademy.vilastore.store/")
         self.assertContains(reserved, "That school portal name is reserved.")
 
     def test_subdomain_availability_endpoint(self):
@@ -167,7 +216,7 @@ class EduPortalVerificationRegistrationTests(TestCase):
         reserved = self.client.get(reverse("edu:subdomain_check"), {"subdomain": "register"})
 
         self.assertTrue(available.json()["available"])
-        self.assertEqual(available.json()["portal_url"], "/edu/portal/new-school/")
+        self.assertEqual(available.json()["portal_url"], "https://new-school.vilastore.store/")
         self.assertFalse(taken.json()["available"])
         self.assertFalse(reserved.json()["available"])
 

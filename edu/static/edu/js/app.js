@@ -57,6 +57,56 @@
     setPricingCycle('term');
   }
 
+  document.querySelectorAll('[data-edu-pricing]').forEach((panel) => {
+    const billingInputs = Array.from(panel.querySelectorAll('[data-billing-cycle]'));
+    const cards = Array.from(panel.querySelectorAll('[data-package-card]'));
+    const selectedBilling = () => {
+      const selected = billingInputs.find((input) => input.checked);
+      return selected ? selected.value : 'termly';
+    };
+    const syncCards = () => {
+      const cycle = selectedBilling();
+      cards.forEach((card) => {
+        const input = card.querySelector('[data-package-option]');
+        const price = card.querySelector('[data-package-price]');
+        const label = card.querySelector('[data-package-billing-label]');
+        const button = card.querySelector('[data-package-select-text]');
+        const cta = card.querySelector('[data-package-cta]');
+        if (input) {
+          card.classList.toggle('is-selected', input.checked);
+          if (button) {
+            button.textContent = input.checked ? 'Selected ✓' : 'Select Package';
+          }
+        }
+        if (price) {
+          price.textContent = cycle === 'session'
+            ? (input ? input.dataset.sessionPrice : card.dataset.sessionPrice)
+            : (input ? input.dataset.termPrice : card.dataset.termPrice);
+        }
+        if (label) {
+          label.textContent = cycle === 'session' ? 'per session' : 'per term';
+        }
+        if (cta) {
+          const url = new URL(cta.getAttribute('href'), window.location.origin);
+          url.searchParams.set('billing', cycle);
+          cta.setAttribute('href', `${url.pathname}${url.search}`);
+        }
+      });
+    };
+    billingInputs.forEach((input) => input.addEventListener('change', syncCards));
+    cards.forEach((card) => {
+      card.addEventListener('click', (event) => {
+        if (event.target.closest('a, button')) return;
+        const input = card.querySelector('[data-package-option]');
+        if (input && !input.checked) {
+          input.checked = true;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    });
+    syncCards();
+  });
+
   const wizardForms = document.querySelectorAll('[data-registration-wizard]');
   wizardForms.forEach((form) => {
     const panels = Array.from(form.querySelectorAll('[data-wizard-panel]'));
@@ -125,8 +175,8 @@
           seenRadioGroups.add(field.name);
           const checked = form.querySelector(`input[type="radio"][name="${field.name}"]:checked`);
           const label = checked ? checked.closest('label') : null;
-          const title = label ? label.querySelector('.plan-card-title') : null;
-          const amount = label ? label.querySelector('strong') : null;
+          const title = label ? label.querySelector('.plan-card-title, .package-name') : null;
+          const amount = label ? label.querySelector('.package-price, strong') : null;
           const display = [title ? title.textContent.trim() : checked?.value, amount ? amount.textContent.trim() : '']
             .filter(Boolean)
             .join(' - ');

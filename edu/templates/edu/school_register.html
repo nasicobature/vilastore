@@ -105,69 +105,7 @@
         </section>
 
         <section class="wizard-panel" data-wizard-panel>
-          <div class="section-heading package-step-heading">
-            <h2>Choose the Right Plan for Your School</h2>
-            <p>Start with a 3-day free trial. You won't be charged until your trial ends.</p>
-          </div>
-          <div class="registration-billing-toggle" role="radiogroup" aria-label="Billing period">
-            <label class="billing-toggle-option">
-              <input type="radio" name="subscription_billing_cycle" value="termly" data-review-label="Billing" data-billing-cycle {% if default_subscription_cycle == 'termly' %}checked{% endif %} />
-              <span>Per Term</span>
-            </label>
-            <label class="billing-toggle-option">
-              <input type="radio" name="subscription_billing_cycle" value="session" data-review-label="Billing" data-billing-cycle {% if default_subscription_cycle == 'session' %}checked{% endif %} />
-              <span>Per Session</span>
-              <em>Save 10%</em>
-            </label>
-          </div>
-          <div class="registration-package-table-shell">
-            <table class="registration-package-table">
-              <thead>
-                <tr>
-                  <th>Package</th>
-                  <th>Student Range</th>
-                  <th>Price</th>
-                  <th>Trial</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for package in pricing_packages %}
-                  {% if package.code != 'enterprise-plus' %}
-                    <tr class="registration-package-row">
-                      <td data-label="Package">
-                        <label class="registration-package-choice">
-                          <input
-                            type="radio"
-                            name="subscription_package"
-                            value="{{ package.code }}"
-                            required
-                            data-review-label="Selected Package"
-                            data-package-option
-                            data-package-name="{{ package.name }}"
-                            data-student-limit="{{ package.student_limit }}"
-                            data-student-range="{{ package.student_range }}"
-                            data-term-price="NGN {{ package.term_amount_display }}"
-                            data-session-price="NGN {{ package.session_amount_display }}"
-                            {% if package.code == default_subscription_package %}checked{% endif %}
-                          />
-                          <span class="package-check" aria-hidden="true"><i data-lucide="check"></i></span>
-                          <strong class="package-name">{{ package.name }}</strong>
-                        </label>
-                      </td>
-                      <td data-label="Student Range"><span class="package-range">{{ package.student_range }}</span></td>
-                      <td data-label="Price">
-                        <strong class="package-price" data-package-price>NGN {{ package.term_amount_display }}</strong>
-                        <span class="package-cycle" data-package-billing-label>per term</span>
-                      </td>
-                      <td data-label="Trial"><span class="package-trial-pill">3 days free</span></td>
-                      <td data-label="Select"><span class="package-select-button" data-package-select-text>Select</span></td>
-                    </tr>
-                  {% endif %}
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+          {% include 'edu/partials/pricing_cards.html' with pricing_mode='registration' billing_input_name='subscription_billing_cycle' selected_billing_cycle=default_subscription_cycle selected_package_code=default_subscription_package %}
         </section>
 
         <section class="wizard-panel" data-wizard-panel>
@@ -177,14 +115,14 @@
           </div>
           <div class="portal-preview-card">
             <span>Your School Portal</span>
-            <strong data-portal-preview>/edu/portal/yourschool/</strong>
+            <strong data-portal-preview>yourschool.vilastore.store</strong>
             <small>Staff, students, and parents will log in from this school-specific portal.</small>
           </div>
           <div class="form-grid">
             <label class="field-block field-wide">School portal name *
               <div class="subdomain-input-row">
-                <span>vilastore.store/edu/portal/</span>
                 <input type="text" name="school_code" required placeholder="brightfuture" data-school-code data-review-label="School Portal" />
+                <span>.vilastore.store</span>
               </div>
               <small class="availability-message" data-subdomain-message>Enter a school name to generate your portal.</small>
             </label>
@@ -206,6 +144,7 @@
           </div>
           <input type="hidden" value="3 Days" data-review-label="Free Trial" />
           <input type="hidden" value="" data-selected-student-limit data-review-label="Student Limit" />
+          <input type="hidden" value="" data-selected-student-range data-review-label="Student Range" />
           <div class="review-grid" data-review-output></div>
           <div class="verification-notice">
             <i data-lucide="shield-check"></i>
@@ -226,7 +165,7 @@
   </div>
 </div>
 
-<style>
+<style media="not all">
   [data-school-register-form] .package-step-heading {
     text-align: center;
     max-width: 760px;
@@ -467,6 +406,7 @@
     const billingInputs = Array.from(form.querySelectorAll('[data-billing-cycle]'));
     const packageInputs = Array.from(form.querySelectorAll('[data-package-option]'));
     const studentLimitInput = form.querySelector('[data-selected-student-limit]');
+    const studentRangeInput = form.querySelector('[data-selected-student-range]');
     const checkUrl = "{% url 'edu:subdomain_check' %}";
     let userEditedCode = false;
     let availabilityTimer = null;
@@ -494,7 +434,7 @@
       const subdomain = slugify(schoolCode.value);
       schoolCode.value = subdomain;
       if (portalPreview) {
-        portalPreview.textContent = subdomain ? `/edu/portal/${subdomain}/` : '/edu/portal/yourschool/';
+        portalPreview.textContent = subdomain ? `${subdomain}.vilastore.store` : 'yourschool.vilastore.store';
       }
       return subdomain;
     };
@@ -550,7 +490,7 @@
     const syncPackagePrices = () => {
       const cycle = selectedBilling();
       packageInputs.forEach((input) => {
-        const card = input.closest('.registration-package-row');
+        const card = input.closest('[data-package-card]');
         const price = card ? card.querySelector('[data-package-price]') : null;
         const label = card ? card.querySelector('[data-package-billing-label]') : null;
         if (price) {
@@ -562,13 +502,21 @@
       });
       const selectedPackage = packageInputs.find((input) => input.checked);
       if (studentLimitInput && selectedPackage) {
-        studentLimitInput.value = `${Number(selectedPackage.dataset.studentLimit || 0).toLocaleString()} students`;
+        studentLimitInput.value = selectedPackage.value === 'enterprise-plus'
+          ? 'Unlimited above 750 students'
+          : `${Number(selectedPackage.dataset.studentLimit || 0).toLocaleString()} students`;
+      }
+      if (studentRangeInput && selectedPackage) {
+        studentRangeInput.value = selectedPackage.dataset.studentRange || '';
       }
       packageInputs.forEach((input) => {
-        const card = input.closest('.registration-package-row');
+        const card = input.closest('[data-package-card]');
         const buttonText = card ? card.querySelector('[data-package-select-text]') : null;
+        if (card) {
+          card.classList.toggle('is-selected', input.checked);
+        }
         if (buttonText) {
-          buttonText.textContent = input.checked ? 'Selected' : 'Select Package';
+          buttonText.textContent = input.checked ? 'Selected ✓' : 'Select Package';
         }
       });
     };
@@ -579,7 +527,7 @@
     packageInputs.forEach((input) => {
       input.addEventListener('change', syncPackagePrices);
     });
-    form.querySelectorAll('.registration-package-row').forEach((row) => {
+    form.querySelectorAll('[data-package-card]').forEach((row) => {
       row.addEventListener('click', (event) => {
         if (event.target.closest('a, button')) return;
         const input = row.querySelector('[data-package-option]');

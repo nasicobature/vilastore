@@ -2,23 +2,41 @@
 
 {% block content %}
 <div class="edu-product-page">
+  <header class="edu-site-nav">
+    <a href="/edu/" class="edu-brand">
+      <span class="edu-brand-mark"><i data-lucide="graduation-cap"></i></span>
+      <strong>VilaStore Edu</strong>
+    </a>
+    <nav>
+      <a href="/edu/">Home</a>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#how-it-works">How It Works</a>
+      <a href="#contact">Contact</a>
+    </nav>
+    <div class="edu-nav-actions">
+      <a href="{% url 'edu:school_portal_lookup' %}" class="wizard-btn wizard-btn-secondary">School Login</a>
+      <a href="/edu/register/" class="wizard-btn wizard-btn-primary">Start Free Trial</a>
+    </div>
+  </header>
+
   <section class="edu-hero">
     <div class="edu-hero-copy">
       <div class="edu-hero-mark">
         <i data-lucide="graduation-cap"></i>
       </div>
       <p class="registration-eyebrow">EduPortal for Schools</p>
-      <h1>Launch with verified secondary schools first.</h1>
+      <h1>Manage Your School Smarter with VilaStore Edu</h1>
       <p>
-        Manage students, staff, classes, subjects, fees, scores, result review, and role-based school operations after VilaStore verifies the institution.
+        Manage students, staff, results, fees, attendance and school operations from one secure platform.
       </p>
       <div class="edu-hero-actions">
-        <a href="/edu/register/" class="wizard-btn wizard-btn-primary">Register School</a>
-        <a href="#pricing" class="wizard-btn wizard-btn-secondary">View Pricing</a>
+        <a href="/edu/register/" class="wizard-btn wizard-btn-primary">Start 3-Day Free Trial</a>
+        <a href="{% url 'edu:school_portal_lookup' %}" class="wizard-btn wizard-btn-secondary">School Login</a>
       </div>
     </div>
 
-    <div class="edu-launch-panel">
+    <div class="edu-launch-panel" id="features">
       <div class="launch-badge">Primary launch product</div>
       <h2>Secondary School Portal</h2>
       <p>Built for nursery, primary, and secondary schools that need verified administration, fees, results, and staff workflow.</p>
@@ -31,76 +49,26 @@
     </div>
   </section>
 
-  <section class="school-portal-section">
+  <section class="school-portal-section" id="how-it-works">
     <div class="portal-copy">
       <span class="portal-kicker"><i data-lucide="globe-2"></i> Dedicated School Portal</span>
       <h2>Your Personal School Portal</h2>
-      <p>Every school gets a unique portal link on your domain. Staff, students, and parents log in with dedicated access.</p>
+      <p>Every school gets a unique portal address on your domain. Staff, students, and parents log in with dedicated access.</p>
     </div>
-    <form class="portal-search" onsubmit="event.preventDefault(); const value = this.elements.school.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''); if (value) window.location.href = '/edu/portal/' + value + '/';">
+    <form class="portal-search" method="get" action="{% url 'edu:school_portal_lookup' %}">
       <label>
         <span>School portal name</span>
         <div class="subdomain-input">
-          <strong>vilastore.store/edu/portal/</strong>
           <input type="text" name="school" placeholder="yourschool" aria-label="School portal name" />
+          <strong>.vilastore.store</strong>
         </div>
       </label>
-      <button type="submit" class="wizard-btn wizard-btn-primary">Go to Portal</button>
+      <button type="submit" class="wizard-btn wizard-btn-primary">Continue</button>
     </form>
   </section>
 
   <section id="pricing" class="pricing-section">
-    <div class="pricing-heading">
-      <div>
-        <h2>Simple Pricing. Built for Value.</h2>
-        <p>Free features are always free - the only thing that matters is your student range.</p>
-      </div>
-    </div>
-
-    <div class="pricing-control-row" data-pricing-switch>
-      <strong data-pricing-cycle-label="term" class="is-active">Per Term</strong>
-      <label class="billing-toggle" aria-label="Switch between per term and per session pricing">
-        <input type="checkbox" data-pricing-checkbox />
-        <span></span>
-      </label>
-      <strong data-pricing-cycle-label="session">Per Session</strong>
-      <span class="pricing-save-chip">Save 10%</span>
-    </div>
-
-    <div class="pricing-table-shell" data-pricing-table>
-      <table class="pricing-table">
-        <thead>
-          <tr>
-            <th>Package</th>
-            <th>Student Range</th>
-            <th><span data-pricing-heading>Per Term Pricing</span></th>
-            <th>Trial</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for package in pricing_packages %}
-            <tr
-              class="{% if forloop.counter == 3 %}is-popular{% endif %}"
-              data-term-price="{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }}{% endif %}"
-              data-session-price="{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.session_amount_display }}{% endif %}"
-              data-term-label="{% if package.is_custom %}{% else %}/ term{% endif %}"
-              data-session-label="{% if package.is_custom %}{% else %}/ session{% endif %}"
-            >
-              <td data-label="Package">
-                <strong class="table-package-name">{{ package.name }}</strong>
-                {% if forloop.counter == 3 %}<span class="table-popular-badge">Popular</span>{% endif %}
-              </td>
-              <td data-label="Student Range">{{ package.student_range }}</td>
-              <td class="table-price" data-label="Price">
-                <strong data-price-value>{% if package.is_custom %}Custom Pricing{% else %}NGN {{ package.term_amount_display }}{% endif %}</strong>
-                <span data-price-label>{% if package.is_custom %}{% else %}/ term{% endif %}</span>
-              </td>
-              <td data-label="Zero-Stress Trial"><a class="trial-link" href="{{ package.whatsapp_url }}" target="_blank" rel="noopener">{% if package.is_custom %}Contact Us{% else %}Start Free{% endif %}</a></td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% include 'edu/partials/pricing_cards.html' with pricing_mode='public' billing_input_name='edu_pricing_billing_cycle' selected_billing_cycle=default_subscription_cycle selected_package_code=default_subscription_package %}
 
     <div class="pricing-notes">
       <span>Choose Per Term or Per Session during registration</span>
@@ -109,7 +77,7 @@
     </div>
   </section>
 
-  <section class="coming-soon-section">
+  <section class="coming-soon-section" id="contact">
     <div class="section-heading">
       <h2>Coming Soon Modules</h2>
       <p>These should be sold as upcoming or custom features until they are fully wired.</p>

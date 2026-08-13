@@ -36,7 +36,7 @@
       </div>
       <div class="rounded-xl border border-border bg-background p-4">
         <span class="block text-xs text-muted-foreground">Student Limit</span>
-        <strong class="block mt-1">{{ institution.student_limit }} Students</strong>
+        <strong class="block mt-1">{% if selected_package.is_unlimited %}{{ selected_package.student_range }}{% else %}{{ institution.student_limit }} Students{% endif %}</strong>
       </div>
       <div class="rounded-xl border border-border bg-background p-4 md:col-span-2">
         <span class="block text-xs text-muted-foreground">Billing</span>

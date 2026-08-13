@@ -1,0 +1,61 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="portal-lookup-page">
+  <a href="/edu/" class="registration-back">
+    <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to VilaStore Edu
+  </a>
+
+  <section class="portal-lookup-card">
+    <div class="section-heading">
+      <p class="registration-eyebrow">School Login</p>
+      <h1>Find Your School Portal</h1>
+      <p>Enter your school's portal name to continue to your secure school login page.</p>
+    </div>
+
+    {% if lookup_error %}
+      <div class="portal-not-found-panel">
+        <h2>School Portal Not Found</h2>
+        <p>We couldn't find a school registered with that portal address. Check the portal name and try again.</p>
+        <div class="portal-lookup-actions">
+          <a href="{% url 'edu:school_portal_lookup' %}" class="wizard-btn wizard-btn-secondary">Try Again</a>
+          <a href="/edu/register/" class="wizard-btn wizard-btn-primary">Register Your School</a>
+        </div>
+      </div>
+    {% endif %}
+
+    <form method="get" class="portal-lookup-form">
+      <label>
+        <span>Portal name</span>
+        <div class="subdomain-input">
+          <input type="text" name="school" value="{{ portal_name }}" placeholder="yarimaprimaryschool" aria-label="School portal name" required />
+          <strong>.vilastore.store</strong>
+        </div>
+      </label>
+      <button type="submit" class="wizard-btn wizard-btn-primary">Continue to School Login</button>
+    </form>
+
+    <details class="forgot-portal-panel" {% if forgot_error or found_portal_url %}open{% endif %}>
+      <summary>Forgot your school portal?</summary>
+      <form method="post" class="forgot-portal-form">
+        {% csrf_token %}
+        <label class="field-block">School Name
+          <input type="text" name="school_name" value="{{ forgot_name }}" placeholder="Your school name" required />
+        </label>
+        <label class="field-block">Registered School Email
+          <input type="email" name="school_email" value="{{ forgot_email }}" placeholder="school@example.com" required />
+        </label>
+        <button type="submit" class="wizard-btn wizard-btn-secondary">Find Portal</button>
+      </form>
+      {% if found_portal_url %}
+        <div class="portal-found-panel">
+          <span>Your school portal</span>
+          <a href="{{ found_portal_url }}">{{ found_portal_url }}</a>
+        </div>
+      {% elif forgot_error %}
+        <p class="forgot-portal-error">{{ forgot_error }}</p>
+      {% endif %}
+    </details>
+  </section>
+</div>
+{% endblock %}

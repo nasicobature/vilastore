@@ -23,7 +23,6 @@ from core.utils.notifications import send_email
 
 EDU_DEFAULT_BILLING_CYCLE = 'termly'
 EDU_DEFAULT_PACKAGE = 'starter'
-EDU_REGISTRATION_PACKAGES = {'starter', 'basic', 'growth', 'standard', 'premium', 'enterprise'}
 EDU_PRICING_PACKAGES = [
     ('starter', 'Starter', '1 - 50 Students', EDU_PACKAGE_LIMITS['starter'], Decimal('20000.00')),
     ('basic', 'Basic', '51 - 100 Students', EDU_PACKAGE_LIMITS['basic'], Decimal('30000.00')),
@@ -33,6 +32,7 @@ EDU_PRICING_PACKAGES = [
     ('enterprise', 'Enterprise', '501 - 750 Students', EDU_PACKAGE_LIMITS['enterprise'], Decimal('110000.00')),
     ('enterprise-plus', 'Enterprise Plus', '751+ Students', EDU_PACKAGE_LIMITS['enterprise-plus'], Decimal('150000.00')),
 ]
+EDU_REGISTRATION_PACKAGES = {item[0] for item in EDU_PRICING_PACKAGES}
 
 
 def _format_edu_price(amount):
@@ -70,6 +70,7 @@ def _edu_pricing_packages():
             'name': name,
             'student_range': student_range,
             'student_limit': student_limit,
+            'is_unlimited': code == 'enterprise-plus',
             'term_amount': term_amount,
             'term_amount_display': 'Custom Pricing' if is_custom else _format_edu_price(term_amount),
             'session_amount': session_amount,
@@ -160,14 +161,16 @@ def _profile_login_url(profile):
 def _institution_portal_url(institution, admin_id=None):
     if not institution or not institution.school_code:
         return ''
-    url = f'/edu/portal/{institution.school_code.lower()}/'
+    url = f'https://{institution.school_code.lower()}.vilastore.store/'
     if admin_id:
         url += f'?admin_id={requests.utils.quote(admin_id)}'
     return url
 
 
 def _institution_fallback_portal_url(institution):
-    return _institution_portal_url(institution)
+    if not institution or not institution.school_code:
+        return ''
+    return f'/edu/portal/{institution.school_code.lower()}/'
 
 
 def _edu_trial_student_limit():
@@ -240,6 +243,7 @@ def _subscription_usage(institution):
     limit = institution.current_student_limit
     is_expired = _subscription_is_expired(institution)
     trial_days_remaining = institution.trial_days_remaining
+    is_unlimited = limit is None
     return {
         'package_code': institution.subscription_package,
         'package_name': institution.package_name,
@@ -247,8 +251,11 @@ def _subscription_usage(institution):
         'status_display': institution.get_subscription_status_display(),
         'billing_cycle': institution.subscription_billing_cycle,
         'student_limit': limit,
+        'student_limit_display': 'Unlimited' if is_unlimited else f'{limit}',
         'students_used': used,
-        'students_remaining': max(limit - used, 0),
+        'students_remaining': None if is_unlimited else max(limit - used, 0),
+        'students_remaining_display': 'Unlimited' if is_unlimited else f'{max(limit - used, 0)}',
+        'is_unlimited': is_unlimited,
         'expiry_date': _subscription_expiry_date(institution),
         'trial_start_date': institution.trial_start_date,
         'trial_end_date': institution.trial_end_date,
@@ -262,6 +269,8 @@ def _subscription_usage(institution):
 
 def _student_limit_message(institution):
     usage = _subscription_usage(institution)
+    if usage['is_unlimited']:
+        return ''
     return (
         f"You have reached the {usage['student_limit']}-student limit for your "
         f"{usage['package_name']} package. Upgrade your package to add more students."
@@ -279,6 +288,8 @@ def _student_capacity_message(institution):
 
 def _can_add_students(institution, count=1):
     usage = _subscription_usage(institution)
+    if usage['is_unlimited']:
+        return not usage['is_expired']
     return not usage['is_expired'] and usage['students_used'] + count <= usage['student_limit']
 
 
@@ -581,6 +592,49 @@ TERTIARY_ROLES = [
 def index(request):
     return render(request, 'edu/index.html', {
         'pricing_packages': _edu_pricing_packages(),
+        'default_subscription_package': EDU_DEFAULT_PACKAGE,
+        'default_subscription_cycle': EDU_DEFAULT_BILLING_CYCLE,
+    })
+
+
+def school_portal_lookup(request):
+    portal_name = request.GET.get('school', '').strip()
+    forgot_name = request.POST.get('school_name', '').strip()
+    forgot_email = request.POST.get('school_email', '').strip()
+    lookup_error = ''
+    forgot_error = ''
+    found_portal_url = ''
+
+    if portal_name:
+        school_code = Institution.normalize_subdomain(portal_name)
+        if not school_code or school_code in RESERVED_EDU_SUBDOMAINS:
+            lookup_error = "We couldn't find a school registered with that portal address. Check the portal name and try again."
+        else:
+            institution = Institution.objects.filter(school_code__iexact=school_code).first()
+            if institution:
+                return redirect(_institution_portal_url(institution))
+            lookup_error = "We couldn't find a school registered with that portal address. Check the portal name and try again."
+
+    if request.method == 'POST':
+        if not forgot_name or not forgot_email:
+            forgot_error = 'Enter the school name and registered school email.'
+        else:
+            institution = Institution.objects.filter(
+                name__iexact=forgot_name,
+                email__iexact=forgot_email,
+            ).first()
+            if institution:
+                found_portal_url = _institution_portal_url(institution)
+            else:
+                forgot_error = "We couldn't find a school with those details. Check the information and try again."
+
+    return render(request, 'edu/school_portal_lookup.html', {
+        'portal_name': Institution.normalize_subdomain(portal_name),
+        'lookup_error': lookup_error,
+        'forgot_name': forgot_name,
+        'forgot_email': forgot_email,
+        'forgot_error': forgot_error,
+        'found_portal_url': found_portal_url,
     })
 
 
@@ -1325,20 +1379,24 @@ def edu_subdomain_availability(request):
     return JsonResponse({
         'available': available,
         'subdomain': subdomain,
-        'portal_url': f'/edu/portal/{subdomain}/' if subdomain else '',
+        'portal_url': f'https://{subdomain}.vilastore.store/' if subdomain else '',
         'message': message,
     })
 
 
-def _school_register_context(default_school_type='secondary'):
+def _school_register_context(default_school_type='secondary', request=None):
+    selected_package = _normalize_edu_package(request.GET.get('package')) if request else EDU_DEFAULT_PACKAGE
+    if selected_package not in EDU_REGISTRATION_PACKAGES:
+        selected_package = EDU_DEFAULT_PACKAGE
+    selected_cycle = _normalize_edu_billing_cycle(request.GET.get('billing')) if request else EDU_DEFAULT_BILLING_CYCLE
     return {
         'type_choices': Institution.TYPE_CHOICES,
         'default_school_type': default_school_type,
         'reserved_subdomains': sorted(RESERVED_EDU_SUBDOMAINS),
         'pricing_packages': _edu_pricing_packages(),
         'subscription_plans': _edu_subscription_plans(),
-        'default_subscription_package': EDU_DEFAULT_PACKAGE,
-        'default_subscription_cycle': EDU_DEFAULT_BILLING_CYCLE,
+        'default_subscription_package': selected_package,
+        'default_subscription_cycle': selected_cycle,
     }
 
 
@@ -1487,7 +1545,7 @@ def _register_school_with_trial(request, default_school_type='secondary'):
                 for message in _validation_error_messages(exc):
                     messages.error(request, message)
 
-    context = _school_register_context(default_school_type)
+    context = _school_register_context(default_school_type, request)
     if duplicate_institution:
         context['duplicate_institution'] = duplicate_institution
         context['duplicate_portal_url'] = _institution_portal_url(duplicate_institution)

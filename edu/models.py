@@ -181,6 +181,8 @@ class Institution(models.Model):
 
     @property
     def current_student_limit(self):
+        if self.subscription_package == 'enterprise-plus' and self.subscription_status != 'trial':
+            return None
         if self.subscription_status == 'trial':
             return self.trial_student_limit
         return self.student_limit or self.package_student_limit
@@ -193,6 +195,8 @@ class Institution(models.Model):
 
     @property
     def student_remaining_capacity(self):
+        if self.current_student_limit is None:
+            return None
         return max(self.current_student_limit - self.student_usage_count, 0)
 
     @property
@@ -437,7 +441,7 @@ class Student(models.Model):
             })
         existing_students = Student.objects.filter(institution=self.institution).exclude(pk=self.pk).count()
         limit = self.institution.current_student_limit
-        if existing_students >= limit:
+        if limit is not None and existing_students >= limit:
             raise ValidationError({
                 'institution': (
                     f"You have reached the {limit}-student limit for your "

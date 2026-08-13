@@ -11,6 +11,7 @@ urlpatterns = [
     path('forgot-password/', views.forgot_password, name='forgot_password'),
     path('reset-password/<str:token>/', views.reset_password, name='reset_password'),
     path('subscription/renew/', views.edu_subscription_renewal, name='subscription_renewal'),
+    path('school-login/', views.school_portal_lookup, name='school_portal_lookup'),
     path('subdomain/check/', views.edu_subdomain_availability, name='subdomain_check'),
     path('portal/<str:school_code>/', views.school_portal_fallback, name='school_portal_fallback'),
     path('portal/<str:school_code>/dashboard/', views.school_portal_fallback_dashboard, name='school_portal_fallback_dashboard'),
