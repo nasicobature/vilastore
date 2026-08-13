@@ -1354,6 +1354,80 @@ button {
   padding: 1rem;
 }
 
+.shopboy-checkout-bar {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(176, 110, 33, 0.28);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12);
+}
+
+.shopboy-checkout-bar > div,
+.shopboy-checkout-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.shopboy-checkout-bar strong {
+  display: block;
+  font-size: 1rem;
+  color: var(--foreground);
+}
+
+.shopboy-checkout-bar span {
+  color: var(--muted-foreground);
+  font-size: 0.88rem;
+}
+
+.shopboy-checkout-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(176, 110, 33, 0.12);
+  color: var(--primary);
+}
+
+.shopboy-checkout-form,
+.shopboy-drawer-checkout {
+  margin: 0;
+}
+
+.shopboy-drawer-checkout {
+  position: sticky;
+  bottom: 0;
+  padding-top: 0.85rem;
+  background: var(--card);
+}
+
+.shopboy-complete-sale-btn {
+  min-height: 46px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.shopboy-complete-sale-btn i,
+.shopboy-complete-sale-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.shopboy-complete-sale-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .products-section {
   min-width: 0;
 }
@@ -6958,6 +7032,19 @@ button {
   .main-content {
     padding-left: 0.85rem !important;
     padding-right: 0.85rem !important;
+  }
+
+  .shopboy-checkout-bar {
+    position: static;
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .shopboy-checkout-form,
+  .shopboy-checkout-form .shopboy-complete-sale-btn,
+  .shopboy-drawer-checkout .shopboy-complete-sale-btn,
+  .cart-panel > .shopboy-complete-sale-btn {
+    width: 100%;
   }
 
   .card,

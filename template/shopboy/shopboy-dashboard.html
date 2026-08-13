@@ -255,16 +255,17 @@
         </section>
 
         {% if cart %}
-        <div class="card" style="padding:1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;">
+        <div class="card shopboy-checkout-bar">
           <div>
             <strong>Cart Ready</strong><br>
             <span style="font-size:0.85rem;color:var(--muted-foreground);">
               {{ cart_count|floatformat:"-2" }} item{% if cart_count != 1 %}s{% endif %} · Total &#8358;{{ cart_total }}
             </span>
           </div>
-          <form method="POST" action="{% url 'shopboy_checkout' %}" style="margin:0;">
+          <form method="POST" action="{% url 'shopboy_checkout' %}" class="shopboy-checkout-form">
             {% csrf_token %}
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" class="btn btn-primary shopboy-complete-sale-btn" data-complete-sale-button>
+              <i data-lucide="check-circle-2"></i>
               Complete Sale
             </button>
           </form>
@@ -400,15 +401,24 @@
 
           <p><strong>Total:</strong> &#8358;{{ cart_total }}</p>
 
-          <form method="POST" action="{% url 'shopboy_checkout' %}">
+          <form method="POST" action="{% url 'shopboy_checkout' %}" class="shopboy-drawer-checkout">
             {% csrf_token %}
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" class="btn btn-primary shopboy-complete-sale-btn" data-complete-sale-button>
+              <i data-lucide="check-circle-2"></i>
               Complete Sale
             </button>
           </form>
 
         {% else %}
-          <p>Cart is empty</p>
+          <div class="cart-empty">
+            <i data-lucide="shopping-cart"></i>
+            <p>Cart is empty</p>
+            <span>Add products before completing a sale.</span>
+          </div>
+          <button type="button" class="btn btn-primary shopboy-complete-sale-btn" disabled>
+            <i data-lucide="check-circle-2"></i>
+            Complete Sale
+          </button>
         {% endif %}
 
       </div>

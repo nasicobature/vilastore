@@ -1491,6 +1491,77 @@ class WebDashboardTests(TestCase):
         self.assertEqual(len(response.context["today_transactions"]), 1)
 
 
+class ShopboyPortalDashboardTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="shopboy-dashboard-owner",
+            email="shopboy-dashboard@example.com",
+            password="TestPass123!",
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Dashboard Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000003009",
+            address="31 Market Road",
+            country="Nigeria",
+        )
+        self.product = Product.objects.create(
+            user=self.owner,
+            name="Dashboard Soap",
+            code="SOAP001",
+            cost_price=Decimal("500.00"),
+            selling_price=Decimal("750.00"),
+            stock=Decimal("5.00"),
+        )
+        self.shopboy = ShopBoy.objects.create(
+            user=self.owner,
+            full_name="Dashboard Staff",
+            username="dashboard-staff",
+            password="pass123",
+            is_active=True,
+        )
+
+    def _login_shopboy_session(self):
+        session = self.client.session
+        session["shopboy_id"] = self.shopboy.id
+        session["shopboy_owner_id"] = self.owner.id
+        session["shopboy_name"] = self.shopboy.full_name
+        session.save()
+
+    def test_dashboard_shows_disabled_complete_sale_when_cart_is_empty(self):
+        self._login_shopboy_session()
+
+        response = self.client.get(reverse("shopboy_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Complete Sale")
+        self.assertContains(response, "Add products before completing a sale.")
+        self.assertContains(response, "shopboy-complete-sale-btn")
+        self.assertContains(response, "disabled")
+
+    def test_dashboard_shows_visible_complete_sale_when_cart_has_items(self):
+        self._login_shopboy_session()
+        session = self.client.session
+        session["shopboy_cart"] = {
+            str(self.product.id): {
+                "name": self.product.name,
+                "price": 750.0,
+                "cost": 500.0,
+                "quantity": "1",
+            }
+        }
+        session.save()
+
+        response = self.client.get(reverse("shopboy_dashboard"))
+        html = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "shopboy-checkout-bar")
+        self.assertContains(response, "data-complete-sale-button")
+        self.assertGreaterEqual(html.count("Complete Sale"), 2)
+        self.assertGreaterEqual(html.count(reverse("shopboy_checkout")), 2)
+
+
 class CustomerScannerPaymentTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(
