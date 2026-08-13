@@ -26,13 +26,15 @@
           <th>Package</th>
           <th>Student Range</th>
           <th>Price</th>
-          <th>{% if pricing_mode == 'registration' or pricing_mode == 'payment' %}Select{% else %}Trial{% endif %}</th>
+          {% if pricing_mode == 'registration' or pricing_mode == 'payment' %}
+            <th>Select</th>
+          {% endif %}
         </tr>
       </thead>
       <tbody>
         {% for package in pricing_packages %}
           <tr
-            class="edu-package-card {% if package.code == selected_package_code|default:default_subscription_package %}is-selected{% endif %}"
+            class="edu-package-card {% if pricing_mode == 'registration' or pricing_mode == 'payment' %}{% if package.code == selected_package_code|default:default_subscription_package %}is-selected{% endif %}{% endif %}"
             data-package-card
             data-package-code="{{ package.code }}"
             data-term-price="NGN {{ package.term_amount_display }}"
@@ -67,17 +69,11 @@
               <strong class="package-price" data-package-price>NGN {{ package.term_amount_display }}</strong>
               <span class="package-cycle" data-package-billing-label>per term</span>
             </td>
-            <td data-label="{% if pricing_mode == 'registration' or pricing_mode == 'payment' %}Select{% else %}Trial{% endif %}">
-              {% if pricing_mode == 'registration' or pricing_mode == 'payment' %}
+            {% if pricing_mode == 'registration' or pricing_mode == 'payment' %}
+              <td data-label="Select">
                 <span class="package-select-button" data-package-select-text>Select Package</span>
-              {% else %}
-                <a
-                  class="package-select-button"
-                  data-package-cta
-                  href="/edu/register/?package={{ package.code }}&billing={{ selected_billing_cycle|default:default_subscription_cycle }}"
-                >Start 3-Day Free Trial</a>
-              {% endif %}
-            </td>
+              </td>
+            {% endif %}
           </tr>
         {% endfor %}
       </tbody>

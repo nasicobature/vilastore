@@ -41,6 +41,7 @@ class EduPortalRoutingTests(TestCase):
         response = self.client.get(reverse("edu:index"))
 
         self.assertContains(response, "Simple Pricing. Built for Value.")
+        self.assertContains(response, "edu-pricing-table")
         self.assertContains(response, "Per Term")
         self.assertContains(response, "Per Session")
         self.assertContains(response, "NGN 20,000")
@@ -49,6 +50,9 @@ class EduPortalRoutingTests(TestCase):
         self.assertContains(response, "751+ Students")
         self.assertEqual(response.content.decode().count('data-package-card'), 7)
         self.assertContains(response, "Save 10%")
+        self.assertContains(response, "<th>Price</th>", html=True)
+        self.assertNotContains(response, "<th>Trial</th>", html=True)
+        self.assertNotContains(response, "<th>Select</th>", html=True)
         self.assertContains(response, "Coming Soon Modules")
         self.assertContains(response, reverse("edu:school_portal_lookup"))
 

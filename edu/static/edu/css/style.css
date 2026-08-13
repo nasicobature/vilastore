@@ -1750,6 +1750,14 @@ textarea {
   background: #fbfdff;
 }
 
+.edu-pricing-panel[data-pricing-mode="public"] .edu-package-card {
+  cursor: default;
+}
+
+.edu-pricing-panel[data-pricing-mode="public"] .edu-package-card .package-check {
+  display: none;
+}
+
 .edu-package-card input {
   position: absolute;
   opacity: 0;
