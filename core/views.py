@@ -506,6 +506,10 @@ def home(request):
     return render(request, 'home/home.html', {"plans": PLAN_CATALOG})
 
 
+def ai_data(request):
+    return render(request, "home/ai-data.html")
+
+
 def edu_subdomain_dashboard(request):
     return redirect('home')
 

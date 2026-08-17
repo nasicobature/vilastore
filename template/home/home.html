@@ -38,7 +38,7 @@
 
     /* NAV */
     .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; background: rgba(15,17,23,0.85); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
-    .nav-logo { display: flex; align-items: center; gap: 0.75rem; font-size: 1.5rem; font-weight: 800; }
+    .nav-logo { display: flex; align-items: center; gap: 0.75rem; font-size: 1.5rem; font-weight: 800; color: var(--text); }
     .nav-logo-icon { width: 40px; height: 40px; background: var(--gradient); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; background-image: url("{% static 'img/vilastore-logo.png' %}"); background-size: cover; background-position: center; }
     .nav-logo-icon svg { display: none; }
     .nav-links { display: flex; gap: 0.5rem; }
@@ -84,6 +84,7 @@
     .portal-card.agent::before { background: var(--gradient-7); }
     .portal-card.housing::before { background: var(--gradient-8); }
     .portal-card.edu::before { background: var(--gradient-9); }
+    .portal-card.ai-data::before { background: linear-gradient(135deg, #f1c273, #00b894); }
     .portal-icon { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem; }
     .portal-card.owner .portal-icon { background: rgba(108,92,231,0.15); color: var(--primary-light); }
     .portal-card.shopboy .portal-icon { background: rgba(0,206,201,0.15); color: var(--accent); }
@@ -94,6 +95,7 @@
     .portal-card.agent .portal-icon { background: rgba(253,203,110,0.18); color: #ffeaa7; }
     .portal-card.housing .portal-icon { background: rgba(249,115,22,0.18); color: #fdba74; }
     .portal-card.edu .portal-icon { background: rgba(34,197,94,0.18); color: #86efac; }
+    .portal-card.ai-data .portal-icon { background: rgba(241,194,115,0.16); color: var(--primary-light); }
     .portal-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
     .portal-card p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
     .portal-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1.5rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; border: none; cursor: pointer; }
@@ -106,6 +108,7 @@
     .portal-card.agent .portal-btn { background: var(--gradient-7); color: #3d2e00; }
     .portal-card.housing .portal-btn { background: var(--gradient-8); color: #fff; }
     .portal-card.edu .portal-btn { background: var(--gradient-9); color: #fff; }
+    .portal-card.ai-data .portal-btn { background: linear-gradient(135deg, #f1c273, #b06e21); color: #fff; }
     .portal-btn:hover { opacity: 0.9; transform: translateY(-1px); }
 
     /* HOW IT WORKS */
@@ -195,17 +198,7 @@
 <body>
 
   <!-- NAV -->
-  <nav class="nav">
-    <div class="nav-logo">
-      <div class="nav-logo-icon"><i data-lucide="store" style="width:22px;height:22px;"></i></div>
-      VilaStore
-    </div>
-    <div class="nav-links">
-      <a href="#pricing" class="btn-outline">Pricing</a>
-      <a href="{% url 'login' %}" class="btn-outline">Sign In</a>
-      <a href="{% url 'marketplace' %}" class="btn-primary">Marketplace</a>
-    </div>
-  </nav>
+  {% include 'partials/public-nav.html' %}
 
   <!-- HERO -->
   <section class="hero">
@@ -217,6 +210,7 @@
         <a href="{% url 'login' %}" class="btn-hero"><i data-lucide="log-in" style="width:20px;height:20px;"></i> Sign In</a>
         <a href="{% url 'shop_signup' %}" class="btn-secondary"><i data-lucide="user-plus" style="width:20px;height:20px;"></i> Sign Up</a>
         <a href="{% url 'marketplace' %}" class="btn-secondary"><i data-lucide="shopping-bag" style="width:20px;height:20px;"></i> Browse Marketplace</a>
+        <a href="{% url 'ai_data' %}" class="btn-secondary"><i data-lucide="audio-lines" style="width:20px;height:20px;"></i> AI Data Services</a>
         <a href="{% url 'edu:index' %}" class="btn-secondary"><i data-lucide="graduation-cap" style="width:20px;height:20px;"></i> Open Edu Portal</a>
         <a href="{% url 'housing_signup' %}" class="btn-secondary"><i data-lucide="house-plus" style="width:20px;height:20px;"></i> Register Housing</a>
         <a href="#how-it-works" class="btn-secondary"><i data-lucide="play-circle" style="width:20px;height:20px;"></i> How It Works</a>
@@ -231,6 +225,12 @@
       <p>Choose where you want to go</p>
     </div>
     <div class="portals-grid">
+      <div class="portal-card ai-data">
+        <div class="portal-icon"><i data-lucide="audio-lines" style="width:28px;height:28px;"></i></div>
+        <h3>AI Data Services</h3>
+        <p>Ethical, consent-based African speech and language data collection for AI training, evaluation, and development projects.</p>
+        <a href="{% url 'ai_data' %}" class="portal-btn"><i data-lucide="arrow-right" style="width:18px;height:18px;"></i> Explore AI Data Services</a>
+      </div>
       <div class="portal-card housing">
         <div class="portal-icon"><i data-lucide="house-plus" style="width:28px;height:28px;"></i></div>
         <h3>House Management</h3>
@@ -384,7 +384,7 @@
   </section>
 
   <!-- FEEDBACK -->
-  <section class="section">
+  <section class="section" id="contact">
     <div class="section-title">
       <h2>We'd Love Your Feedback</h2>
       <p>Help us improve VilaStore for you</p>
@@ -430,9 +430,7 @@
   </section>
 
   <!-- FOOTER -->
-  <footer class="footer">
-    <p>&copy; 2025 VilaStore. Built with &#10084; for African businesses.</p>
-  </footer>
+  {% include 'partials/public-footer.html' %}
 
   <div id="toastContainer" class="toast-container"></div>
 

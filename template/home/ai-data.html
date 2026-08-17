@@ -1,0 +1,242 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'partials/branding-head.html' %}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Data Services | VilaStore Technologies Hub</title>
+  <meta name="description" content="VilaStore Technologies Hub provides ethical, consent-based African speech and language data collection services for AI training, evaluation, and development.">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-2: #242834;
+      --border: #2e3345;
+      --text: #e8eaf0;
+      --text-muted: #9aa2b8;
+      --primary: #b06e21;
+      --primary-light: #f1c273;
+      --accent: #f1b04a;
+      --accent-2: #00b894;
+      --gradient: linear-gradient(135deg, #f1b04a, #b06e21);
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    a { color: var(--primary-light); text-decoration: none; }
+
+    .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; background: rgba(15,17,23,0.88); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
+    .nav-logo { display: flex; align-items: center; gap: 0.75rem; font-size: 1.5rem; font-weight: 800; color: var(--text); }
+    .nav-logo-icon { width: 40px; height: 40px; background: var(--gradient); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; background-image: url("{% static 'img/vilastore-logo.png' %}"); background-size: cover; background-position: center; }
+    .nav-logo-icon svg { display: none; }
+    .nav-links { display: flex; gap: 0.5rem; }
+    .nav-links a { padding: 0.6rem 1.25rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; }
+    .nav-links .btn-outline { border: 1px solid var(--border); color: var(--text); }
+    .nav-links .btn-outline:hover { border-color: var(--primary); color: var(--primary-light); }
+    .nav-links .btn-primary { background: var(--gradient); color: #fff; }
+    .nav-links .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    .page-shell { overflow: hidden; }
+    .hero { min-height: 92vh; display: flex; align-items: center; padding: 8rem 2rem 4rem; position: relative; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 18% 20%, rgba(241,176,74,0.16), transparent 32%), radial-gradient(circle at 85% 18%, rgba(0,184,148,0.12), transparent 28%); pointer-events: none; }
+    .hero-inner { position: relative; z-index: 1; width: min(1120px, 100%); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr); gap: 3rem; align-items: center; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.42rem 0.9rem; border-radius: 999px; background: rgba(241,176,74,0.1); border: 1px solid rgba(241,176,74,0.24); color: var(--primary-light); font-size: 0.82rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 1.25rem; }
+    .hero h1 { font-size: clamp(2.45rem, 5vw, 4.7rem); line-height: 1.02; font-weight: 900; max-width: 780px; margin-bottom: 1.3rem; }
+    .hero h1 span { background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero-subtitle { color: var(--text-muted); font-size: clamp(1rem, 2vw, 1.22rem); max-width: 680px; margin-bottom: 1.5rem; }
+    .positioning { color: #d6dae6; max-width: 680px; margin-bottom: 2rem; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; border-radius: var(--radius-sm); padding: 0.85rem 1.35rem; font-weight: 800; transition: all 0.22s; }
+    .btn-main { background: var(--gradient); color: #fff; box-shadow: 0 12px 34px rgba(176,110,33,0.24); }
+    .btn-main:hover { transform: translateY(-2px); box-shadow: 0 16px 40px rgba(176,110,33,0.34); }
+    .btn-soft { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+    .btn-soft:hover { border-color: var(--primary); color: var(--primary-light); }
+    .hero-panel { background: linear-gradient(180deg, rgba(36,40,52,0.9), rgba(26,29,39,0.95)); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius); padding: 1.5rem; box-shadow: 0 24px 70px rgba(0,0,0,0.28); }
+    .hero-panel h2 { font-size: 1.05rem; margin-bottom: 1rem; color: var(--primary-light); }
+    .signal-grid { display: grid; gap: 0.75rem; }
+    .signal { display: flex; gap: 0.75rem; align-items: flex-start; padding: 1rem; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; background: rgba(15,17,23,0.5); }
+    .signal i { color: var(--accent); flex: 0 0 auto; margin-top: 0.12rem; }
+    .signal strong { display: block; margin-bottom: 0.15rem; }
+    .signal span { color: var(--text-muted); font-size: 0.9rem; }
+
+    .section { padding: 5rem 2rem; width: min(1120px, 100%); margin: 0 auto; }
+    .section-heading { max-width: 760px; margin-bottom: 2rem; }
+    .section-heading.center { text-align: center; margin-left: auto; margin-right: auto; }
+    .section-heading h2 { font-size: clamp(1.8rem, 3vw, 2.55rem); line-height: 1.12; margin-bottom: 0.7rem; }
+    .section-heading p { color: var(--text-muted); font-size: 1rem; }
+    .services-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+    .service-card { min-height: 178px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; display: flex; flex-direction: column; gap: 0.8rem; transition: border-color 0.22s, transform 0.22s; }
+    .service-card:hover { border-color: rgba(241,176,74,0.55); transform: translateY(-3px); }
+    .service-icon { width: 44px; height: 44px; border-radius: 12px; background: rgba(241,176,74,0.13); color: var(--primary-light); display: inline-flex; align-items: center; justify-content: center; }
+    .service-card h3 { font-size: 1rem; line-height: 1.25; }
+    .service-card p { color: var(--text-muted); font-size: 0.87rem; margin-top: auto; }
+    .process-wrap { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.75rem; align-items: stretch; }
+    .process-step { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1rem; min-height: 124px; display: grid; align-content: center; gap: 0.6rem; text-align: center; }
+    .process-step:not(:last-child)::after { content: '>'; position: absolute; right: -0.62rem; top: 50%; transform: translateY(-50%); color: var(--primary-light); font-weight: 900; z-index: 2; }
+    .process-step i { margin: 0 auto; color: var(--accent); }
+    .process-step strong { font-size: 0.9rem; line-height: 1.25; }
+    .responsible { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 2rem; align-items: start; }
+    .responsible-panel { background: linear-gradient(180deg, rgba(36,40,52,0.88), rgba(26,29,39,0.98)); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; }
+    .responsible-panel p { color: var(--text-muted); margin-top: 0.8rem; }
+    .principles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+    .principle { display: flex; gap: 0.65rem; align-items: flex-start; background: rgba(36,40,52,0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 0.9rem; color: #d8dce8; font-size: 0.9rem; }
+    .principle i { color: var(--accent-2); flex: 0 0 auto; margin-top: 0.1rem; }
+    .language-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+    .language-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.35rem; }
+    .language-card span { display: inline-flex; color: var(--primary-light); margin-bottom: 0.7rem; }
+    .language-card h3 { font-size: 1.15rem; }
+    .language-note { margin-top: 1rem; padding: 1rem 1.2rem; background: rgba(0,184,148,0.08); border: 1px solid rgba(0,184,148,0.22); border-radius: 14px; color: #dff8f0; }
+    .contact-cta { text-align: center; background: linear-gradient(135deg, rgba(241,176,74,0.12), rgba(0,184,148,0.09)); border: 1px solid rgba(255,255,255,0.1); border-radius: 22px; padding: clamp(1.5rem, 5vw, 3rem); }
+    .contact-cta h2 { font-size: clamp(1.8rem, 4vw, 3rem); margin-bottom: 0.8rem; }
+    .contact-cta p { color: var(--text-muted); max-width: 760px; margin: 0 auto 1.6rem; }
+    .footer { text-align: center; padding: 2rem; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem; margin-top: 3rem; }
+
+    @media (max-width: 980px) {
+      .hero-inner, .responsible { grid-template-columns: 1fr; }
+      .services-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .process-wrap { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .process-step:nth-child(3)::after { content: none; }
+    }
+
+    @media (max-width: 768px) {
+      .nav { padding: 0.75rem 1rem; }
+      .nav-links { gap: 0.25rem; flex-wrap: wrap; justify-content: flex-end; }
+      .nav-links a { padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+      .hero { padding: 8rem 1rem 3rem; min-height: auto; }
+      .section { padding: 3.5rem 1rem; }
+      .process-wrap, .language-grid, .principles { grid-template-columns: 1fr; }
+      .process-step:not(:last-child)::after { content: 'v'; right: 50%; top: auto; bottom: -0.82rem; transform: translateX(50%); }
+      .process-step:nth-child(3)::after { content: 'v'; }
+    }
+
+    @media (max-width: 540px) {
+      .nav { flex-direction: column; align-items: flex-start; gap: 0.75rem; position: absolute; }
+      .nav-logo { font-size: 1.25rem; }
+      .nav-links { width: 100%; justify-content: stretch; }
+      .nav-links a { flex: 1 1 46%; text-align: center; }
+      .hero { padding-top: 11rem; }
+      .services-grid { grid-template-columns: 1fr; }
+      .hero-actions .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  {% include 'partials/public-nav.html' %}
+
+  <main class="page-shell">
+    <section class="hero">
+      <div class="hero-inner">
+        <div>
+          <div class="eyebrow"><i data-lucide="audio-lines" style="width:16px;height:16px;"></i> Available for custom AI data collection projects</div>
+          <h1>African Speech &amp; Language Data <span>for AI</span></h1>
+          <p class="hero-subtitle">VilaStore Technologies Hub provides ethical, consent-based speech and language data collection services for AI training, evaluation, and development.</p>
+          <p class="positioning">VilaStore Technologies Hub builds digital platforms and also provides specialized AI data collection services for organizations developing artificial intelligence systems.</p>
+          <div class="hero-actions">
+            <a href="#contact" class="btn btn-main"><i data-lucide="messages-square" style="width:20px;height:20px;"></i> Discuss a Data Project</a>
+            <a href="{% url 'home' %}" class="btn btn-soft"><i data-lucide="grid-3x3" style="width:20px;height:20px;"></i> VilaStore Platforms</a>
+          </div>
+        </div>
+        <aside class="hero-panel" aria-label="AI data project signals">
+          <h2>Designed for responsible collection</h2>
+          <div class="signal-grid">
+            <div class="signal">
+              <i data-lucide="shield-check" style="width:22px;height:22px;"></i>
+              <div><strong>Consent first</strong><span>Contributor participation, project purpose, and payment terms are explained before recording.</span></div>
+            </div>
+            <div class="signal">
+              <i data-lucide="languages" style="width:22px;height:22px;"></i>
+              <div><strong>African language focus</strong><span>Initial coverage supports Hausa, Nigerian English, and Hausa-English code-switching.</span></div>
+            </div>
+            <div class="signal">
+              <i data-lucide="folder-lock" style="width:22px;height:22px;"></i>
+              <div><strong>Secure delivery</strong><span>Collection, review, and delivery can be shaped around each approved client project.</span></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading center">
+        <h2>AI Data Services</h2>
+        <p>Available for custom AI data collection projects that need carefully managed African speech, language, annotation, and review workflows.</p>
+      </div>
+      <div class="services-grid">
+        <div class="service-card"><div class="service-icon"><i data-lucide="message-circle"></i></div><h3>Hausa Conversational Speech Collection</h3><p>Natural spoken Hausa sessions shaped by project instructions.</p></div>
+        <div class="service-card"><div class="service-icon"><i data-lucide="mic"></i></div><h3>Nigerian English Speech Collection</h3><p>Voice recordings for AI training, evaluation, and development needs.</p></div>
+        <div class="service-card"><div class="service-icon"><i data-lucide="shuffle"></i></div><h3>Hausa-English Code-Switching Data</h3><p>Speech and dialogue examples where speakers move between Hausa and English.</p></div>
+        <div class="service-card"><div class="service-icon"><i data-lucide="file-audio"></i></div><h3>Scripted Speech Collection</h3><p>Prompted recordings based on approved scripts and recording requirements.</p></div>
+        <div class="service-card"><div class="service-icon"><i data-lucide="captions"></i></div><h3>Audio Transcription</h3><p>Transcription support for speech files according to project specifications.</p></div>
+        <div class="service-card"><div class="service-icon"><i data-lucide="messages-square"></i></div><h3>Dialogue Collection &amp; Validation</h3><p>Dialogue capture and validation for conversational AI use cases.</p></div>
+        <div class="service-card"><div class="service-icon"><i data-lucide="badge-check"></i></div><h3>Data Quality Review</h3><p>Checks for completeness, consent alignment, audio quality, and annotation rules.</p></div>
+        <div class="service-card"><div class="service-icon"><i data-lucide="user-search"></i></div><h3>Custom Contributor Recruitment</h3><p>Contributor recruitment based on language, profile, location, and project requirements.</p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading center">
+        <h2>How It Works</h2>
+        <p>A clear project flow from client requirements to reviewed dataset delivery.</p>
+      </div>
+      <div class="process-wrap" aria-label="AI data collection process">
+        <div class="process-step"><i data-lucide="building-2"></i><strong>AI Client</strong></div>
+        <div class="process-step"><i data-lucide="clipboard-list"></i><strong>Project Requirements</strong></div>
+        <div class="process-step"><i data-lucide="user-check"></i><strong>Verified &amp; Consenting Contributors</strong></div>
+        <div class="process-step"><i data-lucide="radio"></i><strong>Voice/Data Collection</strong></div>
+        <div class="process-step"><i data-lucide="list-checks"></i><strong>Transcription &amp; Quality Review</strong></div>
+        <div class="process-step"><i data-lucide="package-check"></i><strong>Secure Dataset Delivery</strong></div>
+      </div>
+    </section>
+
+    <section class="section responsible">
+      <div class="responsible-panel">
+        <div class="eyebrow"><i data-lucide="scale" style="width:16px;height:16px;"></i> Responsible Data Collection</div>
+        <h2>Clear consent, protected contributor information, and restricted data access.</h2>
+        <p>VilaStore follows responsible data-collection practices so each project can be evaluated, collected, reviewed, and delivered with appropriate privacy and data-protection safeguards.</p>
+      </div>
+      <div class="principles">
+        <div class="principle"><i data-lucide="check-circle"></i><span>Contributors participate voluntarily.</span></div>
+        <div class="principle"><i data-lucide="check-circle"></i><span>Contributors are clearly informed about the purpose of each project.</span></div>
+        <div class="principle"><i data-lucide="check-circle"></i><span>Consent is obtained before recording.</span></div>
+        <div class="principle"><i data-lucide="check-circle"></i><span>Contributors are informed that approved recordings may be used for AI training, testing, evaluation, or development depending on the client project.</span></div>
+        <div class="principle"><i data-lucide="check-circle"></i><span>Non-consenting people must not be recorded.</span></div>
+        <div class="principle"><i data-lucide="check-circle"></i><span>Contributor information is protected.</span></div>
+        <div class="principle"><i data-lucide="check-circle"></i><span>Access to collected data is restricted.</span></div>
+        <div class="principle"><i data-lucide="check-circle"></i><span>Data collection follows applicable privacy and data-protection requirements.</span></div>
+        <div class="principle"><i data-lucide="check-circle"></i><span>Contributors are informed about payment conditions before participating.</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading center">
+        <h2>Initial Language Coverage</h2>
+        <p>Starting coverage for custom speech and language data projects.</p>
+      </div>
+      <div class="language-grid">
+        <div class="language-card"><span><i data-lucide="map-pin"></i></span><h3>Hausa &mdash; Nigeria</h3></div>
+        <div class="language-card"><span><i data-lucide="map-pin"></i></span><h3>Nigerian English</h3></div>
+        <div class="language-card"><span><i data-lucide="map-pin"></i></span><h3>Hausa-English Code-Switching</h3></div>
+      </div>
+      <div class="language-note">Additional African languages can be supported based on project requirements.</div>
+    </section>
+
+    <section class="section" id="contact">
+      <div class="contact-cta">
+        <h2>Looking for African speech or language data?</h2>
+        <p>Tell us the language, number of speakers, recording type, required hours, and annotation requirements. Our team can evaluate the project and propose a custom data-collection plan.</p>
+        <a href="{% url 'home' %}#contact" class="btn btn-main"><i data-lucide="send" style="width:20px;height:20px;"></i> Contact VilaStore</a>
+      </div>
+    </section>
+  </main>
+
+  {% include 'partials/public-footer.html' %}
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

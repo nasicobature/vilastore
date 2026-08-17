@@ -11,6 +11,7 @@ urlpatterns = [
     path("service-worker.js", views.service_worker, name="service_worker"),
     path("privacy-policy/", views.privacy_policy, name="privacy_policy"),
     path("account-deletion/", views.account_deletion, name="account_deletion"),
+    path("ai-data/", views.ai_data, name="ai_data"),
     path("api/health/", api.api_health, name="api_health"),
     path('api/marketplace/auth/signup/', api.api_marketplace_signup, name='api_marketplace_signup'),
     path('api/marketplace/auth/login/', api.api_marketplace_login, name='api_marketplace_login'),

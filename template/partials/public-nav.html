@@ -1,0 +1,13 @@
+{% load static %}
+<nav class="nav">
+  <a href="{% url 'home' %}" class="nav-logo" aria-label="VilaStore home">
+    <div class="nav-logo-icon"><i data-lucide="store" style="width:22px;height:22px;"></i></div>
+    VilaStore
+  </a>
+  <div class="nav-links">
+    <a href="{% url 'home' %}#pricing" class="btn-outline">Pricing</a>
+    <a href="{% url 'ai_data' %}" class="btn-outline">AI Data Services</a>
+    <a href="{% url 'login' %}" class="btn-outline">Sign In</a>
+    <a href="{% url 'marketplace' %}" class="btn-primary">Marketplace</a>
+  </div>
+</nav>
