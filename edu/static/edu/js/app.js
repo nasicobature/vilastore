@@ -227,6 +227,38 @@
     }
   });
 
+  const sidebar = document.getElementById('app-sidebar');
+  const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+  const sidebarOpenBtn = document.getElementById('sidebar-open');
+  const sidebarCloseBtn = document.getElementById('sidebar-close');
+
+  if (sidebar && sidebarBackdrop) {
+    const openSidebar = () => {
+      sidebar.classList.remove('-translate-x-full');
+      sidebarBackdrop.classList.remove('hidden');
+    };
+    const closeSidebar = () => {
+      sidebar.classList.add('-translate-x-full');
+      sidebarBackdrop.classList.add('hidden');
+    };
+
+    if (sidebarOpenBtn) {
+      sidebarOpenBtn.addEventListener('click', openSidebar);
+    }
+    if (sidebarCloseBtn) {
+      sidebarCloseBtn.addEventListener('click', closeSidebar);
+    }
+    sidebarBackdrop.addEventListener('click', closeSidebar);
+    sidebar.querySelectorAll('.nav-item').forEach((link) => {
+      link.addEventListener('click', closeSidebar);
+    });
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 768) {
+        closeSidebar();
+      }
+    });
+  }
+
   const navLinks = document.querySelectorAll('.nav-item');
   const activeClasses = ['bg-sidebar-accent', 'text-sidebar-accent-foreground', 'font-medium'];
   const inactiveClasses = ['text-sidebar-foreground/70'];
