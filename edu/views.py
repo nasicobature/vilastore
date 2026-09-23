@@ -458,6 +458,7 @@ def _login_for_institution(request, institution_type, template_name):
                 messages.error(request, 'Invalid username or password.')
         else:
             auth_login(request, user)
+            request.session['active_portal'] = 'edu'
             profile = _get_or_repair_edu_profile(user, institution_type, school_code)
             if profile and profile.institution_type != institution_type:
                 auth_logout(request)
@@ -2651,7 +2652,10 @@ def tertiary_school_register(request):
 
 
 def logout(request):
+    active_portal = request.session.get('active_portal')
     auth_logout(request)
+    if active_portal == 'shop':
+        return redirect('login')
     return redirect('edu:index')
 
 

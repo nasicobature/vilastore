@@ -2744,6 +2744,7 @@ def mobile_subscription_upgrade_checkout(request):
     token_obj.last_used_at = timezone.now()
     token_obj.save(update_fields=["last_used_at"])
     login(request, owner, backend="django.contrib.auth.backends.ModelBackend")
+    request.session["active_portal"] = "shop"
     return redirect("subscription_payment")
 
 
@@ -4278,6 +4279,7 @@ def login_view(request):
                 messages.error(request, "Subscription payment required. Please make the payment to continue.")
                 return redirect("subscription_payment")
             login(request, user)
+            request.session["active_portal"] = "shop"
             request.session.pop("pending_payment_user_id", None)
             return redirect(_post_login_redirect_name(user))
 
@@ -4309,7 +4311,10 @@ def login_view(request):
 
 
 def logout_view(request):
+    active_portal = request.session.get("active_portal")
     logout(request)
+    if active_portal == "edu":
+        return redirect("edu:index")
     return redirect("login")
 
 
@@ -4959,6 +4964,7 @@ def subscription_payment(request):
 
         if not request.user.is_authenticated:
             login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        request.session["active_portal"] = "shop"
         request.session.pop("pending_payment_user_id", None)
         request.session.pop("subscription_upgrade_plan", None)
         request.session.pop("subscription_upgrade_user_id", None)
