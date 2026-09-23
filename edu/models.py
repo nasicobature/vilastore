@@ -408,6 +408,35 @@ class Profile(models.Model):
         return f"{self.user.username} ({self.get_role_display()})"
 
 
+class EduMembership(models.Model):
+    """Links a user to a specific Institution (school) with a role.
+
+    Phase 1 of separating EduPortal from the shared User table: every
+    existing Profile row that has an institution set is backfilled into
+    exactly one EduMembership row here (see
+    edu/management/commands/backfill_edu_membership.py). Profile keeps
+    working unchanged for now; call sites move over to EduMembership in
+    a later phase, after which Profile.user (a direct FK to User) can
+    be retired in favor of always going through this table.
+    """
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='edu_memberships')
+    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='memberships')
+    role = models.CharField(max_length=20, choices=Profile.ROLE_CHOICES, default='student')
+    faculty = models.ForeignKey(Faculty, on_delete=models.SET_NULL, null=True, blank=True)
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    is_approved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'institution'], name='unique_edu_membership_per_user'),
+        ]
+
+    def __str__(self):
+        return f"{self.user} -> {self.institution} ({self.role})"
+
+
 class Student(models.Model):
     institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='students')
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)

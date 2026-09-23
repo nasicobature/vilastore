@@ -208,6 +208,60 @@ class ShopBranch(models.Model):
             self.is_default = True
 
 
+class Shop(models.Model):
+    """A shop/business entity, decoupled from the User who manages it.
+
+    Phase 1 of separating Shop Management from the shared User table:
+    every existing shop-owner User is backfilled into exactly one Shop
+    row (see core/management/commands/backfill_shop_membership.py).
+    Shop-specific fields (business_name, shop_code, billing) still live
+    on User for now -- moving reads/writes off User and onto Shop is a
+    later phase, done once ShopMembership is wired through the call
+    sites that currently assume a direct User foreign key.
+    """
+
+    business_name = models.CharField(max_length=200, blank=True)
+    shop_code = models.CharField(max_length=20, unique=True, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.business_name or self.shop_code or f"Shop #{self.pk}"
+
+
+class ShopMembership(models.Model):
+    """Links a user to a specific Shop with a role.
+
+    Going forward, new Shop-side models should reference ShopMembership
+    (or Shop, via a membership lookup) instead of taking a direct
+    ForeignKey to User -- see the module docstring note on Shop.
+    """
+
+    ROLE_OWNER = "owner"
+    ROLE_MANAGER = "manager"
+    ROLE_STAFF = "staff"
+    ROLE_CHOICES = [
+        (ROLE_OWNER, "Owner"),
+        (ROLE_MANAGER, "Manager"),
+        (ROLE_STAFF, "Staff"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="shop_memberships")
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="memberships")
+    branch = models.ForeignKey(ShopBranch, on_delete=models.SET_NULL, null=True, blank=True, related_name="memberships")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_OWNER)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "shop"], name="unique_shop_membership_per_user"),
+        ]
+
+    def __str__(self):
+        return f"{self.user} -> {self.shop} ({self.role})"
+
+
 class Product(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True)
