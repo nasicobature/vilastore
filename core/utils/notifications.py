@@ -57,7 +57,9 @@ def send_email(
             return True
 
         from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None) or getattr(settings, "EMAIL_HOST_USER", None)
-        send_mail(subject, message, from_email, [to_email], fail_silently=fail_silently)
+        # Always raise internally so failures are caught below instead of being
+        # swallowed by Django's own fail_silently handling in the SMTP backend.
+        send_mail(subject, message, from_email, [to_email], fail_silently=False)
         logger.info("Email sent via SMTP to %s", to_email)
         return True
     except Exception:
