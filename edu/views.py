@@ -482,8 +482,10 @@ def _login_for_institution(request, institution_type, template_name):
                     messages.error(request, 'This account needs an email address before portal access. Please contact your school admin.')
                 elif not profile.email_verified:
                     auth_logout(request)
-                    _send_edu_verification_email(request, profile)
-                    messages.error(request, 'Please verify your email address before login. We sent a fresh verification link to your email.')
+                    if _send_edu_verification_email(request, profile):
+                        messages.error(request, 'Please verify your email address before login. We sent a fresh verification link to your email.')
+                    else:
+                        messages.error(request, 'Please verify your email address before login, but we could not send the verification email right now. Contact your school admin or try again later.')
                 else:
                     if profile.institution_type == 'tertiary':
                         return redirect('edu:tertiary_dashboard', role=profile.role)
@@ -537,6 +539,7 @@ def forgot_password(request):
             request.POST.get('identifier', ''),
         )
         if profile and profile.user.email:
+            # Message stays generic even on send failure to avoid leaking whether an account exists.
             _send_edu_password_reset_email(request, profile)
         messages.success(request, 'If the account exists, a password reset link has been sent to the registered email address.')
         return redirect(f"/edu/forgot-password/?institution={institution_type}")
@@ -1315,7 +1318,7 @@ def secondary_create_user(request):
             profile.approved_by = request.user
             profile.approved_at = timezone.now()
             profile.save()
-            _send_edu_verification_email(request, profile)
+            email_sent = _send_edu_verification_email(request, profile)
 
             if role == 'student':
                 academic_class = AcademicClass.objects.filter(id=class_id).first()
@@ -1337,7 +1340,10 @@ def secondary_create_user(request):
                     department='',
                 )
 
-            messages.success(request, f'Account created successfully. ID: {username}. Verification email sent.')
+            if email_sent:
+                messages.success(request, f'Account created successfully. ID: {username}. Verification email sent.')
+            else:
+                messages.success(request, f'Account created successfully. ID: {username}. We could not send the verification email - share this ID with the user directly.')
         except IntegrityError:
             messages.error(request, 'Username already exists.')
 
@@ -2050,13 +2056,16 @@ def secondary_student_profile_update(request):
                 'email_verification_sent_at',
                 'email_verification_expires_at',
             ])
-            _send_edu_verification_email(request, profile)
+            email_sent = _send_edu_verification_email(request, profile)
 
         student.next_of_kin_name = request.POST.get('next_of_kin_name', '').strip()
         student.next_of_kin_phone = request.POST.get('next_of_kin_phone', '').strip()
         student.next_of_kin_relationship = request.POST.get('next_of_kin_relationship', '').strip()
         student.save(update_fields=['next_of_kin_name', 'next_of_kin_phone', 'next_of_kin_relationship'])
-        messages.success(request, 'Profile updated. Please verify your new email address before your next login.' if email_changed else 'Profile updated.')
+        if email_changed and not email_sent:
+            messages.warning(request, 'Profile updated, but we could not send the verification email to your new address. Contact your school admin.')
+        else:
+            messages.success(request, 'Profile updated. Please verify your new email address before your next login.' if email_changed else 'Profile updated.')
 
     return redirect('edu:secondary_page', role=profile.role, page='profile')
 
@@ -2251,7 +2260,7 @@ def secondary_add_student(request):
             profile.approved_by = request.user
             profile.approved_at = timezone.now()
             profile.save()
-            _send_edu_verification_email(request, profile)
+            email_sent = _send_edu_verification_email(request, profile)
 
             Student.objects.create(
                 institution=creator_profile.institution,
@@ -2275,7 +2284,10 @@ def secondary_add_student(request):
                         academic_class=academic_class,
                     )
 
-            messages.success(request, f'Student registered. ID: {username}. Verification email sent.')
+            if email_sent:
+                messages.success(request, f'Student registered. ID: {username}. Verification email sent.')
+            else:
+                messages.success(request, f'Student registered. ID: {username}. We could not send the verification email - share this ID with the user directly.')
         except IntegrityError:
             messages.error(request, 'Could not create student.')
 
@@ -2439,7 +2451,7 @@ def secondary_add_teacher(request):
             profile.approved_by = request.user
             profile.approved_at = timezone.now()
             profile.save()
-            _send_edu_verification_email(request, profile)
+            email_sent = _send_edu_verification_email(request, profile)
 
             Staff.objects.create(
                 institution=creator_profile.institution,
@@ -2451,7 +2463,10 @@ def secondary_add_teacher(request):
                 photo=photo,
             )
 
-            messages.success(request, f'Teacher created. ID: {username}. Verification email sent.')
+            if email_sent:
+                messages.success(request, f'Teacher created. ID: {username}. Verification email sent.')
+            else:
+                messages.success(request, f'Teacher created. ID: {username}. We could not send the verification email - share this ID with the teacher directly.')
         except IntegrityError:
             messages.error(request, 'Could not create teacher.')
 
@@ -2503,7 +2518,7 @@ def tertiary_create_user(request):
             profile.faculty = Faculty.objects.filter(id=faculty_id).first() if faculty_id else None
             profile.department = Department.objects.filter(id=department_id).first() if department_id else None
             profile.save()
-            _send_edu_verification_email(request, profile)
+            email_sent = _send_edu_verification_email(request, profile)
 
             if role == 'student':
                 Student.objects.create(
@@ -2523,7 +2538,10 @@ def tertiary_create_user(request):
                     department=profile.department.name if profile.department else '',
                 )
 
-            messages.success(request, f'Account created successfully. ID: {username}. Verification email sent.')
+            if email_sent:
+                messages.success(request, f'Account created successfully. ID: {username}. Verification email sent.')
+            else:
+                messages.success(request, f'Account created successfully. ID: {username}. We could not send the verification email - share this ID with the user directly.')
         except IntegrityError:
             messages.error(request, 'Username already exists.')
 
