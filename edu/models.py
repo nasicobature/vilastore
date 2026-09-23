@@ -650,7 +650,18 @@ class Result(models.Model):
         self.test2 = Decimal(str(self.test2 or 0))
         self.assignment = Decimal(str(self.assignment or 0))
         self.exam = Decimal(str(self.exam or 0))
+        component_errors = {}
+        for field_name in ('test1', 'test2', 'assignment', 'exam'):
+            if getattr(self, field_name) < 0:
+                component_errors[field_name] = 'Score cannot be negative.'
+        if component_errors:
+            raise ValidationError(component_errors)
         self.total = self.test1 + self.test2 + self.assignment + self.exam
+        max_grade = self.institution.max_grade if self.institution_id else None
+        if max_grade is not None and self.total > max_grade:
+            raise ValidationError({
+                'total': f'Total score ({self.total}) cannot exceed the {max_grade} maximum for this school. Check the entered test/exam/assignment scores.'
+            })
         if self.total >= 70:
             self.grade = 'A'
         elif self.total >= 60:

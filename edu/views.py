@@ -2356,6 +2356,7 @@ def secondary_save_scores(request):
         student_ids = request.POST.getlist('students')
         students = Student.objects.filter(id__in=student_ids, academic_class=academic_class, institution=profile.institution)
 
+        failed_students = []
         for student in students:
             def _to_decimal(value):
                 try:
@@ -2368,23 +2369,31 @@ def secondary_save_scores(request):
             assignment = _to_decimal(request.POST.get(f'assignment_{student.id}'))
             exam = _to_decimal(request.POST.get(f'exam_{student.id}'))
 
-            Result.objects.update_or_create(
-                institution=profile.institution,
-                student=student,
-                subject=subject,
-                academic_session=session,
-                academic_term=term,
-                session=session.name,
-                term=term.get_term_display(),
-                defaults={
-                    'academic_class': academic_class,
-                    'teacher': staff,
-                    'test1': test1,
-                    'test2': test2,
-                    'assignment': assignment,
-                    'exam': exam,
-                },
-            )
+            try:
+                Result.objects.update_or_create(
+                    institution=profile.institution,
+                    student=student,
+                    subject=subject,
+                    academic_session=session,
+                    academic_term=term,
+                    session=session.name,
+                    term=term.get_term_display(),
+                    defaults={
+                        'academic_class': academic_class,
+                        'teacher': staff,
+                        'test1': test1,
+                        'test2': test2,
+                        'assignment': assignment,
+                        'exam': exam,
+                    },
+                )
+            except ValidationError as exc:
+                failed_students.append(f"{student.full_name}: {'; '.join(exc.messages)}")
+
+        if failed_students:
+            messages.error(request, 'Could not save scores for: ' + ' | '.join(failed_students))
+        else:
+            messages.success(request, 'Scores saved.')
 
         ResultSubmission.objects.update_or_create(
             institution=profile.institution,
@@ -2400,7 +2409,6 @@ def secondary_save_scores(request):
                 'published_at': None,
             },
         )
-        messages.success(request, 'Scores saved.')
     return redirect('edu:secondary_page', role=profile.role, page='enter-scores')
 
 
