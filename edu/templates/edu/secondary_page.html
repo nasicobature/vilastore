@@ -1457,6 +1457,23 @@
             </div>
           </form>
         </div>
+
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 class="font-display font-semibold">Import Students from CSV</h3>
+              <p class="text-xs text-muted-foreground mt-1">Add many students at once. Required columns: full_name, email, password. Optional: class (must match an existing class name), next_of_kin_name, next_of_kin_phone, next_of_kin_relationship. Up to 500 rows per file.</p>
+            </div>
+            <a href="{% url 'edu:secondary_students_csv_template' %}" class="text-sm font-medium text-primary hover:underline whitespace-nowrap">Download template</a>
+          </div>
+          <form method="post" action="{% url 'edu:secondary_import_students' %}" enctype="multipart/form-data" class="flex flex-col sm:flex-row sm:items-center gap-3">
+            {% csrf_token %}
+            <input type="file" name="students_csv" accept=".csv,text/csv" required class="w-full text-sm" />
+            <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors whitespace-nowrap">
+              Import Students
+            </button>
+          </form>
+        </div>
       {% endif %}
 
       {% if active_page == 'assign-class' and role == 'registry' %}

@@ -1,3 +1,6 @@
+import csv
+import io
+import time
 from decimal import Decimal
 from datetime import timedelta
 from functools import wraps
@@ -9,12 +12,14 @@ from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, get_user_model
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import EDU_PACKAGE_LIMITS, RESERVED_EDU_SUBDOMAINS, EduSubscriptionSettings, Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
@@ -976,11 +981,18 @@ def _get_school_short(institution):
 def _generate_user_id(institution):
     with transaction.atomic():
         inst = Institution.objects.select_for_update().get(pk=institution.pk)
-        inst.user_sequence += 1
-        inst.save(update_fields=['user_sequence'])
         year = timezone.now().year
         short = _get_school_short(inst)
-        return f"{short}/{year}/{inst.user_sequence:03d}"
+        User = get_user_model()
+        # Usernames are globally unique but the prefix comes from school initials,
+        # so two schools (e.g. both "ITS") can reach the same number. Skip taken ones.
+        while True:
+            inst.user_sequence += 1
+            candidate = f"{short}/{year}/{inst.user_sequence:03d}"
+            if not User.objects.filter(username__iexact=candidate).exists():
+                break
+        inst.save(update_fields=['user_sequence'])
+        return candidate
 
 
 def _verification_uploads(request):
@@ -2803,6 +2815,159 @@ def secondary_add_student(request):
             messages.error(request, '; '.join(exc.messages))
 
     return redirect('edu:secondary_page', role=creator_profile.role, page='register')
+
+
+STUDENT_IMPORT_MAX_ROWS = 500
+STUDENT_IMPORT_MAX_BYTES = 1024 * 1024
+STUDENT_IMPORT_TIME_BUDGET_SECONDS = 20
+STUDENT_IMPORT_TEMPLATE_HEADER = ['full_name', 'email', 'password', 'class', 'next_of_kin_name', 'next_of_kin_phone', 'next_of_kin_relationship']
+
+
+@login_required(login_url='/edu/secondary/login/')
+def secondary_students_csv_template(request):
+    creator_profile = getattr(request.user, 'profile', None)
+    if not creator_profile or creator_profile.institution_type != 'secondary' or creator_profile.role not in ['admin', 'registry']:
+        return redirect('edu:secondary_dashboard', role=creator_profile.role if creator_profile else 'admin')
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="student-import-template.csv"'
+    writer = csv.writer(response)
+    writer.writerow(STUDENT_IMPORT_TEMPLATE_HEADER)
+    writer.writerow(['Ada Obi', 'ada.obi@example.com', 'ChangeMe123', 'JSS1', 'Mrs Obi', '08012345678', 'Mother'])
+    return response
+
+
+@login_required(login_url='/edu/secondary/login/')
+def secondary_import_students(request):
+    creator_profile = getattr(request.user, 'profile', None)
+    if not creator_profile or creator_profile.institution_type != 'secondary' or creator_profile.role not in ['admin', 'registry']:
+        messages.error(request, 'Only Admin/Registry can import students.')
+        return redirect('edu:secondary_dashboard', role=creator_profile.role if creator_profile else 'admin')
+
+    register_redirect = redirect('edu:secondary_page', role=creator_profile.role, page='register')
+    if request.method != 'POST':
+        return register_redirect
+
+    upload = request.FILES.get('students_csv')
+    if not upload:
+        messages.error(request, 'Choose a CSV file to import.')
+        return register_redirect
+    if upload.size > STUDENT_IMPORT_MAX_BYTES:
+        messages.error(request, 'That file is too large. Keep imports under 1 MB.')
+        return register_redirect
+    try:
+        content = upload.read().decode('utf-8-sig')
+    except UnicodeDecodeError:
+        messages.error(request, 'Could not read that file. Save it as a UTF-8 CSV and try again.')
+        return register_redirect
+
+    reader = csv.DictReader(io.StringIO(content))
+    headers = {(name or '').strip().lower() for name in (reader.fieldnames or [])}
+    missing_headers = [name for name in ('full_name', 'email', 'password') if name not in headers]
+    if missing_headers:
+        messages.error(request, 'The CSV is missing required column(s): ' + ', '.join(missing_headers) + '. Download the template for the exact format.')
+        return register_redirect
+
+    institution = creator_profile.institution
+    User = get_user_model()
+    classes_by_name = {c.name.strip().lower(): c for c in AcademicClass.objects.filter(institution=institution)}
+    created_count = 0
+    errors = []
+    data_rows = 0
+    password_hashes = {}
+    started_at = time.monotonic()
+
+    for row_number, raw_row in enumerate(reader, start=2):
+        row = {(key or '').strip().lower(): (value or '').strip() for key, value in raw_row.items() if key}
+        if not any(row.values()):
+            continue
+        data_rows += 1
+        if data_rows > STUDENT_IMPORT_MAX_ROWS:
+            errors.append(f'Stopped after {STUDENT_IMPORT_MAX_ROWS} rows. Import the rest in a second file.')
+            break
+
+        if time.monotonic() - started_at > STUDENT_IMPORT_TIME_BUDGET_SECONDS:
+            errors.append(f'Row {row_number}: time limit reached. This and the remaining rows were not imported - upload them in another file.')
+            break
+
+        full_name = row.get('full_name', '')
+        email = row.get('email', '')
+        password = row.get('password', '')
+        if not full_name or not email or not password:
+            errors.append(f'Row {row_number}: full_name, email and password are required.')
+            continue
+        if len(password) < 6:
+            errors.append(f'Row {row_number}: password must be at least 6 characters.')
+            continue
+        try:
+            validate_email(email)
+        except ValidationError:
+            errors.append(f'Row {row_number}: "{email}" is not a valid email address.')
+            continue
+        if not _email_is_available(email):
+            errors.append(f'Row {row_number}: {email} is already used by another account.')
+            continue
+
+        class_name = row.get('class', '')
+        academic_class = None
+        if class_name:
+            academic_class = classes_by_name.get(class_name.lower())
+            if academic_class is None:
+                errors.append(f'Row {row_number}: class "{class_name}" does not exist.')
+                continue
+
+        if not _can_add_students(institution):
+            errors.append(f'Row {row_number}: {_student_capacity_message(institution)} Remaining rows were not imported.')
+            break
+
+        try:
+            with transaction.atomic():
+                username = _generate_user_id(institution)
+                if password not in password_hashes:
+                    password_hashes[password] = make_password(password)
+                user = User(username=username, email=User.objects.normalize_email(email), is_active=True)
+                user.password = password_hashes[password]
+                user.save()
+
+                profile, _ = Profile.objects.get_or_create(user=user)
+                profile.institution = institution
+                profile.institution_type = 'secondary'
+                profile.role = 'student'
+                profile.created_by = request.user
+                profile.created_via = creator_profile.role
+                profile.is_approved = True
+                profile.approved_by = request.user
+                profile.approved_at = timezone.now()
+                profile.save()
+
+                Student.objects.create(
+                    institution=institution,
+                    user=user,
+                    full_name=full_name,
+                    student_id=username,
+                    academic_class=academic_class,
+                    status='Active',
+                    next_of_kin_name=row.get('next_of_kin_name', ''),
+                    next_of_kin_phone=row.get('next_of_kin_phone', ''),
+                    next_of_kin_relationship=row.get('next_of_kin_relationship', ''),
+                )
+        except ValidationError as exc:
+            errors.append(f'Row {row_number}: ' + '; '.join(exc.messages))
+            continue
+        except IntegrityError:
+            errors.append(f'Row {row_number}: could not create this student.')
+            continue
+        created_count += 1
+
+    if created_count:
+        messages.success(request, f'Imported {created_count} student(s). Each student gets a verification email the first time they sign in.')
+    if errors:
+        shown = errors[:10]
+        extra = len(errors) - len(shown)
+        summary = ' | '.join(shown) + (f' | ...and {extra} more.' if extra > 0 else '')
+        messages.error(request, f'{len(errors)} row(s) were not imported: ' + summary)
+    if not created_count and not errors:
+        messages.info(request, 'The file had no student rows.')
+    return register_redirect
 
 
 @login_required(login_url='/edu/secondary/login/')
