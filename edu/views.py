@@ -10,6 +10,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
@@ -3164,6 +3165,11 @@ def secondary_page(request, role, page):
         ).select_related('user')
 
     students_all = Student.objects.filter(institution=institution).select_related('academic_class')
+    student_query = (request.GET.get('student_q') or '').strip()
+    students_filtered = students_all
+    if student_query:
+        students_filtered = students_filtered.filter(Q(full_name__icontains=student_query) | Q(student_id__icontains=student_query))
+    students_page = Paginator(students_filtered.order_by('full_name'), 25).get_page(request.GET.get('student_page'))
     staff_members = Staff.objects.filter(institution=institution).order_by('full_name')
     teachers = Staff.objects.filter(institution=institution, role='teacher').prefetch_related('assignments__academic_class', 'subject_assignments__academic_class', 'subject_assignments__subject')
     sessions = AcademicSession.objects.filter(institution=institution).order_by('-name')
@@ -3811,6 +3817,8 @@ def secondary_page(request, role, page):
         'stats': stats,
         'students': students,
         'students_all': students_all,
+        'students_page': students_page,
+        'student_query': student_query,
         'teachers': teachers,
         'staff_members': staff_members,
         'sessions': sessions,

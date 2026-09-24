@@ -877,8 +877,13 @@
         </div>
 
         <div class="bg-card rounded-xl border border-border overflow-hidden">
-          <div class="flex items-center justify-between p-4 border-b border-border">
-            <h3 class="font-display font-semibold">Students</h3>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-b border-border">
+            <h3 class="font-display font-semibold">Students <span class="text-xs font-normal text-muted-foreground">({{ students_page.paginator.count }})</span></h3>
+            <form method="get" class="flex items-center gap-2">
+              <input type="text" name="student_q" value="{{ student_query }}" placeholder="Search name or ID" class="w-full sm:w-56 px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              <button type="submit" class="rounded-lg bg-primary text-primary-foreground px-3 py-2 text-sm font-medium hover:bg-primary/90 transition-colors">Search</button>
+              {% if student_query %}<a href="?" class="text-sm text-muted-foreground hover:text-foreground">Clear</a>{% endif %}
+            </form>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full">
@@ -891,7 +896,7 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-border">
-                {% for student in students_all %}
+                {% for student in students_page %}
                   <tr class="hover:bg-muted/30 transition-colors">
                     <td class="px-4 py-3 text-sm">{{ student.student_id }}</td>
                     <td class="px-4 py-3 text-sm">{{ student.full_name }}</td>
@@ -899,11 +904,24 @@
                     <td class="px-4 py-3 text-sm">{{ student.status }}</td>
                   </tr>
                 {% empty %}
-                  <tr><td colspan="4" class="px-4 py-3 text-sm">No students yet.</td></tr>
+                  <tr><td colspan="4" class="px-4 py-3 text-sm">{% if student_query %}No students match "{{ student_query }}".{% else %}No students yet.{% endif %}</td></tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
+          {% if students_page.paginator.num_pages > 1 %}
+            <div class="flex items-center justify-between gap-3 p-4 border-t border-border text-sm">
+              <span class="text-muted-foreground">Page {{ students_page.number }} of {{ students_page.paginator.num_pages }}</span>
+              <div class="flex items-center gap-2">
+                {% if students_page.has_previous %}
+                  <a href="?student_page={{ students_page.previous_page_number }}{% if student_query %}&student_q={{ student_query|urlencode }}{% endif %}" class="rounded-lg border border-border px-3 py-1.5 hover:bg-muted transition-colors">Previous</a>
+                {% endif %}
+                {% if students_page.has_next %}
+                  <a href="?student_page={{ students_page.next_page_number }}{% if student_query %}&student_q={{ student_query|urlencode }}{% endif %}" class="rounded-lg border border-border px-3 py-1.5 hover:bg-muted transition-colors">Next</a>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
         </div>
 
         <div class="bg-card rounded-xl border border-border overflow-hidden">
