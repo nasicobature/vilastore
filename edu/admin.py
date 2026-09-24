@@ -18,6 +18,8 @@ from .models import (
     SalaryVoucher,
     Result,
     ResultAuditLog,
+    EduMembership,
+    StudentGuardian,
     TeacherAssignment,
     ClassSubject,
 )
@@ -254,6 +256,19 @@ class ResultAuditLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(EduMembership)
+class EduMembershipAdmin(admin.ModelAdmin):
+    list_display = ('user', 'institution', 'role', 'is_approved', 'created_at')
+    list_filter = ('role', 'is_approved')
+    search_fields = ('user__username', 'user__email', 'institution__name')
+
+
+@admin.register(StudentGuardian)
+class StudentGuardianAdmin(admin.ModelAdmin):
+    list_display = ('student', 'membership', 'relationship', 'created_at')
+    search_fields = ('student__full_name', 'student__student_id', 'membership__user__email')
 
 
 @admin.register(TeacherAssignment)

@@ -21,8 +21,9 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
-from .models import EDU_PACKAGE_LIMITS, RESERVED_EDU_SUBDOMAINS, EduSubscriptionSettings, Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
+from .models import EDU_PACKAGE_LIMITS, RESERVED_EDU_SUBDOMAINS, EduMembership, EduSubscriptionSettings, StudentGuardian, Institution, Student, Staff, Fee, Payment, SalaryVoucher, Result, Profile, AcademicClass, Faculty, Department, TeacherAssignment, AcademicSession, AcademicTerm, Subject, ClassSubject, ResultSubmission, TeacherSubjectAssignment, StudentClassHistory
 from core.utils.notifications import send_email
 
 
@@ -1168,6 +1169,19 @@ def _get_selected_session_term(institution, session_id, term_id):
     return session, term
 
 
+def _competition_rank(rows, student_id):
+    """1-based rank of student_id in rows sorted best-first; tied scores share a rank."""
+    last_score = None
+    last_rank = 0
+    for index, row in enumerate(rows, start=1):
+        if last_score is None or row['total_score'] != last_score:
+            last_rank = index
+            last_score = row['total_score']
+        if row['student_id'] == student_id:
+            return last_rank
+    return None
+
+
 def _ordinal(value):
     try:
         number = int(value)
@@ -2180,6 +2194,15 @@ def secondary_payment_receipt(request, reference):
         if not student or payment.student_id != student.id:
             messages.error(request, 'Receipt not found for your account.')
             return redirect('edu:secondary_page', role=profile.role, page='pay-fees')
+    if profile.role == 'parent':
+        is_linked = StudentGuardian.objects.filter(
+            membership__user=request.user,
+            membership__institution=profile.institution,
+            student_id=payment.student_id,
+        ).exists()
+        if not is_linked:
+            messages.error(request, 'Receipt not found for your account.')
+            return redirect('edu:secondary_page', role='parent', page='fees')
     return render(request, 'edu/payment_receipt.html', {
         'payment': payment,
         'institution': payment.institution,
@@ -3274,6 +3297,221 @@ def approve_profile(request, profile_id):
     return redirect('edu:tertiary_dashboard', role=approver.role)
 
 
+def _parent_children(profile):
+    links = StudentGuardian.objects.filter(
+        membership__user=profile.user,
+        membership__institution=profile.institution,
+    ).select_related('student__academic_class').order_by('student__full_name')
+    return [link.student for link in links]
+
+
+def _student_fee_rows(student):
+    rows = []
+    for fee in Fee.objects.filter(institution=student.institution).prefetch_related('classes', 'departments').order_by('id'):
+        if not _fee_student_queryset(fee).filter(pk=student.pk).exists():
+            continue
+        payments = list(Payment.objects.filter(student=student, fee=fee, status='Paid').order_by('-paid_at'))
+        paid = sum((p.amount for p in payments), Decimal('0.00'))
+        balance = max(fee.amount - paid, Decimal('0.00'))
+        rows.append({
+            'fee': fee,
+            'paid': paid,
+            'balance': balance,
+            'receipts': [{'payment': p, 'url': _payment_receipt_url(p)} for p in payments if p.reference],
+        })
+    return rows
+
+
+def _published_report_for_student(student):
+    """The student's most recently published term report, or None.
+
+    Only subjects whose ResultSubmission is published are included, and the
+    position uses tie-aware (competition) ranking across the same subjects.
+    """
+    if not student.academic_class_id:
+        return None
+    latest = ResultSubmission.objects.filter(
+        institution=student.institution,
+        academic_class=student.academic_class,
+        status='published',
+    ).select_related('academic_session', 'academic_term').order_by('-published_at', '-id').first()
+    if not latest:
+        return None
+
+    published = ResultSubmission.objects.filter(
+        institution=student.institution,
+        academic_class=student.academic_class,
+        academic_session=latest.academic_session,
+        academic_term=latest.academic_term,
+        status='published',
+    )
+    subject_ids = list(published.values_list('subject_id', flat=True))
+    results = list(Result.objects.filter(
+        institution=student.institution,
+        student=student,
+        academic_class=student.academic_class,
+        academic_session=latest.academic_session,
+        academic_term=latest.academic_term,
+        subject_id__in=subject_ids,
+    ).select_related('subject').order_by('subject__name'))
+    if not results:
+        return None
+
+    total = sum((r.total for r in results), Decimal('0.00'))
+    average = (total / Decimal(len(results))).quantize(Decimal('0.01'))
+
+    class_totals = Result.objects.filter(
+        institution=student.institution,
+        academic_class=student.academic_class,
+        academic_session=latest.academic_session,
+        academic_term=latest.academic_term,
+        subject_id__in=subject_ids,
+    ).values('student_id').annotate(total_score=Sum('total')).order_by('-total_score')
+    rank = _competition_rank(class_totals, student.id)
+    position = _ordinal(rank) if rank else '-'
+
+    comments = published.exclude(teacher_comment='', examiner_comment='', admin_comment='').first()
+    return {
+        'results': results,
+        'total': total,
+        'average': average,
+        'position': position,
+        'session': latest.session or (latest.academic_session.name if latest.academic_session_id else ''),
+        'term': latest.term or (latest.academic_term.get_term_display() if latest.academic_term_id else ''),
+        'teacher_comment': comments.teacher_comment if comments else '',
+        'examiner_comment': comments.examiner_comment if comments else '',
+        'admin_comment': comments.admin_comment if comments else '',
+    }
+
+
+def _parent_portal(request, profile, page):
+    institution = profile.institution
+    active_page = page if page in ('results', 'fees') else 'overview'
+    children = []
+    for student in _parent_children(profile):
+        fee_rows = _student_fee_rows(student)
+        report = _published_report_for_student(student)
+        children.append({
+            'student': student,
+            'fee_rows': fee_rows,
+            'fee_balance': sum((row['balance'] for row in fee_rows), Decimal('0.00')),
+            'report': report,
+            'published_count': len(report['results']) if report else 0,
+        })
+
+    selected = None
+    requested = request.GET.get('student')
+    if requested and requested.isdigit():
+        selected = next((c for c in children if c['student'].id == int(requested)), None)
+    if selected is None and children:
+        selected = children[0]
+
+    nav_items = [
+        {'id': 'overview', 'label': 'Overview', 'icon': 'layout-dashboard', 'url': reverse('edu:secondary_page', kwargs={'role': 'parent', 'page': 'dashboard'})},
+        {'id': 'results', 'label': 'Results', 'icon': 'graduation-cap', 'url': reverse('edu:secondary_page', kwargs={'role': 'parent', 'page': 'results'})},
+        {'id': 'fees', 'label': 'Fees', 'icon': 'credit-card', 'url': reverse('edu:secondary_page', kwargs={'role': 'parent', 'page': 'fees'})},
+    ]
+    return render(request, 'edu/parent_portal.html', {
+        'nav_items': nav_items,
+        'active_page': active_page,
+        'children': children,
+        'selected': selected,
+        'institution_name': institution.name if institution else '',
+        'user_name': request.user.get_full_name() or request.user.username,
+    })
+
+
+@login_required(login_url='/edu/secondary/login/')
+def secondary_add_guardian(request):
+    creator_profile = getattr(request.user, 'profile', None)
+    if not creator_profile or creator_profile.institution_type != 'secondary' or creator_profile.role not in ['admin', 'registry']:
+        messages.error(request, 'Only Admin/Registry can link parents.')
+        return redirect('edu:secondary_dashboard', role=creator_profile.role if creator_profile else 'admin')
+
+    register_redirect = redirect('edu:secondary_page', role=creator_profile.role, page='register')
+    if request.method != 'POST':
+        return register_redirect
+
+    institution = creator_profile.institution
+    student_ref = request.POST.get('student_id', '').strip()
+    guardian_name = request.POST.get('guardian_name', '').strip()
+    guardian_email = request.POST.get('guardian_email', '').strip()
+    guardian_password = request.POST.get('guardian_password', '').strip()
+    relationship = request.POST.get('relationship', '').strip()
+
+    student = Student.objects.filter(institution=institution, student_id__iexact=student_ref).first() if student_ref else None
+    if not student:
+        messages.error(request, 'No student in this school has that Student ID.')
+        return register_redirect
+    if not guardian_email:
+        messages.error(request, 'Guardian email is required.')
+        return register_redirect
+    try:
+        validate_email(guardian_email)
+    except ValidationError:
+        messages.error(request, f'"{guardian_email}" is not a valid email address.')
+        return register_redirect
+
+    User = get_user_model()
+    existing = User.objects.filter(email__iexact=guardian_email).first()
+    email_sent = None
+    try:
+        with transaction.atomic():
+            if existing:
+                existing_profile = getattr(existing, 'profile', None)
+                if not existing_profile or existing_profile.role != 'parent' or existing_profile.institution_id != institution.id:
+                    messages.error(request, 'That email address is already used by another account.')
+                    return register_redirect
+                parent_user = existing
+                is_new_parent = False
+            else:
+                if not guardian_name or len(guardian_password) < 6:
+                    messages.error(request, 'For a new guardian account, enter the guardian name and a password of at least 6 characters.')
+                    return register_redirect
+                username = _generate_user_id(institution)
+                parent_user = User.objects.create_user(username=username, email=guardian_email, password=guardian_password)
+                parent_user.first_name = guardian_name[:150]
+                parent_user.is_active = True
+                parent_user.save()
+                parent_profile, _ = Profile.objects.get_or_create(user=parent_user)
+                parent_profile.institution = institution
+                parent_profile.institution_type = 'secondary'
+                parent_profile.role = 'parent'
+                parent_profile.created_by = request.user
+                parent_profile.created_via = creator_profile.role
+                parent_profile.is_approved = True
+                parent_profile.approved_by = request.user
+                parent_profile.approved_at = timezone.now()
+                parent_profile.save()
+                is_new_parent = True
+
+            membership, _ = EduMembership.objects.get_or_create(
+                user=parent_user,
+                institution=institution,
+                defaults={'role': 'parent', 'is_approved': True},
+            )
+            _, link_created = StudentGuardian.objects.get_or_create(
+                student=student,
+                membership=membership,
+                defaults={'relationship': relationship},
+            )
+    except (IntegrityError, ValidationError):
+        messages.error(request, 'Could not link that guardian.')
+        return register_redirect
+
+    if is_new_parent:
+        email_sent = _send_edu_verification_email(request, Profile.objects.get(user=parent_user))
+        if email_sent:
+            messages.success(request, f'Guardian account created for {student.full_name}. Sign-in ID: {parent_user.username} (or their email). Verification email sent.')
+        else:
+            messages.success(request, f'Guardian account created for {student.full_name}. Sign-in ID: {parent_user.username} (or their email). We could not send the verification email - share these details with the guardian directly.')
+    elif link_created:
+        messages.success(request, f'{student.full_name} was linked to the existing guardian account {guardian_email}.')
+    else:
+        messages.info(request, 'That guardian is already linked to this student.')
+    return register_redirect
+
+
 @login_required
 def secondary_dashboard(request, role):
     return secondary_page(request, role, 'dashboard')
@@ -3291,6 +3529,9 @@ def secondary_page(request, role, page):
     institution = profile.institution
     if _subscription_is_expired(institution):
         return _expired_subscription_response(request, profile)
+
+    if role == 'parent':
+        return _parent_portal(request, profile, page)
 
     today = timezone.localdate()
     students = Student.objects.filter(institution=institution).select_related('academic_class')[:5]
@@ -3675,10 +3916,9 @@ def secondary_page(request, role, page):
                             academic_term=first_result.academic_term,
                         ).values('subject'),
                     ).values('student_id').annotate(total_score=Sum('total')).order_by('-total_score')
-                    for index, item in enumerate(class_results, start=1):
-                        if item['student_id'] == student_record.id:
-                            student_report_position = _ordinal(index)
-                            break
+                    rank = _competition_rank(class_results, student_record.id)
+                    if rank:
+                        student_report_position = _ordinal(rank)
                     student_report_card = {
                         'student': student_record,
                         'results': student_report_results,
@@ -3800,10 +4040,9 @@ def secondary_page(request, role, page):
                             academic_term=selected_term,
                         ).values('subject'),
                     ).values('student_id').annotate(total_score=Sum('total')).order_by('-total_score')
-                    for index, item in enumerate(class_totals, start=1):
-                        if item['student_id'] == student_record.id:
-                            selected_class_report_position = _ordinal(index)
-                            break
+                    rank = _competition_rank(class_totals, student_record.id)
+                    if rank:
+                        selected_class_report_position = _ordinal(rank)
                     selected_class_report_card = {
                         'student': student_record,
                         'results': selected_class_results,

@@ -27,6 +27,7 @@ urlpatterns = [
     path('secondary/classes/session-term/', protected(views.secondary_assign_class_session_term), name='secondary_assign_class_session_term'),
     path('secondary/students/add/', protected(views.secondary_add_student), name='secondary_add_student'),
     path('secondary/students/import/', protected(views.secondary_import_students), name='secondary_import_students'),
+    path('secondary/students/guardian/', protected(views.secondary_add_guardian), name='secondary_add_guardian'),
     path('secondary/students/import/template/', protected(views.secondary_students_csv_template), name='secondary_students_csv_template'),
     path('secondary/students/assign-class/', protected(views.secondary_assign_student_class), name='secondary_assign_student_class'),
     path('secondary/teachers/assign/', protected(views.secondary_assign_teacher), name='secondary_assign_teacher'),

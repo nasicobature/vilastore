@@ -1,0 +1,185 @@
+{% extends 'edu/base.html' %}
+
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-background">
+  <div id="sidebar-backdrop" class="fixed inset-0 z-30 bg-black/50 hidden md:hidden"></div>
+  <aside id="app-sidebar" class="w-64 bg-sidebar flex flex-col flex-shrink-0 fixed inset-y-0 left-0 z-40 -translate-x-full transition-transform duration-200 ease-in-out md:static md:translate-x-0 md:z-auto">
+    <div class="p-4 border-b border-sidebar-border flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i data-lucide="graduation-cap" class="text-sidebar-primary-foreground"></i>
+        <div>
+          <h1 class="font-display text-sm font-bold text-sidebar-foreground">EduPortal</h1>
+          <p class="text-xs text-sidebar-foreground/60">Parent / Guardian</p>
+        </div>
+      </div>
+      <button id="sidebar-close" class="md:hidden p-1.5 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent/50">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+      {% for item in nav_items %}
+        <a href="{{ item.url }}" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors {% if active_page == item.id %}bg-sidebar-accent text-sidebar-accent-foreground font-medium{% else %}text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground{% endif %}">
+          <i data-lucide="{{ item.icon }}" class="w-4 h-4"></i>
+          <span>{{ item.label }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+
+    <div class="p-3 border-t border-sidebar-border">
+      <a href="{% url 'edu:logout' %}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-destructive/20 hover:text-destructive transition-colors">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="flex-1 flex flex-col overflow-hidden min-w-0">
+    <header class="h-16 bg-card border-b border-border flex items-center justify-between px-4 md:px-6 flex-shrink-0">
+      <div class="flex items-center gap-3 min-w-0">
+        <button id="sidebar-open" class="md:hidden p-2 -ml-2 rounded-lg hover:bg-muted transition-colors flex-shrink-0">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+        <p class="text-sm text-muted-foreground truncate">{{ institution_name }}</p>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-semibold flex-shrink-0">{{ user_name|slice:':1'|upper }}</div>
+        <div class="hidden md:block">
+          <p class="text-sm font-medium">{{ user_name }}</p>
+          <p class="text-xs text-muted-foreground">Parent / Guardian</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+      {% if not children %}
+        <div class="bg-card rounded-xl border border-border p-6 text-sm">
+          <h2 class="font-display text-xl font-bold mb-2">No children linked yet</h2>
+          <p class="text-muted-foreground">Ask the school admin or registry to link your account to your child's student record.</p>
+        </div>
+      {% else %}
+
+        {% if children|length > 1 and active_page != 'overview' %}
+          <div class="flex flex-wrap gap-2">
+            {% for child in children %}
+              <a href="?student={{ child.student.id }}" class="rounded-full border px-3 py-1.5 text-sm {% if child.student.id == selected.student.id %}bg-primary text-primary-foreground border-primary{% else %}border-border hover:bg-muted{% endif %}">{{ child.student.full_name }}</a>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        {% if active_page == 'overview' %}
+          <div>
+            <h2 class="font-display text-2xl font-bold mb-4">Welcome, {{ user_name }}</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {% for child in children %}
+                <div class="bg-card rounded-xl border border-border p-5 space-y-3">
+                  <div>
+                    <p class="font-display font-semibold text-lg">{{ child.student.full_name }}</p>
+                    <p class="text-xs text-muted-foreground">{{ child.student.student_id }} &middot; {% if child.student.academic_class %}{{ child.student.academic_class.name }}{% else %}No class yet{% endif %}</p>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="rounded-lg border border-border bg-background px-3 py-2"><span class="text-muted-foreground">Fees owing</span><br><strong>&#8358;{{ child.fee_balance }}</strong></div>
+                    <div class="rounded-lg border border-border bg-background px-3 py-2"><span class="text-muted-foreground">Published results</span><br><strong>{{ child.published_count }}</strong></div>
+                  </div>
+                  <div class="flex gap-3 text-sm">
+                    <a class="text-primary hover:underline" href="{% url 'edu:secondary_page' role='parent' page='results' %}?student={{ child.student.id }}">View results</a>
+                    <a class="text-primary hover:underline" href="{% url 'edu:secondary_page' role='parent' page='fees' %}?student={{ child.student.id }}">View fees</a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
+        {% if active_page == 'results' %}
+          <div class="bg-card rounded-xl border border-border overflow-hidden">
+            <div class="p-4 border-b border-border">
+              <h3 class="font-display font-semibold">Results for {{ selected.student.full_name }}</h3>
+              {% if selected.report %}
+                <p class="text-xs text-muted-foreground mt-1">{{ selected.report.session }} &middot; {{ selected.report.term }}</p>
+              {% endif %}
+            </div>
+            {% if selected.report %}
+              <div class="overflow-x-auto">
+                <table class="w-full">
+                  <thead>
+                    <tr class="bg-muted/50">
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Subject</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 1</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Test 2</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Assignment</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Exam</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Total</th>
+                      <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Grade</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-border">
+                    {% for r in selected.report.results %}
+                      <tr>
+                        <td class="px-4 py-3 text-sm">{{ r.subject.name }}</td>
+                        <td class="px-4 py-3 text-sm">{{ r.test1 }}</td>
+                        <td class="px-4 py-3 text-sm">{{ r.test2 }}</td>
+                        <td class="px-4 py-3 text-sm">{{ r.assignment }}</td>
+                        <td class="px-4 py-3 text-sm">{{ r.exam }}</td>
+                        <td class="px-4 py-3 text-sm font-medium">{{ r.total }}</td>
+                        <td class="px-4 py-3 text-sm font-medium">{{ r.grade }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              <div class="p-4 border-t border-border grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                <div><span class="text-muted-foreground">Total</span><br><strong>{{ selected.report.total }}</strong></div>
+                <div><span class="text-muted-foreground">Average</span><br><strong>{{ selected.report.average }}</strong></div>
+                <div><span class="text-muted-foreground">Position in class</span><br><strong>{{ selected.report.position }}</strong></div>
+              </div>
+              {% if selected.report.teacher_comment or selected.report.examiner_comment or selected.report.admin_comment %}
+                <div class="p-4 border-t border-border space-y-2 text-sm">
+                  {% if selected.report.teacher_comment %}<p><span class="text-muted-foreground">Teacher:</span> {{ selected.report.teacher_comment }}</p>{% endif %}
+                  {% if selected.report.examiner_comment %}<p><span class="text-muted-foreground">Examiner:</span> {{ selected.report.examiner_comment }}</p>{% endif %}
+                  {% if selected.report.admin_comment %}<p><span class="text-muted-foreground">Admin:</span> {{ selected.report.admin_comment }}</p>{% endif %}
+                </div>
+              {% endif %}
+            {% else %}
+              <p class="p-6 text-sm text-muted-foreground">No published results yet for this term. They appear here once the school publishes them.</p>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if active_page == 'fees' %}
+          <div class="bg-card rounded-xl border border-border overflow-hidden">
+            <div class="p-4 border-b border-border">
+              <h3 class="font-display font-semibold">Fees for {{ selected.student.full_name }}</h3>
+              <p class="text-xs text-muted-foreground mt-1">Total owing: &#8358;{{ selected.fee_balance }}</p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="bg-muted/50">
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Fee</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Amount</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Paid</th>
+                    <th class="text-left text-xs font-medium text-muted-foreground px-4 py-3 uppercase tracking-wider">Balance</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  {% for row in selected.fee_rows %}
+                    <tr>
+                      <td class="px-4 py-3 text-sm">{{ row.fee.name }}</td>
+                      <td class="px-4 py-3 text-sm">&#8358;{{ row.fee.amount }}</td>
+                      <td class="px-4 py-3 text-sm">&#8358;{{ row.paid }}{% for receipt in row.receipts %} <a class="text-primary hover:underline text-xs ml-1" href="{{ receipt.url }}">Receipt</a>{% endfor %}</td>
+                      <td class="px-4 py-3 text-sm font-medium">{% if row.balance %}&#8358;{{ row.balance }}{% else %}<span class="text-success">Paid</span>{% endif %}</td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="4" class="px-4 py-3 text-sm">No fees apply to this student.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endif %}
+      {% endif %}
+    </main>
+  </div>
+</div>
+{% endblock %}

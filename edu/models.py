@@ -383,6 +383,7 @@ class Profile(models.Model):
         ('department-admin', 'Department Admin'),
         ('hod', 'HOD'),
         ('lecturer', 'Lecturer'),
+        ('parent', 'Parent'),
     ]
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -484,6 +485,27 @@ class Student(models.Model):
 
     def __str__(self):
         return f"{self.full_name} ({self.student_id})"
+
+
+class StudentGuardian(models.Model):
+    """Links a parent/guardian's EduMembership to a Student they may view.
+
+    Goes through EduMembership (not a direct User foreign key) so guardian
+    access stays scoped to one school and follows the membership model.
+    """
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='guardians')
+    membership = models.ForeignKey(EduMembership, on_delete=models.CASCADE, related_name='guardian_links')
+    relationship = models.CharField(max_length=50, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['student', 'membership'], name='unique_guardian_link_per_student'),
+        ]
+
+    def __str__(self):
+        return f"{self.membership.user} guardian of {self.student}"
 
 
 class StudentClassHistory(models.Model):

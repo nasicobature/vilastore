@@ -1474,6 +1474,42 @@
             </button>
           </form>
         </div>
+
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div>
+            <h3 class="font-display font-semibold">Link Parent / Guardian</h3>
+            <p class="text-xs text-muted-foreground mt-1">Give a parent their own login to see their child's published results and fees. Use the same email again to link another child to an existing guardian account.</p>
+          </div>
+          <form method="post" action="{% url 'edu:secondary_add_guardian' %}" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% csrf_token %}
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Student ID *</label>
+              <input type="text" name="student_id" required placeholder="e.g. ABC/2026/001" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Relationship</label>
+              <input type="text" name="relationship" placeholder="Mother, Father, Guardian..." class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Guardian Name</label>
+              <input type="text" name="guardian_name" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5">Guardian Email *</label>
+              <input type="email" name="guardian_email" required class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-sm font-medium mb-1.5">Temporary Password</label>
+              <input type="password" name="guardian_password" autocomplete="new-password" class="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              <p class="text-xs text-muted-foreground mt-1">Only needed when creating a new guardian account (at least 6 characters).</p>
+            </div>
+            <div class="md:col-span-2">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors">
+                Link Guardian
+              </button>
+            </div>
+          </form>
+        </div>
       {% endif %}
 
       {% if active_page == 'assign-class' and role == 'registry' %}
