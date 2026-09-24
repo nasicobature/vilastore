@@ -17,6 +17,7 @@ from .models import (
     Payment,
     SalaryVoucher,
     Result,
+    ResultAuditLog,
     TeacherAssignment,
     ClassSubject,
 )
@@ -239,6 +240,20 @@ class SalaryVoucherAdmin(admin.ModelAdmin):
 class ResultAdmin(admin.ModelAdmin):
     list_display = ('student', 'academic_class', 'subject', 'teacher', 'total', 'grade', 'term', 'session')
     list_filter = ('institution', 'academic_class', 'academic_session', 'academic_term', 'grade')
+
+
+@admin.register(ResultAuditLog)
+class ResultAuditLogAdmin(admin.ModelAdmin):
+    list_display = ('result', 'changed_by', 'previous_total', 'previous_grade', 'changed_at')
+    list_filter = ('changed_at',)
+    search_fields = ('result__student__full_name', 'result__student__student_id', 'changed_by__username')
+    readonly_fields = [f.name for f in ResultAuditLog._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(TeacherAssignment)

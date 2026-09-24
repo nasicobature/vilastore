@@ -646,6 +646,12 @@ class Result(models.Model):
     session = models.CharField(max_length=20, blank=True)
 
     def save(self, *args, **kwargs):
+        previous = None
+        if self.pk:
+            previous = Result.objects.filter(pk=self.pk).values(
+                'test1', 'test2', 'assignment', 'exam', 'total', 'grade'
+            ).first()
+
         self.test1 = Decimal(str(self.test1 or 0))
         self.test2 = Decimal(str(self.test2 or 0))
         self.assignment = Decimal(str(self.assignment or 0))
@@ -674,8 +680,51 @@ class Result(models.Model):
             self.grade = 'F'
         super().save(*args, **kwargs)
 
+        score_changed = previous and (
+            previous['test1'] != self.test1
+            or previous['test2'] != self.test2
+            or previous['assignment'] != self.assignment
+            or previous['exam'] != self.exam
+        )
+        if score_changed:
+            ResultAuditLog.objects.create(
+                result=self,
+                changed_by=getattr(self, '_changed_by', None),
+                previous_test1=previous['test1'],
+                previous_test2=previous['test2'],
+                previous_assignment=previous['assignment'],
+                previous_exam=previous['exam'],
+                previous_total=previous['total'],
+                previous_grade=previous['grade'],
+            )
+
     def __str__(self):
         return f"{self.student} - {self.subject}"
+
+
+class ResultAuditLog(models.Model):
+    """A snapshot of a Result's scores immediately before they were changed.
+
+    Written automatically by Result.save() whenever an existing result's
+    test1/test2/assignment/exam values change, so a school can always see
+    who altered a grade, when, and what it used to be.
+    """
+
+    result = models.ForeignKey(Result, on_delete=models.CASCADE, related_name='audit_logs')
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='result_audit_logs')
+    previous_test1 = models.DecimalField(max_digits=5, decimal_places=2)
+    previous_test2 = models.DecimalField(max_digits=5, decimal_places=2)
+    previous_assignment = models.DecimalField(max_digits=5, decimal_places=2)
+    previous_exam = models.DecimalField(max_digits=5, decimal_places=2)
+    previous_total = models.DecimalField(max_digits=5, decimal_places=2)
+    previous_grade = models.CharField(max_length=2, blank=True)
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        return f"{self.result} changed at {self.changed_at}"
 
 
 class ResultSubmission(models.Model):

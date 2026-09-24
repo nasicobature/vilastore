@@ -2369,24 +2369,32 @@ def secondary_save_scores(request):
             assignment = _to_decimal(request.POST.get(f'assignment_{student.id}'))
             exam = _to_decimal(request.POST.get(f'exam_{student.id}'))
 
-            try:
-                Result.objects.update_or_create(
+            result = Result.objects.filter(
+                institution=profile.institution,
+                student=student,
+                subject=subject,
+                academic_session=session,
+                academic_term=term,
+            ).first()
+            if result is None:
+                result = Result(
                     institution=profile.institution,
                     student=student,
                     subject=subject,
                     academic_session=session,
                     academic_term=term,
-                    session=session.name,
-                    term=term.get_term_display(),
-                    defaults={
-                        'academic_class': academic_class,
-                        'teacher': staff,
-                        'test1': test1,
-                        'test2': test2,
-                        'assignment': assignment,
-                        'exam': exam,
-                    },
                 )
+            result.academic_class = academic_class
+            result.teacher = staff
+            result.session = session.name
+            result.term = term.get_term_display()
+            result.test1 = test1
+            result.test2 = test2
+            result.assignment = assignment
+            result.exam = exam
+            result._changed_by = request.user
+            try:
+                result.save()
             except ValidationError as exc:
                 failed_students.append(f"{student.full_name}: {'; '.join(exc.messages)}")
 
@@ -3131,11 +3139,19 @@ def secondary_page(request, role, page):
     pending_salary_vouchers = salary_vouchers_all.filter(status='pending')
     approved_due_salary_vouchers = salary_vouchers_all.filter(status='approved', payment_date__lte=today)
 
+    institution_results = Result.objects.filter(institution=institution)
+    institution_results_count = institution_results.count()
+    if institution_results_count:
+        passed_count = institution_results.exclude(grade='F').count()
+        pass_rate_display = f"{round((passed_count / institution_results_count) * 100)}%"
+    else:
+        pass_rate_display = "-"
+
     stats = [
         {"label": "Total Students", "value": str(Student.objects.filter(institution=institution).count())},
         {"label": "Total Staff", "value": str(Staff.objects.filter(institution=institution).count())},
         {"label": "Classes", "value": str(institution.classes.count() if institution else 0)},
-        {"label": "Pass Rate", "value": "92%"},
+        {"label": "Pass Rate", "value": pass_rate_display},
     ]
 
     role_label = next((r['label'] for r in SECONDARY_ROLES if r['slug'] == role), role.title())
