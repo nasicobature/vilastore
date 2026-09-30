@@ -1517,6 +1517,34 @@ button {
   transform: translateY(-2px);
 }
 
+.floating-scan-button {
+  position: fixed;
+  right: max(1.25rem, env(safe-area-inset-right, 0px));
+  bottom: calc(max(1.25rem, env(safe-area-inset-bottom, 0px)) + 76px);
+  z-index: 130;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+}
+
+.floating-scan-button i,
+.floating-scan-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+body.floating-cart-open .floating-scan-button {
+  display: none;
+}
+
 .floating-cart-button-empty,
 .floating-cart-button[hidden] {
   display: none;

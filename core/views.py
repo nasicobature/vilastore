@@ -520,11 +520,12 @@ def healthz(request):
 
 def service_worker(request):
     script = """
-const CACHE_NAME = "vilastore-web-offline-v4";
+const CACHE_NAME = "vilastore-web-offline-v5";
 const STATIC_ASSETS = [
   "/static/css/styles.css",
   "/static/js/app.js",
   "/static/js/offline-web.js",
+  "/static/js/camera-scanner.js",
   "/static/js/sw-register.js",
   "/static/img/vilastore-logo.png",
   "/static/site.webmanifest"
@@ -797,6 +798,7 @@ def product(request):
         'search_query': search_query,
         'last_sale': last_sale,
         'can_edit_price': _can_edit_cart_price(request.user),
+        'camera_scan_enabled': _plan_has_feature(request.user, "barcode"),
         'branches': branches,
         'selected_branch': selected_branch,
     })
@@ -848,25 +850,62 @@ def add_to_cart(request, product_id):
     _set_session_cart(request, selected_branch, cart)
     return redirect('product')
 
+def _is_ajax(request):
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
+def _scan_response(request, redirect_name, ok, message="", level="error", cart=None, product=None, quantity=None):
+    """Camera scans post with fetch and want JSON; normal form posts get a flash message and redirect."""
+    if _is_ajax(request):
+        payload = {"success": ok, "message": message, "level": level if message else ""}
+        if cart is not None:
+            payload["cart_count"] = len(cart)
+        if product is not None:
+            payload["product"] = product.name
+            payload["quantity"] = _format_quantity(quantity)
+        return JsonResponse(payload, status=200 if ok else 400)
+    if message:
+        getattr(messages, level)(request, message)
+    return redirect(redirect_name)
+
+
+def _add_scanned_product_to_cart(cart, product, qty, available_stock, price):
+    """Add qty of product to cart, capped at stock. Returns (new_quantity, warning)."""
+    product_key = str(product.id)
+    desired_qty = _cart_quantity(cart.get(product_key, {})) + qty
+    warning = ""
+    if desired_qty > available_stock:
+        desired_qty = available_stock
+        warning = f"Only {available_stock} units available for {product.name}."
+
+    if product_key in cart:
+        cart[product_key]["quantity"] = _format_quantity(desired_qty)
+    else:
+        cart[product_key] = {
+            "name": product.name,
+            "price": float(price),
+            "cost": float(product.cost_price),
+            "quantity": _format_quantity(desired_qty),
+        }
+    return desired_qty, warning
+
+
 @login_required
 @require_POST
 def add_to_cart_by_code(request):
-    feature_redirect = _require_feature_or_redirect(request, "barcode", "product")
-    if feature_redirect:
-        return feature_redirect
+    if not _plan_has_feature(request.user, "barcode"):
+        return _scan_response(request, "product", False, _feature_upgrade_message("barcode"))
 
     code = (request.POST.get("code") or "").strip()
     qty_raw = request.POST.get("quantity")
 
     if not code:
-        messages.error(request, "Enter a product code.")
-        return redirect('product')
+        return _scan_response(request, "product", False, "Enter a product code.")
 
     try:
         qty = _parse_quantity(qty_raw, default=Decimal("1"))
     except (TypeError, ValueError):
-        messages.error(request, "Please enter a valid quantity (e.g., 1 or 1.5).")
-        return redirect('product')
+        return _scan_response(request, "product", False, "Please enter a valid quantity (e.g., 1 or 1.5).")
 
     selected_branch = _default_branch_for_user(request.user)
     selected_branch_id = str(request.session.get("owner_selected_branch_id") or "")
@@ -875,36 +914,17 @@ def add_to_cart_by_code(request):
 
     product = _branch_scoped_products(request.user, selected_branch).filter(code__iexact=code).first()
     if not product:
-        messages.error(request, f"No product found for code {code}.")
-        return redirect('product')
+        return _scan_response(request, "product", False, f"No product found for code {code}.")
 
     available_stock = _effective_product_stock(product, selected_branch)
     price = _effective_product_price(product, selected_branch)
     if available_stock <= 0:
-        messages.error(request, f"{product.name} is out of stock.")
-        return redirect('product')
+        return _scan_response(request, "product", False, f"{product.name} is out of stock.")
 
     cart = _get_session_cart(request, selected_branch)
-    product_key = str(product.id)
-
-    current_qty = _cart_quantity(cart.get(product_key, {}))
-    desired_qty = current_qty + qty
-    if desired_qty > available_stock:
-        desired_qty = available_stock
-        messages.warning(request, f"Only {available_stock} units available for {product.name}.")
-
-    if product_key in cart:
-        cart[product_key]['quantity'] = _format_quantity(desired_qty)
-    else:
-        cart[product_key] = {
-            'name': product.name,
-            'price': float(price),
-            'cost': float(product.cost_price),
-            'quantity': _format_quantity(desired_qty)
-        }
-
+    new_qty, warning = _add_scanned_product_to_cart(cart, product, qty, available_stock, price)
     _set_session_cart(request, selected_branch, cart)
-    return redirect('product')
+    return _scan_response(request, "product", True, warning, "warning", cart=cart, product=product, quantity=new_qty)
 
 def product_lookup_by_code(request):
     code = (request.GET.get("code") or "").strip()
@@ -5364,6 +5384,7 @@ def shopboy_dashboard(request):
         "cart_count": cart_count,
         "cart_total": total.quantize(Decimal("0.01")),
         "last_sale": last_sale,
+        "camera_scan_enabled": _plan_has_feature(shopboy.user, "barcode"),
     })
 
 
@@ -5415,55 +5436,38 @@ def shopboy_add_to_cart(request, product_id):
 def shopboy_add_to_cart_by_code(request):
     shopboy = _get_shopboy_session(request)
     if not shopboy:
+        if _is_ajax(request):
+            return JsonResponse({"success": False, "message": "Session expired. Log in again."}, status=403)
         return redirect("shopboy_login")
+    if not _plan_has_feature(shopboy.user, "barcode"):
+        return _scan_response(request, "shopboy_dashboard", False, _feature_upgrade_message("barcode"))
 
     code = (request.POST.get("code") or "").strip()
     qty_raw = request.POST.get("quantity")
 
     if not code:
-        messages.error(request, "Enter a product code.")
-        return redirect("shopboy_dashboard")
+        return _scan_response(request, "shopboy_dashboard", False, "Enter a product code.")
 
     try:
         qty = _parse_quantity(qty_raw, default=Decimal("1"))
     except (TypeError, ValueError):
-        messages.error(request, "Please enter a valid quantity (e.g., 1 or 1.5).")
-        return redirect("shopboy_dashboard")
+        return _scan_response(request, "shopboy_dashboard", False, "Please enter a valid quantity (e.g., 1 or 1.5).")
 
     branch = shopboy.branch
     product = _branch_scoped_products(shopboy.user, branch).filter(code__iexact=code).first()
     if not product:
-        messages.error(request, f"No product found for code {code}.")
-        return redirect("shopboy_dashboard")
+        return _scan_response(request, "shopboy_dashboard", False, f"No product found for code {code}.")
     _branch_inventory_for_product(product, branch)
 
     available_stock = _effective_product_stock(product, branch)
     price = _effective_product_price(product, branch)
     if available_stock <= 0:
-        messages.error(request, f"{product.name} is out of stock.")
-        return redirect("shopboy_dashboard")
+        return _scan_response(request, "shopboy_dashboard", False, f"{product.name} is out of stock.")
 
     cart = request.session.get("shopboy_cart", {})
-    product_key = str(product.id)
-
-    current_qty = _cart_quantity(cart.get(product_key, {}))
-    desired_qty = current_qty + qty
-    if desired_qty > available_stock:
-        desired_qty = available_stock
-        messages.warning(request, f"Only {available_stock} units available for {product.name}.")
-
-    if product_key in cart:
-        cart[product_key]["quantity"] = _format_quantity(desired_qty)
-    else:
-        cart[product_key] = {
-            "name": product.name,
-            "price": float(price),
-            "cost": float(product.cost_price),
-            "quantity": _format_quantity(desired_qty),
-        }
-
+    new_qty, warning = _add_scanned_product_to_cart(cart, product, qty, available_stock, price)
     request.session["shopboy_cart"] = cart
-    return redirect("shopboy_dashboard")
+    return _scan_response(request, "shopboy_dashboard", True, warning, "warning", cart=cart, product=product, quantity=new_qty)
 
 
 @require_POST

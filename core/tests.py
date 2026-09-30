@@ -1654,3 +1654,114 @@ class CustomerScannerPaymentTests(TestCase):
     def test_delivery_api_is_removed_for_mvp(self):
         response = self.client.get("/api/marketplace/delivery/riders/")
         self.assertEqual(response.status_code, 404)
+
+
+class CameraScanCartTests(TestCase):
+    """Phone-camera scans post each code with fetch and expect JSON back."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="scan-owner",
+            email="scan-owner@example.com",
+            password="TestPass123!",
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Scan Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000004001",
+            address="5 Scan Road",
+            country="Nigeria",
+            plan="business",
+            is_paid=True,
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        branch = ShopBranch.objects.create(user=self.owner, name="Main Branch", address=self.owner.address, is_default=True)
+        self.product = Product.objects.create(
+            user=self.owner,
+            name="Scan Soap",
+            code="5901234123457",
+            cost_price=Decimal("500.00"),
+            selling_price=Decimal("750.00"),
+            stock=Decimal("2.00"),
+        )
+        BranchInventory.objects.create(branch=branch, product=self.product, stock=Decimal("2.00"), selling_price=Decimal("750.00"))
+        self.shopboy = ShopBoy.objects.create(
+            user=self.owner,
+            full_name="Scan Staff",
+            username="scan-staff",
+            password="pass123",
+            is_active=True,
+        )
+
+    def _scan(self, url_name, code):
+        return self.client.post(
+            reverse(url_name),
+            data={"code": code, "quantity": "1"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+    def _login_shopboy(self):
+        session = self.client.session
+        session["shopboy_id"] = self.shopboy.id
+        session["shopboy_owner_id"] = self.owner.id
+        session["shopboy_name"] = self.shopboy.full_name
+        session.save()
+
+    def test_owner_scans_add_to_cart_and_cap_at_stock(self):
+        self.client.force_login(self.owner)
+
+        first = self._scan("add_to_cart_by_code", self.product.code).json()
+        self.assertTrue(first["success"], first)
+        self.assertEqual(first["product"], "Scan Soap")
+        self.assertEqual(first["cart_count"], 1)
+
+        self._scan("add_to_cart_by_code", self.product.code)
+        third = self._scan("add_to_cart_by_code", self.product.code).json()
+        self.assertTrue(third["success"])
+        self.assertEqual(Decimal(third["quantity"]), Decimal("2"))
+        self.assertIn("Only", third["message"])
+
+    def test_owner_scan_unknown_code_returns_error(self):
+        self.client.force_login(self.owner)
+
+        response = self._scan("add_to_cart_by_code", "0000000000000")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()["success"])
+        self.assertIn("No product found", response.json()["message"])
+
+    def test_shopboy_scan_adds_to_shopboy_cart(self):
+        self._login_shopboy()
+
+        result = self._scan("shopboy_add_to_cart_by_code", self.product.code).json()
+
+        self.assertTrue(result["success"])
+        self.assertIn(str(self.product.id), self.client.session["shopboy_cart"])
+
+    def test_shopboy_scan_blocked_when_owner_plan_has_no_barcode(self):
+        self.owner.plan = "growth"
+        self.owner.save(update_fields=["plan"])
+        self._login_shopboy()
+
+        response = self._scan("shopboy_add_to_cart_by_code", self.product.code)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(self.client.session.get("shopboy_cart"))
+
+    def test_pages_show_scan_button_only_when_plan_allows(self):
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("product")), "data-camera-scan-open")
+        self._login_shopboy()
+        self.assertContains(self.client.get(reverse("shopboy_dashboard")), "data-camera-scan-open")
+
+        self.owner.plan = "starter"
+        self.owner.save(update_fields=["plan"])
+        self.assertNotContains(self.client.get(reverse("product")), "data-camera-scan-open")
+        self.assertNotContains(self.client.get(reverse("shopboy_dashboard")), "data-camera-scan-open")
+
+    def test_plain_form_post_still_redirects(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(reverse("add_to_cart_by_code"), data={"code": self.product.code})
+
+        self.assertEqual(response.status_code, 302)
