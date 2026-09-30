@@ -893,9 +893,14 @@
     return write(scopedKey(CART_KEY), cart);
   }
 
+  // The local cart is either a copy of the server cart ("server") or one built while
+  // offline ("offline"). Online, a server copy always follows the server cart so it
+  // never goes stale after an online sale; an unsold offline cart is kept.
   function seedCartFromServer() {
+    if (!document.getElementById("offlineCartMirror")) return;
     const existing = getCart();
-    if (existing.items && existing.items.length) return;
+    const hasLocalItems = !!(existing.items && existing.items.length);
+    if (hasLocalItems && (!navigator.onLine || existing.source === "offline")) return;
     const items = [];
     document.querySelectorAll("[data-offline-cart-item]").forEach((el) => {
       items.push({
@@ -905,17 +910,20 @@
         quantity: Number(el.dataset.productQuantity || 1),
       });
     });
-    if (items.length) setCart({ items });
+    if (items.length || navigator.onLine) setCart({ items, source: "server" });
   }
 
   function renderCart() {
     const host = document.getElementById("offlineCartMirror");
     if (!host) return;
     const cart = getCart();
-    if (!cart.items.length) {
+    // Online, a server copy is already shown by the page itself; only show the
+    // mirror offline or for a cart that was built offline and is not sold yet.
+    const showMirror = cart.items.length && (!navigator.onLine || cart.source === "offline");
+    if (!showMirror) {
       host.innerHTML = "";
       if (window.VilaStoreCart && typeof window.VilaStoreCart.sync === "function") {
-        window.VilaStoreCart.sync(0);
+        window.VilaStoreCart.sync();
       }
       return;
     }
@@ -968,7 +976,7 @@
         quantity: qty,
       });
     }
-    setCart({ items });
+    setCart({ items, source: "offline" });
     updateLocalProductStock(product.id, -qty);
     renderCart();
   }
@@ -989,7 +997,7 @@
         })
         .filter((item) => Number(item.quantity || 0) > 0);
     }
-    setCart({ items });
+    setCart({ items, source: "offline" });
     renderCart();
   }
 

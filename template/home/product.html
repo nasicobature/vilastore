@@ -171,103 +171,140 @@
       </div>
 
       <!-- CART PANEL -->
-      <div class="cart-panel" id="floatingCartPanel" aria-label="Shopping cart">
+      <div class="cart-panel pos-cart" id="floatingCartPanel" aria-label="Shopping cart">
 
-        <div class="floating-cart-panel-header">
-          <h3>Shopping Cart</h3>
+        <div class="floating-cart-panel-header pos-cart-header">
+          <div class="pos-cart-title">
+            <span class="pos-cart-title-icon"><i data-lucide="shopping-bag"></i></span>
+            <div>
+              <h3>Shopping Cart</h3>
+              <p>{% if cart %}{{ cart_count|floatformat:"-2" }} item{{ cart_count|pluralize }} &middot; {{ cart_rows|length }} product{{ cart_rows|length|pluralize }}{% else %}No items yet{% endif %}</p>
+            </div>
+          </div>
           <button type="button" class="floating-cart-close" data-floating-cart-close aria-label="Close cart">
             <i data-lucide="x"></i>
           </button>
         </div>
         <div id="offlineCartMirror"></div>
-        <form method="POST" action="{% url 'add_to_cart_by_code' %}" id="posCodeForm" data-camera-scan-form style="margin-bottom:0.75rem;">
+        <form method="POST" action="{% url 'add_to_cart_by_code' %}" id="posCodeForm" data-camera-scan-form class="pos-cart-code-form">
           {% csrf_token %}
-          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-            <input type="text" name="code" id="productCodeInput" placeholder="Scan or enter code" class="input" style="flex:1;min-width:180px;">
-            <input type="number" name="quantity" min="0.01" step="0.01" placeholder="Qty" class="input" style="width:80px;">
-            {% if camera_scan_enabled %}<button type="button" class="btn btn-outline" data-camera-scan-open>Scan with Camera</button>{% endif %}
-            <button type="submit" class="btn btn-outline">Add by Code</button>
-          </div>
-          <div id="productCodePreview" style="margin-top:0.35rem;font-size:0.85rem;color:var(--muted-foreground);"></div>
+          <fieldset class="pos-cart-code-row">
+            <legend class="sr-only">Add by product code</legend>
+            <label class="pos-cart-code-field">
+              <i data-lucide="barcode"></i>
+              <input type="text" name="code" id="productCodeInput" placeholder="Scan or enter code" autocomplete="off" aria-label="Product code">
+            </label>
+            <input type="number" name="quantity" min="0.01" step="0.01" placeholder="Qty" class="pos-cart-code-qty" aria-label="Quantity">
+            <button type="submit" class="pos-cart-code-add" aria-label="Add by code"><i data-lucide="plus"></i><span>Add</span></button>
+          </fieldset>
+          {% if camera_scan_enabled %}
+          <button type="button" class="pos-cart-camera-btn" data-camera-scan-open>
+            <i data-lucide="scan-barcode"></i> Scan with camera
+          </button>
+          {% endif %}
+          <div id="productCodePreview" class="pos-cart-code-preview"></div>
         </form>
 
         {% if cart %}
-          <ul>
-            {% for key, item in cart.items %}
+          <ul class="pos-cart-items">
+            {% for item in cart_rows %}
               <li
-                style="margin-bottom:10px;"
+                class="pos-cart-item"
                 data-offline-cart-item
-                data-product-id="{{ key }}"
+                data-product-id="{{ item.key }}"
                 data-product-name="{{ item.name|escapejs }}"
                 data-product-price="{{ item.price }}"
                 data-product-quantity="{{ item.quantity }}"
               >
-                <strong>{{ item.name }}</strong><br>
-                {{ item.quantity }} × ₦{{ item.price }}
+                <div class="pos-cart-item-top">
+                  <div class="pos-cart-item-info">
+                    <strong>{{ item.name }}</strong>
+                    <span>&#8358;{{ item.price|floatformat:"2g" }} each</span>
+                  </div>
+                  <div class="pos-cart-item-total">&#8358;{{ item.line_total|floatformat:"2g" }}</div>
+                </div>
 
-                <!-- Update Quantity -->
-                <div>
-                  <form method="POST" action="{% url 'update_cart' key %}" style="display:inline;">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="decrease">
-                    <button type="submit">−</button>
-                  </form>
+                <div class="pos-cart-item-actions">
+                  <div class="pos-cart-stepper">
+                    <form method="POST" action="{% url 'update_cart' item.key %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="decrease">
+                      <button type="submit" aria-label="Decrease quantity"><i data-lucide="minus"></i></button>
+                    </form>
+                    <form method="POST" action="{% url 'update_cart' item.key %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="set">
+                      <input type="number" name="quantity" value="{{ item.quantity }}" min="0" step="0.01" aria-label="Quantity" data-cart-qty-autosubmit>
+                    </form>
+                    <form method="POST" action="{% url 'update_cart' item.key %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="increase">
+                      <button type="submit" aria-label="Increase quantity"><i data-lucide="plus"></i></button>
+                    </form>
+                  </div>
 
-                  <form method="POST" action="{% url 'update_cart' key %}" style="display:inline;">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="increase">
-                    <button type="submit">+</button>
-                  </form>
-
-                  <form method="POST" action="{% url 'update_cart' key %}" style="display:inline;">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="set">
-                    <input type="number" name="quantity" value="{{ item.quantity }}" min="0" step="0.01" style="width:70px;">
-                    <button type="submit" name="action" value="set">Update</button>
-                  </form>
-                  {% if can_edit_price %}
-                  <form method="POST" action="{% url 'update_cart' key %}" style="display:inline;">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="price">
-                    <input type="number" name="price" value="{{ item.price }}" min="0" step="0.01" style="width:90px;">
-                    <button type="submit">Update Price</button>
-                  </form>
-                  {% endif %}
-                  <form method="POST" action="{% url 'remove_from_cart' key %}" style="display:inline;">
-                    {% csrf_token %}
-                    <button type="submit">Remove</button>
-                  </form>
+                  <div class="pos-cart-item-tools">
+                    {% if can_edit_price %}
+                    <details class="pos-cart-price-edit">
+                      <summary aria-label="Edit price"><i data-lucide="pencil"></i><span>Price</span></summary>
+                      <form method="POST" action="{% url 'update_cart' item.key %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="price">
+                        <input type="number" name="price" value="{{ item.price }}" min="0" step="0.01" aria-label="New price">
+                        <button type="submit">Save</button>
+                      </form>
+                    </details>
+                    {% endif %}
+                    <form method="POST" action="{% url 'remove_from_cart' item.key %}">
+                      {% csrf_token %}
+                      <button type="submit" class="pos-cart-remove" aria-label="Remove {{ item.name }}"><i data-lucide="trash-2"></i></button>
+                    </form>
+                  </div>
                 </div>
               </li>
             {% endfor %}
           </ul>
 
-          <hr>
-
-          <p><strong>Total:</strong> ₦{{ cart_total }}</p>
-
-          <form method="POST" action="{% url 'checkout' %}">
-            {% csrf_token %}
-            <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem;">
-              <label style="font-size:0.85rem;color:var(--muted-foreground);">Payment Status</label>
-              <select name="payment_status" class="input" id="paymentStatusSelect">
-                <option value="paid">Paid</option>
-                <option value="loan">Credit</option>
-              </select>
-              <label style="font-size:0.85rem;color:var(--muted-foreground);">Customer Full Name (optional)</label>
-              <input type="text" name="customer_name" class="input" placeholder="e.g. John Doe">
-              <div id="loanPaymentBlock" style="display:none;">
-                <label style="font-size:0.85rem;color:var(--muted-foreground);">Initial Payment (optional)</label>
-                <input type="number" name="initial_payment" min="0" step="0.01" class="input" placeholder="0.00">
-              </div>
+          <div class="pos-cart-footer">
+            <div class="pos-cart-total">
+              <span>Total</span>
+              <strong>&#8358;{{ cart_total|floatformat:"2g" }}</strong>
             </div>
-            <button type="submit" class="btn btn-primary">
-              Complete Sale
-            </button>
-          </form>
+
+            <form method="POST" action="{% url 'checkout' %}" class="pos-cart-checkout">
+              {% csrf_token %}
+              <div class="pos-cart-checkout-fields">
+                <label>
+                  <span>Payment status</span>
+                  <select name="payment_status" class="input" id="paymentStatusSelect">
+                    <option value="paid">Paid</option>
+                    <option value="loan">Credit</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Customer name (optional)</span>
+                  <input type="text" name="customer_name" class="input" placeholder="e.g. John Doe">
+                </label>
+                <div id="loanPaymentBlock" style="display:none;">
+                  <label>
+                    <span>Initial payment (optional)</span>
+                    <input type="number" name="initial_payment" min="0" step="0.01" class="input" placeholder="0.00">
+                  </label>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary pos-cart-complete">
+                <i data-lucide="check-circle-2"></i>
+                Complete Sale &middot; &#8358;{{ cart_total|floatformat:"2g" }}
+              </button>
+            </form>
+          </div>
 
         {% else %}
-          <p>Cart is empty</p>
+          <div class="cart-empty pos-cart-empty">
+            <span class="pos-cart-empty-icon"><i data-lucide="shopping-cart"></i></span>
+            <p>Your cart is empty</p>
+            <span>Tap a product or scan a barcode to start a sale.</span>
+          </div>
         {% endif %}
 
       </div>

@@ -127,6 +127,22 @@ def _cart_quantity(item):
         return Decimal("0.00")
 
 
+def _cart_rows(cart):
+    """Cart items for display, each with its line total (does not modify the session cart)."""
+    rows = []
+    for key, item in cart.items():
+        price = Decimal(str(item.get("price") or 0))
+        quantity = _cart_quantity(item)
+        rows.append({
+            "key": key,
+            "name": item.get("name", ""),
+            "price": item.get("price"),
+            "quantity": item.get("quantity"),
+            "line_total": (price * quantity).quantize(Decimal("0.01")),
+        })
+    return rows
+
+
 def _cart_money(value, default=Decimal("0.00")):
     try:
         amount = Decimal(str(value if value not in (None, "") else default))
@@ -520,7 +536,7 @@ def healthz(request):
 
 def service_worker(request):
     script = """
-const CACHE_NAME = "vilastore-web-offline-v6";
+const CACHE_NAME = "vilastore-web-offline-v7";
 const STATIC_ASSETS = [
   "/static/css/styles.css",
   "/static/js/app.js",
@@ -792,6 +808,8 @@ def product(request):
     return render(request, 'home/product.html', {
         'products': products,
         'cart': cart,
+        'cart_rows': _cart_rows(cart),
+        'cart_count': sum((_cart_quantity(item) for item in cart.values()), Decimal("0.00")),
         'cart_total': total.quantize(Decimal("0.01")),
         'categories': categories,
         'selected_category': category_id,
@@ -5382,6 +5400,7 @@ def shopboy_dashboard(request):
         "selected_category": category_id,
         "search_query": search_query,
         "cart": cart,
+        "cart_rows": _cart_rows(cart),
         "cart_count": cart_count,
         "cart_total": total.quantize(Decimal("0.01")),
         "last_sale": last_sale,

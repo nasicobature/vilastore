@@ -325,86 +325,109 @@
         </div>
       </div>
 
-      <div class="cart-panel" id="floatingCartPanel" aria-label="Customer cart">
-        <div class="floating-cart-panel-header">
-          <h3>Customer Cart</h3>
+      <div class="cart-panel pos-cart" id="floatingCartPanel" aria-label="Customer cart">
+        <div class="floating-cart-panel-header pos-cart-header">
+          <div class="pos-cart-title">
+            <span class="pos-cart-title-icon"><i data-lucide="shopping-bag"></i></span>
+            <div>
+              <h3>Customer Cart</h3>
+              <p>{% if cart %}{{ cart_count|floatformat:"-2" }} item{{ cart_count|pluralize }} &middot; {{ cart_rows|length }} product{{ cart_rows|length|pluralize }}{% else %}No items yet{% endif %}</p>
+            </div>
+          </div>
           <button type="button" class="floating-cart-close" data-floating-cart-close aria-label="Close cart">
             <i data-lucide="x"></i>
           </button>
         </div>
-        <form method="POST" action="{% url 'shopboy_add_to_cart_by_code' %}" id="shopboyCodeForm" data-camera-scan-form style="margin-bottom:0.75rem;">
+        <form method="POST" action="{% url 'shopboy_add_to_cart_by_code' %}" id="shopboyCodeForm" data-camera-scan-form class="pos-cart-code-form">
           {% csrf_token %}
-          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-            <input type="text" name="code" id="shopboyCodeInput" placeholder="Scan or enter code" class="input" style="flex:1;min-width:180px;">
-            <input type="number" name="quantity" min="0.01" step="0.01" placeholder="Qty" class="input" style="width:80px;">
-            {% if camera_scan_enabled %}<button type="button" class="btn btn-outline" data-camera-scan-open>Scan with Camera</button>{% endif %}
-            <button type="submit" class="btn btn-outline">Add by Code</button>
-          </div>
-          <div id="shopboyCodePreview" style="margin-top:0.35rem;font-size:0.85rem;color:var(--muted-foreground);"></div>
+          <fieldset class="pos-cart-code-row">
+            <legend class="sr-only">Add by product code</legend>
+            <label class="pos-cart-code-field">
+              <i data-lucide="barcode"></i>
+              <input type="text" name="code" id="shopboyCodeInput" placeholder="Scan or enter code" autocomplete="off" aria-label="Product code">
+            </label>
+            <input type="number" name="quantity" min="0.01" step="0.01" placeholder="Qty" class="pos-cart-code-qty" aria-label="Quantity">
+            <button type="submit" class="pos-cart-code-add" aria-label="Add by code"><i data-lucide="plus"></i><span>Add</span></button>
+          </fieldset>
+          {% if camera_scan_enabled %}
+          <button type="button" class="pos-cart-camera-btn" data-camera-scan-open>
+            <i data-lucide="scan-barcode"></i> Scan with camera
+          </button>
+          {% endif %}
+          <div id="shopboyCodePreview" class="pos-cart-code-preview"></div>
         </form>
         <div id="offlineCartMirror"></div>
 
         {% if cart %}
-          <ul>
-            {% for key, item in cart.items %}
+          <ul class="pos-cart-items">
+            {% for item in cart_rows %}
               <li
-                style="margin-bottom:10px;"
+                class="pos-cart-item"
                 data-offline-cart-item
-                data-product-id="{{ key }}"
+                data-product-id="{{ item.key }}"
                 data-product-name="{{ item.name|escapejs }}"
                 data-product-price="{{ item.price }}"
                 data-product-quantity="{{ item.quantity }}"
               >
-                <strong>{{ item.name }}</strong><br>
-                {{ item.quantity }} × &#8358;{{ item.price }}
+                <div class="pos-cart-item-top">
+                  <div class="pos-cart-item-info">
+                    <strong>{{ item.name }}</strong>
+                    <span>&#8358;{{ item.price|floatformat:"2g" }} each</span>
+                  </div>
+                  <div class="pos-cart-item-total">&#8358;{{ item.line_total|floatformat:"2g" }}</div>
+                </div>
 
-                <div>
-                  <form method="POST" action="{% url 'shopboy_update_cart' key %}" style="display:inline;">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="decrease">
-                    <button type="submit">-</button>
-                  </form>
+                <div class="pos-cart-item-actions">
+                  <div class="pos-cart-stepper">
+                    <form method="POST" action="{% url 'shopboy_update_cart' item.key %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="decrease">
+                      <button type="submit" aria-label="Decrease quantity"><i data-lucide="minus"></i></button>
+                    </form>
+                    <form method="POST" action="{% url 'shopboy_update_cart' item.key %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="set">
+                      <input type="number" name="quantity" value="{{ item.quantity }}" min="0" step="0.01" aria-label="Quantity" data-cart-qty-autosubmit>
+                    </form>
+                    <form method="POST" action="{% url 'shopboy_update_cart' item.key %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="increase">
+                      <button type="submit" aria-label="Increase quantity"><i data-lucide="plus"></i></button>
+                    </form>
+                  </div>
 
-                  <form method="POST" action="{% url 'shopboy_update_cart' key %}" style="display:inline;">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="increase">
-                    <button type="submit">+</button>
-                  </form>
-
-                  <form method="POST" action="{% url 'shopboy_update_cart' key %}" style="display:inline;">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="set">
-                    <input type="number" name="quantity" value="{{ item.quantity }}" min="0" step="0.01" style="width:70px;">
-                    <button type="submit" name="action" value="set">Update</button>
-                  </form>
-<form method="POST" action="{% url 'shopboy_remove_from_cart' key %}" style="display:inline;">
-                    {% csrf_token %}
-                    <button type="submit">Remove</button>
-                  </form>
+                  <div class="pos-cart-item-tools">
+                    <form method="POST" action="{% url 'shopboy_remove_from_cart' item.key %}">
+                      {% csrf_token %}
+                      <button type="submit" class="pos-cart-remove" aria-label="Remove {{ item.name }}"><i data-lucide="trash-2"></i></button>
+                    </form>
+                  </div>
                 </div>
               </li>
             {% endfor %}
           </ul>
 
-          <hr>
-
-          <p><strong>Total:</strong> &#8358;{{ cart_total }}</p>
-
-          <form method="POST" action="{% url 'shopboy_checkout' %}" class="shopboy-drawer-checkout">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-primary shopboy-complete-sale-btn" data-complete-sale-button>
-              <i data-lucide="check-circle-2"></i>
-              Complete Sale
-            </button>
-          </form>
+          <div class="pos-cart-footer">
+            <div class="pos-cart-total">
+              <span>Total</span>
+              <strong>&#8358;{{ cart_total|floatformat:"2g" }}</strong>
+            </div>
+            <form method="POST" action="{% url 'shopboy_checkout' %}" class="shopboy-drawer-checkout pos-cart-checkout">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary shopboy-complete-sale-btn pos-cart-complete" data-complete-sale-button>
+                <i data-lucide="check-circle-2"></i>
+                Complete Sale &middot; &#8358;{{ cart_total|floatformat:"2g" }}
+              </button>
+            </form>
+          </div>
 
         {% else %}
-          <div class="cart-empty">
-            <i data-lucide="shopping-cart"></i>
+          <div class="cart-empty pos-cart-empty">
+            <span class="pos-cart-empty-icon"><i data-lucide="shopping-cart"></i></span>
             <p>Cart is empty</p>
             <span>Add products before completing a sale.</span>
           </div>
-          <button type="button" class="btn btn-primary shopboy-complete-sale-btn" disabled>
+          <button type="button" class="btn btn-primary shopboy-complete-sale-btn pos-cart-complete" disabled>
             <i data-lucide="check-circle-2"></i>
             Complete Sale
           </button>

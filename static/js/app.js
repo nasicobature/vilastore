@@ -5,6 +5,17 @@ document.addEventListener('DOMContentLoaded', function() {
   lucide.createIcons();
 });
 
+// Cart quantity boxes save as soon as the number is changed (no separate Update button).
+document.addEventListener('change', function(event) {
+  const input = event.target;
+  if (!input.matches || !input.matches('[data-cart-qty-autosubmit]') || !input.form) return;
+  if (input.form.requestSubmit) {
+    input.form.requestSubmit();
+  } else {
+    input.form.submit();
+  }
+});
+
 function initMobileDashboardNav() {
   const appContainer = document.querySelector('.app-container');
   const sidebar = appContainer ? appContainer.querySelector(':scope > .sidebar') : null;
