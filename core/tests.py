@@ -725,6 +725,7 @@ class SubscriptionEntitlementTests(TestCase):
             address="20 Market Road",
             country="Nigeria",
             plan="starter",
+            is_paid=True,
             subscription_active_until=self.future_date,
         )
         ShopBranch.objects.create(user=self.owner, name="Main Branch", address=self.owner.address, is_default=True)
@@ -746,16 +747,23 @@ class SubscriptionEntitlementTests(TestCase):
         self.assertTrue(response.json()["success"])
         self.assertTrue(response.json()["code"])
 
-    def test_starter_cannot_add_shopboy(self):
+    def test_starter_can_add_only_one_shopboy(self):
         self.client.force_login(self.owner)
-        response = self.client.post(
+        self.client.post(
             reverse("add_shopboy"),
             data={"full_name": "Staff One", "username": "staffone", "password": "Pass123!"},
             follow=True,
         )
+        self.assertEqual(ShopBoy.objects.filter(user=self.owner).count(), 1)
 
-        self.assertEqual(ShopBoy.objects.filter(user=self.owner).count(), 0)
-        self.assertContains(response, "staff")
+        response = self.client.post(
+            reverse("add_shopboy"),
+            data={"full_name": "Staff Two", "username": "stafftwo", "password": "Pass123!"},
+            follow=True,
+        )
+
+        self.assertEqual(ShopBoy.objects.filter(user=self.owner).count(), 1)
+        self.assertContains(response, "staff limit")
 
     def test_growth_allows_customer_profile_details(self):
         self.owner.plan = "growth"
@@ -776,27 +784,24 @@ class SubscriptionEntitlementTests(TestCase):
         customer = Customer.objects.get(user=self.owner)
         self.assertEqual(customer.email, "amina@example.com")
 
-    def test_growth_can_add_second_branch_but_not_third(self):
+    def test_growth_can_add_up_to_three_branches_but_not_fourth(self):
         self.owner.plan = "growth"
         self.owner.save(update_fields=["plan"])
         self.client.force_login(self.owner)
 
-        second_response = self.client.post(
-            reverse("add_branch"),
-            data={"name": "Second Branch", "address": "22 Market Road"},
-        )
+        for name, address in (("Second Branch", "22 Market Road"), ("Third Branch", "33 Market Road")):
+            response = self.client.post(reverse("add_branch"), data={"name": name, "address": address})
+            self.assertEqual(response.status_code, 302)
+        self.assertEqual(ShopBranch.objects.filter(user=self.owner, is_active=True).count(), 3)
 
-        self.assertEqual(second_response.status_code, 302)
-        self.assertEqual(ShopBranch.objects.filter(user=self.owner, is_active=True).count(), 2)
-
-        third_response = self.client.post(
+        fourth_response = self.client.post(
             reverse("add_branch"),
-            data={"name": "Third Branch", "address": "33 Market Road"},
+            data={"name": "Fourth Branch", "address": "44 Market Road"},
             follow=True,
         )
 
-        self.assertEqual(ShopBranch.objects.filter(user=self.owner, is_active=True).count(), 2)
-        self.assertContains(third_response, "Growth plan has reached its branch limit")
+        self.assertEqual(ShopBranch.objects.filter(user=self.owner, is_active=True).count(), 3)
+        self.assertContains(fourth_response, "Growth plan has reached its branch limit")
 
     def test_starter_blocks_customer_profile_details(self):
         self.client.force_login(self.owner)
