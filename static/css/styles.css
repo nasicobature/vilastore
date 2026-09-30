@@ -1545,6 +1545,18 @@ body.floating-cart-open .floating-scan-button {
   display: none;
 }
 
+/* The online/offline pill (added by offline-web.js with inline styles) sits
+   in the same row as the cart button, just to its left, instead of on top of it. */
+body.has-floating-cart #offlineStatusButton {
+  right: calc(max(1.25rem, env(safe-area-inset-right, 0px)) + 76px) !important;
+  bottom: calc(max(1.25rem, env(safe-area-inset-bottom, 0px)) + 10px) !important;
+}
+
+body.floating-cart-open #offlineStatusButton,
+body.floating-cart-open #offlineStatusDrawer {
+  display: none !important;
+}
+
 .floating-cart-button-empty,
 .floating-cart-button[hidden] {
   display: none;

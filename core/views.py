@@ -520,7 +520,7 @@ def healthz(request):
 
 def service_worker(request):
     script = """
-const CACHE_NAME = "vilastore-web-offline-v5";
+const CACHE_NAME = "vilastore-web-offline-v6";
 const STATIC_ASSETS = [
   "/static/css/styles.css",
   "/static/js/app.js",

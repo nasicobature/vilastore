@@ -191,6 +191,7 @@ function syncFloatingCartState(overrideCount) {
 
   openButton.hidden = count <= 0;
   openButton.classList.toggle('floating-cart-button-empty', count <= 0);
+  document.body.classList.toggle('has-floating-cart', count > 0);
 
   if (count <= 0 && document.body.classList.contains('floating-cart-open')) {
     document.body.classList.remove('floating-cart-open');
