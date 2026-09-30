@@ -1765,3 +1765,39 @@ class CameraScanCartTests(TestCase):
         response = self.client.post(reverse("add_to_cart_by_code"), data={"code": self.product.code})
 
         self.assertEqual(response.status_code, 302)
+
+
+class InventoryEntitlementDisplayTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="inventory-plan-owner",
+            email="inventory-plan@example.com",
+            password="TestPass123!",
+            account_type=User.ACCOUNT_TYPE_SHOP,
+            business_name="Inventory Plan Shop",
+            business_type="Retail",
+            state="Lagos",
+            phone="08000005001",
+            address="7 Stock Road",
+            country="Nigeria",
+            plan="business",
+            is_paid=True,
+            subscription_active_until=timezone.localdate() + timedelta(days=30),
+        )
+        ShopBranch.objects.create(user=self.owner, name="Main Branch", address=self.owner.address, is_default=True)
+        self.client.force_login(self.owner)
+
+    def test_business_plan_sees_print_labels(self):
+        response = self.client.get(reverse("inventory"))
+
+        self.assertContains(response, "Print Labels")
+        self.assertNotContains(response, "Labels locked")
+        self.assertNotContains(response, "Barcode/SKU tools are locked")
+
+    def test_starter_plan_sees_labels_locked(self):
+        self.owner.plan = "starter"
+        self.owner.save(update_fields=["plan"])
+
+        response = self.client.get(reverse("inventory"))
+
+        self.assertContains(response, "Labels locked")

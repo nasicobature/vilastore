@@ -1255,6 +1255,7 @@ def inventory(request):
         'search_query': search_query,
         'branches': branches,
         'selected_branch': selected_branch,
+        'entitlements': _feature_entitlements(request.user),
     }
 
     return render(request, 'home/inventory.html', context)
