@@ -1,320 +1,208 @@
-{% extends 'edu/base.html' %}
+{% extends 'edu/auth_base.html' %}
 
-{% block content %}
-<div class="registration-shell">
-  <div class="registration-container">
-    <a href="/edu/" class="registration-back">
-      <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Edu Portal
-    </a>
+{% block card_width %}max-w-lg{% endblock %}
 
-    <div class="registration-header">
-      <div class="registration-mark bg-primary">
-        <i data-lucide="school" class="text-primary-foreground"></i>
-      </div>
-      <div>
-        <p class="registration-eyebrow">Register School</p>
-        <h1 class="registration-title">Create your school portal</h1>
-        <p class="registration-copy">Complete the school profile, create the first admin account, choose a package, set your portal name, and start the 3-day free trial.</p>
-      </div>
-    </div>
+{% block top_link %}Already registered? <a href="{% url 'edu:login' %}" class="font-semibold text-primary hover:underline">Sign in</a>{% endblock %}
 
-    <div class="registration-card">
-      {% if duplicate_institution and duplicate_portal_url %}
-        <div class="mb-5 rounded-2xl border border-primary/25 bg-primary/10 p-5">
-          <p class="text-sm font-semibold text-primary">School portal already exists</p>
-          <h2 class="font-display text-xl font-bold mt-1">{{ duplicate_institution.name }}</h2>
-          <p class="text-sm text-muted-foreground mt-2">Use this working portal link to log in, or choose a different portal name to register another school.</p>
-          <div class="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center">
-            <code class="rounded-lg border border-border bg-background px-3 py-2 text-sm break-all">{{ duplicate_portal_url }}</code>
-            <a href="{{ duplicate_portal_url }}" class="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold hover:bg-primary/90">Go to Portal</a>
-          </div>
-        </div>
-      {% endif %}
+{% block side_content %}
+<p class="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white"><i data-lucide="sparkles" class="w-3.5 h-3.5"></i> 3 days free &middot; no card needed</p>
+<h2 class="font-display text-3xl xl:text-4xl font-bold text-white leading-tight mt-5">Set up your school<br>in about a minute.</h2>
+<ol class="mt-8 space-y-4 text-sm">
+  <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">1</span><span><strong class="block text-white">Tell us about your school</strong>Just the name and type.</span></li>
+  <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">2</span><span><strong class="block text-white">Create your admin account</strong>You sign in with your email.</span></li>
+  <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">3</span><span><strong class="block text-white">Start using your portal</strong>Add classes, staff and students right away.</span></li>
+</ol>
+{% endblock %}
 
-      <ol class="wizard-steps" data-wizard-steps>
-        <li class="wizard-step is-active" data-step-indicator="0"><span>1</span><strong>School</strong></li>
-        <li class="wizard-step" data-step-indicator="1"><span>2</span><strong>Admin</strong></li>
-        <li class="wizard-step" data-step-indicator="2"><span>3</span><strong>Package</strong></li>
-        <li class="wizard-step" data-step-indicator="3"><span>4</span><strong>Portal</strong></li>
-        <li class="wizard-step" data-step-indicator="4"><span>5</span><strong>Confirm</strong></li>
-      </ol>
-
-      <form method="post" enctype="multipart/form-data" class="wizard-form" data-registration-wizard data-school-register-form novalidate>
-        {% csrf_token %}
-        <div class="wizard-alert" data-wizard-error hidden></div>
-
-        <section class="wizard-panel is-active" data-wizard-panel>
-          <div class="section-heading">
-            <h2>School Information</h2>
-            <p>Add the basic school details. No CAC, TIN, license number, owner NIN, or document upload is required.</p>
-          </div>
-          <div class="form-grid">
-            <label class="field-block field-wide">School Name *
-              <input type="text" name="institution_name" required data-school-name data-review-label="School Name" />
-            </label>
-            <label class="field-block">School Type *
-              <select name="institution_type" required data-review-label="School Type">
-                {% for value, label in type_choices %}
-                  <option value="{{ value }}" {% if value == default_school_type %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label class="field-block">State *
-              <input type="text" name="state" required data-review-label="State" />
-            </label>
-            <label class="field-block">LGA *
-              <input type="text" name="lga" required data-review-label="LGA" />
-            </label>
-            <label class="field-block">School Phone *
-              <input type="text" name="phone_number" required data-review-label="School Phone" />
-            </label>
-            <label class="field-block">School Email *
-              <input type="email" name="email" required data-review-label="School Email" />
-            </label>
-            <label class="field-block field-wide">School Address *
-              <input type="text" name="address" required data-review-label="School Address" />
-            </label>
-            <label class="field-block field-wide">School Logo
-              <input type="file" name="logo" accept="image/*" data-review-label="School Logo" />
-            </label>
-          </div>
-        </section>
-
-        <section class="wizard-panel" data-wizard-panel>
-          <div class="section-heading">
-            <h2>Administrator Account</h2>
-            <p>The person registered here becomes the first School Admin for this portal.</p>
-          </div>
-          <div class="form-grid">
-            <label class="field-block field-wide">Administrator Full Name *
-              <input type="text" name="admin_full_name" required data-review-label="Administrator Full Name" />
-            </label>
-            <label class="field-block">Email *
-              <input type="email" name="admin_email" required data-review-label="Administrator Email" />
-            </label>
-            <label class="field-block">Phone Number *
-              <input type="text" name="admin_phone" required data-review-label="Administrator Phone" />
-            </label>
-            <label class="field-block">Password *
-              <input type="password" name="admin_password" required minlength="6" />
-            </label>
-            <label class="field-block">Confirm Password *
-              <input type="password" name="confirm_password" required minlength="6" />
-            </label>
-          </div>
-        </section>
-
-        <section class="wizard-panel" data-wizard-panel>
-          {% include 'edu/partials/pricing_cards.html' with pricing_mode='registration' billing_input_name='subscription_billing_cycle' selected_billing_cycle=default_subscription_cycle selected_package_code=default_subscription_package %}
-        </section>
-
-        <section class="wizard-panel" data-wizard-panel>
-          <div class="section-heading">
-            <h2>School Portal</h2>
-            <p>Your portal name is generated from the school name, and you can edit it before creating the school.</p>
-          </div>
-          <div class="portal-preview-card">
-            <span>Your School Portal</span>
-            <strong data-portal-preview>vilastore.store/edu/portal/yourschool</strong>
-            <small>Staff, students, and parents will log in from this school-specific portal.</small>
-          </div>
-          <div class="form-grid">
-            <label class="field-block field-wide">School portal name *
-              <div class="subdomain-input-row">
-                <span>vilastore.store/edu/portal/</span>
-                <input type="text" name="school_code" required placeholder="brightfuture" data-school-code data-review-label="School Portal" />
-              </div>
-              <small class="availability-message" data-subdomain-message>Enter a school name to generate your portal.</small>
-            </label>
-          </div>
-        </section>
-
-        <section class="wizard-panel" data-wizard-panel>
-          <div class="section-heading">
-            <h2>Confirmation</h2>
-            <p>Review the selected school, package, billing, free trial, and portal before creating the account.</p>
-          </div>
-          <div class="trial-start-card">
-            <div>
-              <span>Free Trial</span>
-              <strong>3 days free</strong>
-              <small>No payment is required now. Payment is due only after the trial expires.</small>
-            </div>
-            <i data-lucide="badge-check"></i>
-          </div>
-          <input type="hidden" value="3 Days" data-review-label="Free Trial" />
-          <input type="hidden" value="" data-selected-student-limit data-review-label="Student Limit" />
-          <input type="hidden" value="" data-selected-student-range data-review-label="Student Range" />
-          <div class="review-grid" data-review-output></div>
-          <div class="verification-notice">
-            <i data-lucide="shield-check"></i>
-            <div>
-              <strong>Create School & Start Free Trial</strong>
-              <p>The school, admin account, unique portal, and trial activation are saved together.</p>
-            </div>
-          </div>
-        </section>
-
-        <div class="wizard-actions">
-          <button type="button" class="wizard-btn wizard-btn-secondary" data-wizard-prev>Back</button>
-          <button type="button" class="wizard-btn wizard-btn-primary" data-wizard-next>Continue</button>
-          <button type="submit" class="wizard-btn wizard-btn-primary" data-wizard-submit data-subdomain-submit hidden>Create School & Start Free Trial</button>
-        </div>
-      </form>
-    </div>
-  </div>
+{% block form_card %}
+<div>
+  <h1 class="font-display text-3xl font-bold">Create your school portal</h1>
+  <p class="text-muted-foreground mt-2">Free for {{ trial_days|default:3 }} days. You only choose a plan when you're ready to pay.</p>
 </div>
 
+{% if duplicate_institution and duplicate_portal_url %}
+  <div class="mt-6 rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm">
+    <p class="font-semibold">{{ duplicate_institution.name }} already has a portal</p>
+    <a href="{{ duplicate_portal_url }}" class="mt-1 inline-flex items-center gap-1 font-medium text-primary hover:underline break-all">{{ duplicate_portal_url }} <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i></a>
+  </div>
+{% endif %}
 
+<form method="post" enctype="multipart/form-data" class="mt-8 space-y-5" data-school-register-form novalidate>
+  {% csrf_token %}
+  <input type="hidden" name="subscription_package" value="{{ default_subscription_package }}" />
+  <input type="hidden" name="subscription_billing_cycle" value="{{ default_subscription_cycle }}" />
 
+  <fieldset>
+    <legend class="block text-sm font-semibold mb-2">Type of school</legend>
+    <div class="grid grid-cols-2 gap-3">
+      {% for value, label in type_choices %}
+        <label class="relative cursor-pointer school-type-option">
+          <input type="radio" name="institution_type" value="{{ value }}" class="peer sr-only"
+            {% if form.institution_type %}{% if form.institution_type == value %}checked{% endif %}{% elif value == default_school_type %}checked{% endif %} />
+          <span class="flex items-center gap-3 rounded-xl border-2 border-border bg-card p-3.5 transition">
+            <span class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+              <i data-lucide="{% if value == 'tertiary' %}landmark{% else %}school{% endif %}" class="w-5 h-5"></i>
+            </span>
+            <span class="text-sm font-semibold leading-tight">{% if value == 'tertiary' %}University / College{% else %}Primary / Secondary{% endif %}</span>
+          </span>
+        </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <div>
+    <label for="reg-school-name" class="block text-sm font-semibold mb-2">School name</label>
+    <input id="reg-school-name" type="text" name="institution_name" value="{{ form.institution_name }}" required autocomplete="organization" data-school-name
+      placeholder="e.g. Bright Future Academy"
+      class="w-full h-12 px-4 rounded-xl border border-input bg-card text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition" />
+    <div class="mt-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground" data-portal-box>
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1" data-portal-display>
+        <i data-lucide="link" class="w-3.5 h-3.5"></i>
+        <span>Your portal: <strong class="text-foreground break-all" data-portal-preview>vilastore.store/edu/portal/yourschool</strong></span>
+        <span data-subdomain-message></span>
+        <button type="button" class="font-semibold text-primary hover:underline" data-edit-portal>Change</button>
+      </div>
+      <div class="hidden mt-1" data-portal-editor>
+        <label for="reg-school-code" class="sr-only">Portal address</label>
+        <div class="flex items-center rounded-lg border border-input bg-card focus-within:ring-2 focus-within:ring-primary/40 overflow-hidden">
+          <span class="pl-3 pr-1 text-muted-foreground whitespace-nowrap">…/portal/</span>
+          <input id="reg-school-code" type="text" name="school_code" value="{{ form.school_code }}" autocapitalize="none" spellcheck="false" data-school-code
+            class="flex-1 min-w-0 h-9 pr-3 bg-transparent text-sm text-foreground focus:outline-none" placeholder="yourschool" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <label for="reg-admin-name" class="block text-sm font-semibold mb-2">Your full name</label>
+    <input id="reg-admin-name" type="text" name="admin_full_name" value="{{ form.admin_full_name }}" required autocomplete="name"
+      placeholder="e.g. Aisha Bello"
+      class="w-full h-12 px-4 rounded-xl border border-input bg-card text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition" />
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+    <div>
+      <label for="reg-email" class="block text-sm font-semibold mb-2">Email</label>
+      <input id="reg-email" type="email" name="admin_email" value="{{ form.admin_email }}" required autocomplete="email" autocapitalize="none" spellcheck="false"
+        placeholder="you@school.com"
+        class="w-full h-12 px-4 rounded-xl border border-input bg-card text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition" />
+    </div>
+    <div>
+      <label for="reg-phone" class="block text-sm font-semibold mb-2">Phone number</label>
+      <input id="reg-phone" type="tel" name="admin_phone" value="{{ form.admin_phone }}" required autocomplete="tel" inputmode="tel"
+        placeholder="0803 000 0000"
+        class="w-full h-12 px-4 rounded-xl border border-input bg-card text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition" />
+    </div>
+  </div>
+
+  <div>
+    <label for="reg-password" class="block text-sm font-semibold mb-2">Create a password</label>
+    {% include 'edu/partials/password_field.html' with field_id='reg-password' field_name='admin_password' autocomplete='new-password' minlength=6 placeholder='At least 6 characters' %}
+  </div>
+
+  <details class="group rounded-xl border border-border bg-card" {% if form.address or form.state or form.lga %}open{% endif %}>
+    <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold">
+      <span>Add school address &amp; logo <span class="font-normal text-muted-foreground">(optional)</span></span>
+      <i data-lucide="chevron-down" class="w-4 h-4 transition group-open:rotate-180"></i>
+    </summary>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 px-4 pb-4">
+      <div class="sm:col-span-2">
+        <label for="reg-address" class="block text-xs font-semibold mb-1.5">Address</label>
+        <input id="reg-address" type="text" name="address" value="{{ form.address }}" autocomplete="street-address" class="w-full h-11 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+      </div>
+      <div>
+        <label for="reg-state" class="block text-xs font-semibold mb-1.5">State</label>
+        <input id="reg-state" type="text" name="state" value="{{ form.state }}" class="w-full h-11 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+      </div>
+      <div>
+        <label for="reg-lga" class="block text-xs font-semibold mb-1.5">LGA</label>
+        <input id="reg-lga" type="text" name="lga" value="{{ form.lga }}" class="w-full h-11 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+      </div>
+      <div class="sm:col-span-2">
+        <label for="reg-logo" class="block text-xs font-semibold mb-1.5">School logo</label>
+        <input id="reg-logo" type="file" name="logo" accept="image/*" class="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary" />
+      </div>
+    </div>
+  </details>
+
+  <button type="submit" data-submit-label="Creating your portal…" class="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-70 transition">
+    <span data-submit-text>Create my school portal</span>
+    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+  </button>
+  <p class="text-center text-xs text-muted-foreground">Your free trial starts now. No payment needed today.</p>
+</form>
+
+<style>
+  .school-type-option input:checked + span { border-color: hsl(var(--primary)); background-color: hsl(var(--primary) / 0.06); }
+  .school-type-option input:focus-visible + span { box-shadow: 0 0 0 3px hsl(var(--primary) / 0.3); }
+</style>
 <script>
   (function () {
-    const form = document.querySelector('[data-school-register-form]');
+    var form = document.querySelector('[data-school-register-form]');
     if (!form) return;
+    var schoolName = form.querySelector('[data-school-name]');
+    var schoolCode = form.querySelector('[data-school-code]');
+    var preview = form.querySelector('[data-portal-preview]');
+    var message = form.querySelector('[data-subdomain-message]');
+    var editor = form.querySelector('[data-portal-editor]');
+    var editButton = form.querySelector('[data-edit-portal]');
+    var checkUrl = "{% url 'edu:subdomain_check' %}";
+    var editing = !!schoolCode.value;
+    var timer = null;
 
-    const schoolName = form.querySelector('[data-school-name]');
-    const schoolCode = form.querySelector('[data-school-code]');
-    const portalPreview = form.querySelector('[data-portal-preview]');
-    const message = form.querySelector('[data-subdomain-message]');
-    const submitButton = form.querySelector('[data-subdomain-submit]');
-    const billingInputs = Array.from(form.querySelectorAll('[data-billing-cycle]'));
-    const packageInputs = Array.from(form.querySelectorAll('[data-package-option]'));
-    const studentLimitInput = form.querySelector('[data-selected-student-limit]');
-    const studentRangeInput = form.querySelector('[data-selected-student-range]');
-    const checkUrl = "{% url 'edu:subdomain_check' %}";
-    let userEditedCode = false;
-    let availabilityTimer = null;
-    let latestAvailability = false;
-
-    const slugify = (value) => (value || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9-]+/g, '')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 63);
-
-    const setAvailability = (state, text) => {
-      latestAvailability = state === 'available';
-      if (message) {
-        message.textContent = text;
-        message.classList.toggle('is-available', state === 'available');
-        message.classList.toggle('is-unavailable', state === 'unavailable');
-      }
-      if (submitButton) {
-        submitButton.disabled = !latestAvailability;
-      }
-    };
-
-    const updatePreview = () => {
-      const subdomain = slugify(schoolCode.value);
-      schoolCode.value = subdomain;
-      if (portalPreview) {
-        portalPreview.textContent = subdomain ? `vilastore.store/edu/portal/${subdomain}` : 'vilastore.store/edu/portal/yourschool';
-      }
-      return subdomain;
-    };
-
-    const checkAvailability = () => {
-      const subdomain = updatePreview();
-      window.clearTimeout(availabilityTimer);
-      if (!subdomain) {
-        setAvailability('unavailable', 'Enter a school portal name.');
-        return;
-      }
-      setAvailability('checking', 'Checking portal availability...');
-      availabilityTimer = window.setTimeout(() => {
-        fetch(`${checkUrl}?subdomain=${encodeURIComponent(subdomain)}`)
-          .then((response) => response.json())
-          .then((data) => {
-            const state = data.available ? 'available' : 'unavailable';
-            setAvailability(state, data.available ? 'Portal name available.' : data.message);
-            if (data.subdomain && data.subdomain !== schoolCode.value) {
-              schoolCode.value = data.subdomain;
-              updatePreview();
-            }
-          })
-          .catch(() => setAvailability('unavailable', 'Could not check availability. Please try again.'));
-      }, 280);
-    };
-
-    if (schoolName && schoolCode) {
-      schoolName.addEventListener('input', () => {
-        if (!userEditedCode) {
-          schoolCode.value = slugify(schoolName.value);
-        }
-        checkAvailability();
-      });
-      schoolCode.addEventListener('input', () => {
-        userEditedCode = true;
-        checkAvailability();
-      });
+    function slugify(value) {
+      return (value || '').toLowerCase().replace(/[^a-z0-9-]+/g, '').replace(/^-+|-+$/g, '').slice(0, 63);
     }
 
-    form.addEventListener('submit', (event) => {
-      if (!latestAvailability) {
-        event.preventDefault();
-        setAvailability('unavailable', 'Check and choose an available portal name before registration.');
-      }
-    });
+    function setMessage(state, text) {
+      message.textContent = text;
+      message.className = state === 'ok' ? 'font-semibold text-success' : state === 'taken' ? 'font-semibold text-destructive' : '';
+    }
 
-    const selectedBilling = () => {
-      const selected = billingInputs.find((input) => input.checked);
-      return selected ? selected.value : 'termly';
-    };
+    function currentSlug() {
+      return editing ? slugify(schoolCode.value) : slugify(schoolName.value);
+    }
 
-    const syncPackagePrices = () => {
-      const cycle = selectedBilling();
-      packageInputs.forEach((input) => {
-        const card = input.closest('[data-package-card]');
-        const price = card ? card.querySelector('[data-package-price]') : null;
-        const label = card ? card.querySelector('[data-package-billing-label]') : null;
-        if (price) {
-          price.textContent = cycle === 'session' ? input.dataset.sessionPrice : input.dataset.termPrice;
-        }
-        if (label) {
-          label.textContent = cycle === 'session' ? 'per session' : 'per term';
-        }
-      });
-      const selectedPackage = packageInputs.find((input) => input.checked);
-      if (studentLimitInput && selectedPackage) {
-        studentLimitInput.value = selectedPackage.value === 'enterprise-plus'
-          ? 'Unlimited above 750 students'
-          : `${Number(selectedPackage.dataset.studentLimit || 0).toLocaleString()} students`;
-      }
-      if (studentRangeInput && selectedPackage) {
-        studentRangeInput.value = selectedPackage.dataset.studentRange || '';
-      }
-      packageInputs.forEach((input) => {
-        const card = input.closest('[data-package-card]');
-        const buttonText = card ? card.querySelector('[data-package-select-text]') : null;
-        if (card) {
-          card.classList.toggle('is-selected', input.checked);
-        }
-        if (buttonText) {
-          buttonText.textContent = input.checked ? 'Selected ✓' : 'Select Package';
-        }
-      });
-    };
+    function refresh() {
+      var slug = currentSlug();
+      preview.textContent = 'vilastore.store/edu/portal/' + (slug || 'yourschool');
+      window.clearTimeout(timer);
+      if (!slug) { setMessage('', ''); return; }
+      setMessage('', 'Checking…');
+      timer = window.setTimeout(function () {
+        fetch(checkUrl + '?subdomain=' + encodeURIComponent(slug))
+          .then(function (response) { return response.json(); })
+          .then(function (data) {
+            if (data.available) {
+              setMessage('ok', '✓ Available');
+            } else if (editing) {
+              setMessage('taken', data.message || 'Already taken');
+            } else {
+              // Not edited: the server adds a number automatically (e.g. ' + slug + '2).
+              setMessage('', 'Taken, so we will add a number. You can change it.');
+            }
+          })
+          .catch(function () { setMessage('', ''); });
+      }, 300);
+    }
 
-    billingInputs.forEach((input) => {
-      input.addEventListener('change', syncPackagePrices);
-    });
-    packageInputs.forEach((input) => {
-      input.addEventListener('change', syncPackagePrices);
-    });
-    form.querySelectorAll('[data-package-card]').forEach((row) => {
-      row.addEventListener('click', (event) => {
-        if (event.target.closest('a, button')) return;
-        const input = row.querySelector('[data-package-option]');
-        if (input && !input.checked) {
-          input.checked = true;
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      });
-    });
+    function openEditor() {
+      editing = true;
+      editor.classList.remove('hidden');
+      editButton.classList.add('hidden');
+      if (!schoolCode.value) schoolCode.value = slugify(schoolName.value);
+      schoolCode.focus();
+      refresh();
+    }
 
-    checkAvailability();
-    syncPackagePrices();
+    editButton.addEventListener('click', openEditor);
+    schoolName.addEventListener('input', refresh);
+    schoolCode.addEventListener('input', function () {
+      var clean = slugify(schoolCode.value);
+      if (clean !== schoolCode.value) schoolCode.value = clean;
+      refresh();
+    });
+    if (editing) openEditor(); else refresh();
   })();
 </script>
 {% endblock %}
-

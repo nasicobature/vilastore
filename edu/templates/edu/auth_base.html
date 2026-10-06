@@ -1,0 +1,83 @@
+{% extends 'edu/base.html' %}
+
+{% block messages %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-background lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+  <aside class="hidden lg:flex flex-col justify-between bg-sidebar text-sidebar-foreground p-10 xl:p-14 relative overflow-hidden">
+    <div class="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-primary/25 blur-3xl"></div>
+    <div class="absolute bottom-0 -left-20 w-72 h-72 rounded-full bg-primary/15 blur-3xl"></div>
+    <a href="/edu/" class="relative flex items-center gap-2.5">
+      <span class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center"><i data-lucide="graduation-cap" class="w-5 h-5 text-primary-foreground"></i></span>
+      <span class="font-display text-lg font-bold text-white">VilaStore EduPortal</span>
+    </a>
+    <div class="relative">
+      {% block side_content %}
+      <h2 class="font-display text-3xl xl:text-4xl font-bold text-white leading-tight">Your whole school,<br>in one simple portal.</h2>
+      <ul class="mt-8 space-y-4 text-sm">
+        <li class="flex gap-3"><span class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0"><i data-lucide="file-check-2" class="w-4 h-4 text-white"></i></span><span><strong class="block text-white">Results &amp; report cards</strong>Scores, grades and positions worked out for you.</span></li>
+        <li class="flex gap-3"><span class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0"><i data-lucide="wallet" class="w-4 h-4 text-white"></i></span><span><strong class="block text-white">Fees &amp; receipts</strong>Track who has paid and print receipts in seconds.</span></li>
+        <li class="flex gap-3"><span class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0"><i data-lucide="users" class="w-4 h-4 text-white"></i></span><span><strong class="block text-white">Staff, students &amp; parents</strong>Everyone gets their own sign-in and dashboard.</span></li>
+      </ul>
+      {% endblock %}
+    </div>
+    <p class="relative text-xs text-sidebar-foreground/60">&copy; VilaStore EduPortal</p>
+  </aside>
+
+  <main class="flex flex-col min-h-screen">
+    <div class="flex items-center justify-between px-5 sm:px-8 pt-6">
+      <a href="/edu/" class="flex items-center gap-2 lg:invisible">
+        <span class="w-9 h-9 rounded-xl bg-primary flex items-center justify-center"><i data-lucide="graduation-cap" class="w-5 h-5 text-primary-foreground"></i></span>
+        <span class="font-display font-bold">EduPortal</span>
+      </a>
+      <div class="text-sm text-muted-foreground">{% block top_link %}{% endblock %}</div>
+    </div>
+
+    <div class="flex-1 flex items-start sm:items-center justify-center px-5 sm:px-8 py-8">
+      <div class="w-full {% block card_width %}max-w-md{% endblock %}">
+        {% if messages %}
+          <div class="mb-5 space-y-2">
+            {% for message in messages %}
+              <div class="auth-alert auth-alert-{% if message.tags == 'success' %}success{% elif message.tags == 'error' %}error{% else %}info{% endif %}" role="alert">
+                <i data-lucide="{% if message.tags == 'success' %}check-circle-2{% elif message.tags == 'error' %}alert-circle{% else %}info{% endif %}" class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
+                <span class="break-words">{{ message }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% block form_card %}{% endblock %}
+      </div>
+    </div>
+  </main>
+</div>
+
+<style>
+  .auth-alert { display: flex; gap: 0.625rem; border: 1px solid hsl(var(--border)); border-radius: 0.75rem; padding: 0.75rem 1rem; font-size: 0.875rem; background: hsl(var(--card)); }
+  .auth-alert-error { border-color: hsl(var(--destructive) / 0.3); background: hsl(var(--destructive) / 0.08); color: hsl(var(--destructive)); }
+  .auth-alert-success { border-color: hsl(var(--success) / 0.3); background: hsl(var(--success) / 0.1); }
+  .auth-success-badge { background: hsl(var(--success) / 0.12); color: hsl(var(--success)); }
+  .auth-error-box { border: 1px solid hsl(var(--destructive) / 0.3); background: hsl(var(--destructive) / 0.08); color: hsl(var(--destructive)); }
+  .auth-found-box { border: 1px solid hsl(var(--success) / 0.3); background: hsl(var(--success) / 0.1); }
+</style>
+<script>
+  // Show / hide password buttons.
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-toggle-password]');
+    if (!button) return;
+    var input = document.getElementById(button.getAttribute('data-toggle-password'));
+    if (!input) return;
+    var show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    button.querySelector('[data-eye-open]').classList.toggle('hidden', show);
+    button.querySelector('[data-eye-closed]').classList.toggle('hidden', !show);
+  });
+  // Prevent double submits and show progress.
+  document.addEventListener('submit', function (event) {
+    var button = event.target.querySelector('[data-submit-label]');
+    if (!button || event.defaultPrevented) return;
+    button.disabled = true;
+    button.querySelector('[data-submit-text]').textContent = button.getAttribute('data-submit-label');
+  });
+</script>
+{% endblock %}

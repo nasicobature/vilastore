@@ -1,61 +1,61 @@
-{% extends 'edu/base.html' %}
+{% extends 'edu/auth_base.html' %}
 
-{% block content %}
-<div class="portal-lookup-page">
-  <a href="/edu/" class="registration-back">
-    <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to VilaStore Edu
-  </a>
+{% block top_link %}<a href="{% url 'edu:login' %}" class="font-medium text-primary hover:underline">Back to sign in</a>{% endblock %}
 
-  <section class="portal-lookup-card">
-    <div class="section-heading">
-      <p class="registration-eyebrow">School Login</p>
-      <h1>Find Your School Portal</h1>
-      <p>Enter your school's portal name to continue to your secure school login page.</p>
-    </div>
-
-    {% if lookup_error %}
-      <div class="portal-not-found-panel">
-        <h2>School Portal Not Found</h2>
-        <p>We couldn't find a school registered with that portal address. Check the portal name and try again.</p>
-        <div class="portal-lookup-actions">
-          <a href="{% url 'edu:school_portal_lookup' %}" class="wizard-btn wizard-btn-secondary">Try Again</a>
-          <a href="/edu/register/" class="wizard-btn wizard-btn-primary">Register Your School</a>
-        </div>
-      </div>
-    {% endif %}
-
-    <form method="get" class="portal-lookup-form">
-      <label>
-        <span>School portal</span>
-        <div class="subdomain-input">
-          <strong>vilastore.store/edu/portal/</strong>
-          <input type="text" name="school" value="{{ portal_name }}" placeholder="yarimaprimaryschool" aria-label="School portal name" required />
-        </div>
-      </label>
-      <button type="submit" class="wizard-btn wizard-btn-primary">Continue to School Login</button>
-    </form>
-
-    <details class="forgot-portal-panel" {% if forgot_error or found_portal_url %}open{% endif %}>
-      <summary>Forgot your school portal?</summary>
-      <form method="post" class="forgot-portal-form">
-        {% csrf_token %}
-        <label class="field-block">School Name
-          <input type="text" name="school_name" value="{{ forgot_name }}" placeholder="Your school name" required />
-        </label>
-        <label class="field-block">Registered School Email
-          <input type="email" name="school_email" value="{{ forgot_email }}" placeholder="school@example.com" required />
-        </label>
-        <button type="submit" class="wizard-btn wizard-btn-secondary">Find Portal</button>
-      </form>
-      {% if found_portal_url %}
-        <div class="portal-found-panel">
-          <span>Your school portal</span>
-          <a href="{{ found_portal_url }}">{{ found_portal_url }}</a>
-        </div>
-      {% elif forgot_error %}
-        <p class="forgot-portal-error">{{ forgot_error }}</p>
-      {% endif %}
-    </details>
-  </section>
+{% block form_card %}
+<div>
+  <span class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center"><i data-lucide="search" class="w-6 h-6"></i></span>
+  <h1 class="font-display text-3xl font-bold mt-5">Find your school</h1>
+  <p class="text-muted-foreground mt-2">Go to your school's own sign-in page. Or simply <a href="{% url 'edu:login' %}" class="font-medium text-primary hover:underline">sign in with your email</a>, which works for every school.</p>
 </div>
+
+{% if lookup_error %}
+  <div class="auth-error-box mt-6 flex gap-2.5 rounded-xl px-4 py-3 text-sm" role="alert">
+    <i data-lucide="alert-circle" class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
+    <span>We couldn't find a school with that portal address. Check the spelling, or find it with your school's name and email below.</span>
+  </div>
+{% endif %}
+
+<form method="get" class="mt-8 space-y-4">
+  <div>
+    <label for="lookup-school" class="block text-sm font-semibold mb-2">School portal address</label>
+    <div class="flex items-center h-12 rounded-xl border border-input bg-card focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary overflow-hidden transition">
+      <span class="pl-4 pr-1 text-sm text-muted-foreground whitespace-nowrap">…/edu/portal/</span>
+      <input id="lookup-school" type="text" name="school" value="{{ portal_name }}" placeholder="yourschool" autocapitalize="none" spellcheck="false" required
+        class="flex-1 min-w-0 h-full pr-4 bg-transparent text-[15px] focus:outline-none" />
+    </div>
+  </div>
+  <button type="submit" class="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition">
+    Go to my school <i data-lucide="arrow-right" class="w-4 h-4"></i>
+  </button>
+</form>
+
+<details class="mt-6 rounded-xl border border-border bg-card group" {% if forgot_error or found_portal_url %}open{% endif %}>
+  <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold">
+    Don't know the portal address?
+    <i data-lucide="chevron-down" class="w-4 h-4 transition group-open:rotate-180"></i>
+  </summary>
+  <form method="post" class="space-y-3 px-4 pb-4">
+    {% csrf_token %}
+    <div>
+      <label for="forgot-school-name" class="block text-xs font-semibold mb-1.5">School name</label>
+      <input id="forgot-school-name" type="text" name="school_name" value="{{ forgot_name }}" required class="w-full h-11 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+    </div>
+    <div>
+      <label for="forgot-school-email" class="block text-xs font-semibold mb-1.5">School's registered email</label>
+      <input id="forgot-school-email" type="email" name="school_email" value="{{ forgot_email }}" required class="w-full h-11 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+    </div>
+    <button type="submit" class="w-full h-11 rounded-lg border border-border font-semibold text-sm hover:bg-muted">Find portal</button>
+    {% if found_portal_url %}
+      <div class="auth-found-box rounded-lg p-3 text-sm">
+        <span class="block text-xs text-muted-foreground">Your school portal</span>
+        <a href="{{ found_portal_url }}" class="font-semibold text-primary hover:underline break-all">{{ found_portal_url }}</a>
+      </div>
+    {% elif forgot_error %}
+      <p class="text-sm text-destructive">{{ forgot_error }}</p>
+    {% endif %}
+  </form>
+</details>
+
+<p class="mt-6 text-center text-sm text-muted-foreground">New school? <a href="{% url 'edu:register' %}" class="font-semibold text-primary hover:underline">Create a free account</a></p>
 {% endblock %}

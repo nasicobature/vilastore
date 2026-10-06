@@ -54,31 +54,31 @@ class EduPortalRoutingTests(TestCase):
         self.assertNotContains(response, "<th>Trial</th>", html=True)
         self.assertNotContains(response, "<th>Select</th>", html=True)
         self.assertContains(response, "Coming Soon Modules")
-        self.assertContains(response, reverse("edu:school_portal_lookup"))
+        self.assertContains(response, reverse("edu:login"))
 
-    def test_general_edu_login_pages_redirect_to_main_site(self):
+    def test_general_edu_login_pages_redirect_to_universal_login(self):
         secondary = self.client.get(reverse("edu:secondary_login"))
         tertiary = self.client.get(reverse("edu:tertiary_login"))
 
         self.assertEqual(secondary.status_code, 302)
         self.assertEqual(tertiary.status_code, 302)
-        self.assertEqual(secondary["Location"], reverse("edu:index"))
-        self.assertEqual(tertiary["Location"], reverse("edu:index"))
+        self.assertEqual(secondary["Location"], reverse("edu:login"))
+        self.assertEqual(tertiary["Location"], reverse("edu:login"))
 
-    def test_registration_pages_render_school_package_trial_wizard(self):
+    def test_registration_pages_render_simple_one_page_form(self):
         secondary = self.client.get(reverse("edu:secondary_register"))
         tertiary = self.client.get(reverse("edu:tertiary_register"))
 
         for response in (secondary, tertiary):
             self.assertEqual(response.status_code, 200)
-            self.assertContains(response, 'class="wizard-form"')
-            self.assertContains(response, "Simple Pricing. Built for Value.")
-            self.assertContains(response, "edu-pricing-table")
-            self.assertContains(response, "Enterprise Plus")
-            self.assertContains(response, "School Portal")
+            self.assertContains(response, "data-school-register-form")
+            self.assertContains(response, "Create your school portal")
             self.assertContains(response, "vilastore.store/edu/portal/yourschool")
-            self.assertContains(response, "Create School & Start Free Trial")
-            self.assertContains(response, "NGN 30,000")
+            self.assertContains(response, "Create my school portal")
+            for field in ("institution_name", "admin_full_name", "admin_email", "admin_phone", "admin_password"):
+                self.assertContains(response, f'name="{field}"')
+            # Package choice moved to payment time; the pricing table is no longer part of sign-up.
+            self.assertNotContains(response, "edu-pricing-table")
 
     def test_registration_preselects_package_and_billing_from_pricing_link(self):
         response = self.client.get(reverse("edu:secondary_register"), {
@@ -87,18 +87,15 @@ class EduPortalRoutingTests(TestCase):
         })
 
         html = response.content.decode()
-        self.assertContains(response, "Enterprise Plus")
-        self.assertIn('value="enterprise-plus"', html)
-        self.assertIn('value="session" data-billing-cycle checked', html)
-        self.assertIn('value="enterprise-plus"', html)
+        self.assertIn('name="subscription_package" value="enterprise-plus"', html)
+        self.assertIn('name="subscription_billing_cycle" value="session"', html)
 
     def test_edu_landing_nav_has_one_school_login_link(self):
         response = self.client.get(reverse("edu:index"))
         html = response.content.decode()
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(html.count("School Login"), 1)
-        self.assertContains(response, f'href="{reverse("edu:school_portal_lookup")}"')
+        self.assertEqual(html.count(f'href="{reverse("edu:login")}"'), 1)
         self.assertContains(response, "data-edu-nav-toggle")
         self.assertNotContains(response, 'class="portal-search"')
 
@@ -152,14 +149,14 @@ class EduPortalVerificationRegistrationTests(TestCase):
         })
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Please complete all required school, administrator, and portal fields.")
+        self.assertContains(response, "Please fill in your school name, your name, email, phone number and a password.")
         self.assertFalse(Institution.objects.filter(name="Missing Simple Fields Academy").exists())
 
     def test_secondary_registration_creates_school_admin_and_trial_with_selected_package(self):
         response = self.client.post(reverse("edu:secondary_register"), self._registration_payload())
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Your School Portal Is Ready!")
+        self.assertContains(response, "Your portal is ready!")
         institution = Institution.objects.get(name="Trial Package Academy")
         profile = Profile.objects.get(institution=institution, role="admin")
         self.assertEqual(institution.school_code, "trialpackageacademy")
@@ -186,7 +183,6 @@ class EduPortalVerificationRegistrationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Enterprise Plus")
-        self.assertContains(response, "751+ Students")
         institution = Institution.objects.get(name="Enterprise Plus Academy")
         self.assertEqual(institution.subscription_package, "enterprise-plus")
         self.assertEqual(institution.student_limit, 751)
@@ -208,9 +204,9 @@ class EduPortalVerificationRegistrationTests(TestCase):
             admin_email="reserved@example.com",
         ))
 
-        self.assertContains(taken, "This school portal already exists.")
+        self.assertContains(taken, "That portal address is already taken.")
         self.assertContains(taken, "https://vilastore.store/edu/portal/existingacademy")
-        self.assertContains(reserved, "That school portal name is reserved.")
+        self.assertContains(reserved, "That portal address is reserved.")
 
     def test_subdomain_availability_endpoint(self):
         Institution.objects.create(
@@ -1005,3 +1001,115 @@ class EduPortalFeesTests(TestCase):
         self.assertEqual(payment.payment_method, "Flutterwave")
         self.assertEqual(payment.gateway_reference, "987654321")
         self.assertRedirects(response, reverse("edu:secondary_payment_receipt", kwargs={"reference": payment.reference}))
+
+
+class EduSimpleSignUpAndLoginTests(TestCase):
+    """One-page registration, auto sign-in, universal email login, and school-created accounts."""
+
+    def _register(self, **overrides):
+        data = {
+            "institution_name": "Simple Start Academy",
+            "institution_type": "secondary",
+            "admin_full_name": "Aisha Bello",
+            "admin_email": "aisha@simple.test",
+            "admin_phone": "08030000000",
+            "admin_password": "secret12",
+        }
+        data.update(overrides)
+        return self.client.post(reverse("edu:secondary_register"), data)
+
+    def test_registration_needs_only_the_basic_fields_and_signs_admin_in(self):
+        response = self._register()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Your portal is ready!")
+        institution = Institution.objects.get(name="Simple Start Academy")
+        self.assertEqual(institution.school_code, "simplestartacademy")
+        self.assertEqual(institution.email, "aisha@simple.test")
+        self.assertEqual(institution.phone_number, "08030000000")
+        self.assertEqual(institution.subscription_status, "trial")
+        self.assertEqual(int(self.client.session["_auth_user_id"]), Profile.objects.get(institution=institution, role="admin").user_id)
+        self.assertEqual(self.client.session["active_portal"], "edu")
+        self.assertContains(response, "/edu/portal/simplestartacademy/dashboard/")
+
+    def test_registration_without_portal_name_picks_a_free_one(self):
+        Institution.objects.create(name="Old", school_code="simplestartacademy", institution_type="secondary")
+
+        self._register()
+
+        self.assertTrue(Institution.objects.filter(name="Simple Start Academy", school_code="simplestartacademy2").exists())
+
+    def test_registration_rejects_short_password_and_bad_email(self):
+        short = self._register(admin_password="123")
+        bad_email = self._register(admin_email="not-an-email")
+
+        self.assertContains(short, "at least 6 characters")
+        self.assertContains(bad_email, "valid email address")
+        self.assertFalse(Institution.objects.filter(name="Simple Start Academy").exists())
+
+    def test_universal_login_with_email_goes_to_own_portal(self):
+        self._register()
+        self.client.logout()
+
+        response = self.client.post(reverse("edu:login"), {"username": "AISHA@simple.test", "password": "secret12"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/edu/portal/simplestartacademy/dashboard/")
+
+    def test_universal_login_wrong_password_shows_friendly_error(self):
+        self._register()
+        self.client.logout()
+
+        response = self.client.post(reverse("edu:login"), {"username": "aisha@simple.test", "password": "wrong"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Incorrect email/ID or password.")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_school_created_teacher_can_sign_in_without_email_link(self):
+        self._register()
+        self.client.post(reverse("edu:secondary_add_teacher"), {
+            "full_name": "Musa Teacher",
+            "email": "musa@simple.test",
+            "password": "teach123",
+        })
+        teacher = get_user_model().objects.get(email="musa@simple.test")
+        self.assertTrue(teacher.profile.email_verified)
+        self.client.logout()
+
+        response = self.client.post(reverse("edu:login"), {"username": "musa@simple.test", "password": "teach123"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/edu/portal/simplestartacademy/dashboard/")
+
+    def test_portal_login_rejects_account_from_another_school(self):
+        self._register()
+        self.client.logout()
+        other = Institution.objects.create(name="Other School", school_code="otherschool", institution_type="secondary")
+
+        response = self.client.post(reverse("edu:school_portal_fallback", args=[other.school_code]), {
+            "username": "aisha@simple.test",
+            "password": "secret12",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This account belongs to another school.")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_forgot_password_only_needs_email_or_id(self):
+        self._register()
+        self.client.logout()
+
+        with patch("edu.views._send_edu_password_reset_email") as send:
+            response = self.client.post(reverse("edu:forgot_password"), {"identifier": "aisha@simple.test"})
+
+        self.assertEqual(response.status_code, 302)
+        send.assert_called_once()
+
+    def test_login_page_renders(self):
+        response = self.client.get(reverse("edu:login"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Welcome back")
+        self.assertContains(response, 'name="username"')
+

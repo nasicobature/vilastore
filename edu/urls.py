@@ -7,6 +7,7 @@ protected = views.edu_portal_access_required
 
 urlpatterns = [
     path('', views.index, name='index'),
+    path('login/', views.edu_login, name='login'),
     path('verify-email/<str:token>/', views.verify_email, name='verify_email'),
     path('forgot-password/', views.forgot_password, name='forgot_password'),
     path('reset-password/<str:token>/', views.reset_password, name='reset_password'),

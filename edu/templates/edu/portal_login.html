@@ -1,0 +1,43 @@
+{% extends 'edu/auth_base.html' %}
+
+{% block top_link %}<a href="{% url 'edu:login' %}" class="font-medium text-primary hover:underline">Not from this school?</a>{% endblock %}
+
+{% block form_card %}
+<div class="text-center">
+  {% if portal_institution.logo %}
+    <img src="{{ portal_institution.logo.url }}" alt="{{ portal_institution.name }} logo" class="w-16 h-16 rounded-2xl object-cover mx-auto border border-border bg-card" />
+  {% else %}
+    <div class="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto font-display text-2xl font-bold">{{ portal_institution.name|slice:':1'|upper }}</div>
+  {% endif %}
+  <h1 class="font-display text-2xl sm:text-3xl font-bold mt-4">{{ portal_institution.name }}</h1>
+  <p class="text-muted-foreground mt-1.5">Sign in to your school portal</p>
+</div>
+
+<form method="post" class="mt-8 space-y-5" novalidate>
+  {% csrf_token %}
+  <input type="hidden" name="school_code" value="{{ resolved_school_code }}" />
+  <div>
+    <label for="portal-username" class="block text-sm font-semibold mb-2">Email or ID</label>
+    <input id="portal-username" type="text" name="username" value="{{ initial_username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required {% if not initial_username %}autofocus{% endif %}
+      placeholder="you@school.com or your ID"
+      class="w-full h-12 px-4 rounded-xl border border-input bg-card text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition" />
+  </div>
+
+  <div>
+    <div class="flex items-center justify-between mb-2">
+      <label for="portal-password" class="block text-sm font-semibold">Password</label>
+      <a href="{% url 'edu:forgot_password' %}?institution={{ institution }}" class="text-sm font-medium text-primary hover:underline">Forgot password?</a>
+    </div>
+    {% include 'edu/partials/password_field.html' with field_id='portal-password' field_name='password' %}
+  </div>
+
+  <button type="submit" data-submit-label="Signing in…" class="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-70 transition">
+    <span data-submit-text>Sign in</span>
+    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+  </button>
+</form>
+
+<p class="mt-8 text-center text-xs text-muted-foreground">
+  Powered by <a href="/edu/" class="font-medium hover:underline">VilaStore EduPortal</a>
+</p>
+{% endblock %}

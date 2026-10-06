@@ -400,20 +400,6 @@ def _mark_email_unverified(profile):
     profile.email_verification_expires_at = None
 
 
-def _find_edu_profile_by_identifier(institution_type, school_code, identifier):
-    identifier = (identifier or '').strip()
-    school_code = (school_code or '').strip().upper()
-    if not identifier or not school_code:
-        return None
-    return Profile.objects.select_related('user', 'institution').filter(
-        institution_type=institution_type,
-        institution__school_code__iexact=school_code,
-    ).filter(
-        Q(user__username__iexact=identifier) |
-        Q(user__email__iexact=identifier)
-    ).first()
-
-
 def _flutterwave_public_key():
     return (
         getattr(django_settings, 'FLUTTERWAVE_PUBLIC_KEY', '')
@@ -800,79 +786,128 @@ def _institution_from_portal_request(request, institution_type):
     return tenant
 
 
+def _edu_login_problem(request, user, profile):
+    """Why this signed-in user may not enter their portal yet, or '' if they may."""
+    if not profile.is_approved:
+        institution = profile.institution
+        if institution and institution.registration_payment_status != 'paid':
+            payment_url = f"/edu/{profile.institution_type}/register/{institution.school_code}/payment/"
+            return f'EduPortal subscription payment is required before portal access. Complete payment here: {payment_url}'
+        if institution and institution.verification_status == 'pending':
+            return 'School setup is still pending approval before portal access is granted.'
+        if institution and institution.verification_status == 'rejected':
+            return 'School verification was rejected. Please contact VilaStore support for review details.'
+        return 'Your account is waiting for approval from your school.'
+    if not user.email:
+        return 'This account needs an email address before portal access. Please contact your school admin.'
+    if not profile.email_verified:
+        if _send_edu_verification_email(request, profile):
+            return 'Please confirm your email address first. We just sent a fresh link to your inbox.'
+        return 'Please confirm your email address first, but we could not send the link right now. Ask your school admin for help or try again later.'
+    return ''
+
+
+def _enter_edu_portal(request, user, profile):
+    """Log the user in (if allowed) and return the redirect to their dashboard, or None with an error message set."""
+    problem = _edu_login_problem(request, user, profile)
+    if problem:
+        messages.error(request, problem)
+        return None
+    auth_login(request, user)
+    request.session['active_portal'] = 'edu'
+    if profile.institution:
+        profile.institution.refresh_subscription_status()
+        return redirect(_institution_portal_dashboard_path(profile.institution))
+    if profile.institution_type == 'tertiary':
+        return redirect('edu:tertiary_dashboard', role=profile.role)
+    return redirect('edu:secondary_dashboard', role=profile.role)
+
+
+def _authenticate_identifier(request, user, identifier, password):
+    """authenticate() with the resolved account's username; sets the error message on failure."""
+    auth_username = user.username if user else identifier
+    authenticated = authenticate(request, username=auth_username, password=password)
+    if authenticated is None:
+        existing = user or get_user_model().objects.filter(username__iexact=identifier).first()
+        if existing and not existing.is_active:
+            messages.error(request, 'Your account is waiting for approval from your school.')
+        else:
+            messages.error(request, 'Incorrect email/ID or password. Please try again.')
+    return authenticated
+
+
 def _login_for_institution(request, institution_type, template_name):
-    roles = SECONDARY_ROLES if institution_type == 'secondary' else TERTIARY_ROLES
     portal_institution = _institution_from_portal_request(request, institution_type)
     if not portal_institution:
-        messages.info(request, 'School users log in through their school portal link.')
-        return redirect('edu:index')
+        return redirect('edu:login')
 
+    school_code = portal_institution.school_code.upper()
+    identifier = ''
     if request.method == 'POST':
-        school_code = request.POST.get('school_code', '').strip().upper()
-        if portal_institution:
-            school_code = portal_institution.school_code.upper()
-        username = request.POST.get('username', '').strip()
+        identifier = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
-        resolved_user = _resolve_login_user(institution_type, school_code, username)
-        auth_username = resolved_user.username if resolved_user else username
-        user = authenticate(request, username=auth_username, password=password)
-        if user is None:
-            existing = resolved_user or get_user_model().objects.filter(username__iexact=username).first()
-            if existing and not existing.is_active:
-                messages.error(request, 'Account pending approval.')
-            else:
-                messages.error(request, 'Invalid username or password.')
-        else:
-            auth_login(request, user)
-            request.session['active_portal'] = 'edu'
+        resolved_user = _resolve_login_user(institution_type, school_code, identifier) or _find_user_for_edu_login(identifier)
+        user = _authenticate_identifier(request, resolved_user, identifier, password)
+        if user is not None:
             profile = _get_or_repair_edu_profile(user, institution_type, school_code)
             profile = _repair_trial_school_admin_login(profile)
-            if profile and profile.institution_type != institution_type:
-                auth_logout(request)
-                messages.error(request, 'This account belongs to a different portal.')
-            elif profile:
-                if not school_code or not profile.institution or profile.institution.school_code.upper() != school_code:
-                    auth_logout(request)
-                    messages.error(request, 'Invalid school code.')
-                elif not profile.is_approved:
-                    auth_logout(request)
-                    if profile.institution and profile.institution.registration_payment_status != 'paid':
-                        payment_url = f"/edu/{profile.institution_type}/register/{profile.institution.school_code}/payment/"
-                        messages.error(request, f'EduPortal subscription payment is required before portal access. Complete payment here: {payment_url}')
-                    elif profile.institution and profile.institution.verification_status == 'pending':
-                        messages.error(request, 'School setup is still pending approval before portal access is granted.')
-                    elif profile.institution and profile.institution.verification_status == 'rejected':
-                        messages.error(request, 'School verification was rejected. Please contact VilaStore support for review details.')
-                    else:
-                        messages.error(request, 'Account pending approval.')
-                elif not user.email:
-                    auth_logout(request)
-                    messages.error(request, 'This account needs an email address before portal access. Please contact your school admin.')
-                elif not profile.email_verified:
-                    auth_logout(request)
-                    if _send_edu_verification_email(request, profile):
-                        messages.error(request, 'Please verify your email address before login. We sent a fresh verification link to your email.')
-                    else:
-                        messages.error(request, 'Please verify your email address before login, but we could not send the verification email right now. Contact your school admin or try again later.')
-                else:
-                    if profile.institution:
-                        profile.institution.refresh_subscription_status()
-                    if getattr(request, 'edu_portal_path', False):
-                        return redirect(_institution_portal_dashboard_path(profile.institution))
-                    if profile.institution_type == 'tertiary':
-                        return redirect('edu:tertiary_dashboard', role=profile.role)
-                    return redirect('edu:secondary_dashboard', role=profile.role)
+            if not profile or not profile.institution:
+                messages.error(request, 'We could not find a school account for these details.')
+            elif profile.institution_type != institution_type or profile.institution.school_code.upper() != school_code:
+                messages.error(request, f'This account belongs to another school. Sign in at {_institution_portal_url(profile.institution)} instead.')
             else:
-                messages.error(request, 'No profile found for this user.')
+                response = _enter_edu_portal(request, user, profile)
+                if response:
+                    return response
 
     return render(request, template_name, {
         'institution': institution_type,
-        'roles': roles,
         'portal_institution': portal_institution,
         'subdomain_institution': portal_institution,
-        'resolved_school_code': portal_institution.school_code if portal_institution else '',
-        'initial_username': request.GET.get('admin_id', '').strip(),
+        'resolved_school_code': portal_institution.school_code,
+        'initial_username': identifier or request.GET.get('admin_id', '').strip(),
     })
+
+
+def _find_user_for_edu_login(identifier):
+    User = get_user_model()
+    identifier = (identifier or '').strip()
+    if not identifier:
+        return None
+    return (
+        User.objects.filter(username__iexact=identifier).first()
+        or User.objects.filter(email__iexact=identifier).order_by('id').first()
+    )
+
+
+def edu_login(request):
+    """One sign-in page for every school: email (or ID) + password, then straight to the user's own portal."""
+    if request.user.is_authenticated:
+        profile = getattr(request.user, 'profile', None)
+        if profile and profile.institution and request.session.get('active_portal') == 'edu':
+            return redirect(_institution_portal_dashboard_path(profile.institution))
+
+    identifier = ''
+    if request.method == 'POST':
+        identifier = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '').strip()
+        user = _authenticate_identifier(request, _find_user_for_edu_login(identifier), identifier, password)
+        if user is not None:
+            profile = getattr(user, 'profile', None)
+            if not profile or not profile.institution:
+                for institution_type in ('secondary', 'tertiary'):
+                    profile = _get_or_repair_edu_profile(user, institution_type, '')
+                    if profile and profile.institution:
+                        break
+            profile = _repair_trial_school_admin_login(profile)
+            if not profile or not profile.institution:
+                messages.error(request, 'We could not find a school account for these details. If you run a shop, use the VilaStore shop login instead.')
+            else:
+                response = _enter_edu_portal(request, user, profile)
+                if response:
+                    return response
+
+    return render(request, 'edu/login.html', {'initial_username': identifier})
 
 
 def secondary_login(request):
@@ -904,25 +939,17 @@ def verify_email(request, token):
 
 
 def forgot_password(request):
-    institution_type = request.POST.get('institution_type') or request.GET.get('institution') or 'secondary'
-    if institution_type not in ['secondary', 'tertiary']:
-        institution_type = 'secondary'
-
     if request.method == 'POST':
-        profile = _find_edu_profile_by_identifier(
-            institution_type,
-            request.POST.get('school_code', ''),
-            request.POST.get('identifier', ''),
-        )
-        if profile and profile.user.email:
+        user = _find_user_for_edu_login(request.POST.get('identifier', ''))
+        profile = getattr(user, 'profile', None) if user else None
+        if profile and profile.institution and user.email:
             # Message stays generic even on send failure to avoid leaking whether an account exists.
             _send_edu_password_reset_email(request, profile)
-        messages.success(request, 'If the account exists, a password reset link has been sent to the registered email address.')
-        return redirect(f"/edu/forgot-password/?institution={institution_type}")
+        messages.success(request, 'If that account exists, we have sent a password reset link to its email address. You can also ask your school admin to reset it.')
+        return redirect('edu:forgot_password')
 
     return render(request, 'edu/forgot_password.html', {
-        'institution_type': institution_type,
-        'login_url': '/edu/tertiary/login/' if institution_type == 'tertiary' else '/edu/secondary/login/',
+        'login_url': reverse('edu:login'),
     })
 
 
@@ -1416,59 +1443,87 @@ def _validation_error_messages(exc):
     return [str(exc)]
 
 
+def _available_school_code(base_code):
+    """base_code if free, otherwise base_code2, base_code3, ... (None if nothing usable)."""
+    base_code = Institution.normalize_subdomain(base_code)
+    if not base_code:
+        return None
+    for suffix in [''] + [str(n) for n in range(2, 100)]:
+        candidate = Institution.normalize_subdomain(f'{base_code[:63 - len(suffix)]}{suffix}')
+        if candidate in RESERVED_EDU_SUBDOMAINS:
+            continue
+        if not Institution.objects.filter(school_code__iexact=candidate).exists():
+            return candidate
+    return None
+
+
 def _register_school_with_trial(request, default_school_type='secondary'):
+    """One-page school sign-up: school + admin details, free trial starts, admin is signed straight in."""
     duplicate_institution = None
+    form_values = {}
     if request.method == 'POST':
         institution_name = request.POST.get('institution_name', '').strip()
         institution_type = request.POST.get('institution_type', default_school_type).strip()
         if institution_type not in {'secondary', 'tertiary'}:
             institution_type = default_school_type
-        school_code = Institution.normalize_subdomain(request.POST.get('school_code') or institution_name)
-        address = request.POST.get('address', '').strip()
-        state = request.POST.get('state', '').strip()
-        lga = request.POST.get('lga', '').strip()
-        school_phone = request.POST.get('phone_number', '').strip()
-        school_email = request.POST.get('email', '').strip()
+        typed_code = Institution.normalize_subdomain(request.POST.get('school_code', ''))
         admin_full_name = request.POST.get('admin_full_name', '').strip()
         admin_email = request.POST.get('admin_email', '').strip()
         admin_phone = request.POST.get('admin_phone', '').strip()
         admin_password = request.POST.get('admin_password', '').strip()
         confirm_password = request.POST.get('confirm_password', '').strip()
-        subscription_package = _normalize_edu_package(request.POST.get('subscription_package'))
-        billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle'))
+        # Optional school details; can be completed later from the dashboard.
+        address = request.POST.get('address', '').strip()
+        state = request.POST.get('state', '').strip()
+        lga = request.POST.get('lga', '').strip()
+        school_phone = request.POST.get('phone_number', '').strip() or admin_phone
+        school_email = request.POST.get('email', '').strip() or admin_email
+        subscription_package = _normalize_edu_package(request.POST.get('subscription_package') or EDU_DEFAULT_PACKAGE)
+        billing_cycle = _normalize_edu_billing_cycle(request.POST.get('subscription_billing_cycle') or EDU_DEFAULT_BILLING_CYCLE)
+        form_values = {
+            'institution_name': institution_name,
+            'institution_type': institution_type,
+            'school_code': typed_code,
+            'admin_full_name': admin_full_name,
+            'admin_email': admin_email,
+            'admin_phone': admin_phone,
+            'address': address,
+            'state': state,
+            'lga': lga,
+            'subscription_package': subscription_package,
+            'subscription_billing_cycle': billing_cycle,
+        }
 
-        required_values = [
-            institution_name,
-            institution_type,
-            address,
-            state,
-            lga,
-            school_phone,
-            school_email,
-            admin_full_name,
-            admin_email,
-            admin_phone,
-            admin_password,
-            confirm_password,
-            subscription_package,
-            billing_cycle,
-            school_code,
-        ]
+        school_code = None
+        email_valid = True
+        try:
+            validate_email(admin_email)
+        except ValidationError:
+            email_valid = False
 
-        if not all(required_values):
-            messages.error(request, 'Please complete all required school, administrator, and portal fields.')
-        elif admin_password != confirm_password:
-            messages.error(request, 'Password and confirm password do not match.')
+        if not all([institution_name, admin_full_name, admin_email, admin_phone, admin_password]):
+            messages.error(request, 'Please fill in your school name, your name, email, phone number and a password.')
+        elif not email_valid:
+            messages.error(request, 'Please enter a valid email address.')
+        elif len(admin_password) < 6:
+            messages.error(request, 'Your password must be at least 6 characters.')
+        elif confirm_password and admin_password != confirm_password:
+            messages.error(request, 'The two passwords do not match.')
         elif subscription_package not in EDU_REGISTRATION_PACKAGES:
             messages.error(request, 'Please choose a valid registration package.')
         elif not _email_is_available(admin_email):
-            messages.error(request, 'That administrator email address is already used by another account.')
-        elif school_code in RESERVED_EDU_SUBDOMAINS:
-            messages.error(request, 'That school portal name is reserved. Please choose another one.')
-        elif Institution.objects.filter(school_code__iexact=school_code).exists():
-            duplicate_institution = Institution.objects.filter(school_code__iexact=school_code).first()
-            messages.error(request, 'This school portal already exists. Use the existing portal link below or choose another portal name.')
+            messages.error(request, 'That email address already has an account. Sign in instead, or use a different email.')
+        elif typed_code and typed_code in RESERVED_EDU_SUBDOMAINS:
+            messages.error(request, 'That portal address is reserved. Please choose another one.')
+        elif typed_code and Institution.objects.filter(school_code__iexact=typed_code).exists():
+            duplicate_institution = Institution.objects.filter(school_code__iexact=typed_code).first()
+            messages.error(request, 'That portal address is already taken. If this is your school, use its portal link below; otherwise choose another address.')
         else:
+            school_code = typed_code or _available_school_code(institution_name)
+            if not school_code:
+                messages.error(request, 'Please choose a portal address for your school (letters and numbers).')
+
+        if school_code:
             try:
                 with transaction.atomic():
                     admin_role = 'vc' if institution_type == 'tertiary' else 'admin'
@@ -1509,6 +1564,7 @@ def _register_school_with_trial(request, default_school_type='secondary'):
                         email=admin_email,
                         password=admin_password,
                     )
+                    user.first_name = admin_full_name[:150]
                     user.is_active = True
                     user.save()
 
@@ -1534,10 +1590,15 @@ def _register_school_with_trial(request, default_school_type='secondary'):
                     if not _activate_trial_access(institution, profile):
                         raise ValidationError('This school has already used its free trial. Choose a package to continue.')
 
+                # Sign the new admin straight in: no separate login or ID to remember.
+                auth_login(request, user)
+                request.session['active_portal'] = 'edu'
                 return render(request, 'edu/registration_success.html', {
                     'institution': institution,
                     'admin_username': admin_username,
+                    'admin_email': admin_email,
                     'portal_url': _institution_portal_url(institution),
+                    'dashboard_url': _institution_portal_dashboard_path(institution),
                     'trial_days': EDU_TRIAL_DAYS,
                     'selected_package': _edu_package(subscription_package),
                     'selected_plan': _edu_subscription_plans(subscription_package)[billing_cycle],
@@ -1545,14 +1606,19 @@ def _register_school_with_trial(request, default_school_type='secondary'):
             except IntegrityError:
                 duplicate_institution = Institution.objects.filter(school_code__iexact=school_code).first()
                 if duplicate_institution:
-                    messages.error(request, 'This school portal already exists. Use the existing portal link below or choose another portal name.')
+                    messages.error(request, 'That portal address was just taken. Please choose another one.')
                 else:
-                    messages.error(request, 'School portal name or administrator ID already exists.')
+                    messages.error(request, 'We could not create the school right now. Please try again.')
             except ValidationError as exc:
                 for message in _validation_error_messages(exc):
                     messages.error(request, message)
 
     context = _school_register_context(default_school_type, request)
+    context['form'] = form_values
+    context['trial_days'] = EDU_TRIAL_DAYS
+    if form_values.get('subscription_package') in EDU_REGISTRATION_PACKAGES:
+        context['default_subscription_package'] = form_values['subscription_package']
+        context['default_subscription_cycle'] = form_values['subscription_billing_cycle']
     if duplicate_institution:
         context['duplicate_institution'] = duplicate_institution
         context['duplicate_portal_url'] = _institution_portal_url(duplicate_institution)
@@ -1827,8 +1893,8 @@ def secondary_create_user(request):
             profile.is_approved = True
             profile.approved_by = request.user
             profile.approved_at = timezone.now()
+            profile.email_verified = True  # the school vouches for accounts it creates
             profile.save()
-            email_sent = _send_edu_verification_email(request, profile)
 
             if role == 'student':
                 if not _can_add_students(creator_profile.institution):
@@ -1854,10 +1920,7 @@ def secondary_create_user(request):
                     department='',
                 )
 
-            if email_sent:
-                messages.success(request, f'Account created successfully. ID: {username}. Verification email sent.')
-            else:
-                messages.success(request, f'Account created successfully. ID: {username}. We could not send the verification email - share this ID with the user directly.')
+            messages.success(request, f'Account created. They can sign in now with {email} (or ID {username}) and the password you set.')
         except IntegrityError:
             messages.error(request, 'Username already exists.')
         except ValidationError as exc:
@@ -2803,8 +2866,8 @@ def secondary_add_student(request):
             profile.is_approved = True
             profile.approved_by = request.user
             profile.approved_at = timezone.now()
+            profile.email_verified = True  # the school vouches for accounts it creates
             profile.save()
-            email_sent = _send_edu_verification_email(request, profile)
 
             Student.objects.create(
                 institution=creator_profile.institution,
@@ -2828,10 +2891,7 @@ def secondary_add_student(request):
                         academic_class=academic_class,
                     )
 
-            if email_sent:
-                messages.success(request, f'Student registered. ID: {username}. Verification email sent.')
-            else:
-                messages.success(request, f'Student registered. ID: {username}. We could not send the verification email - share this ID with the user directly.')
+            messages.success(request, f'Student registered. They can sign in now with {email} (or ID {username}) and the password you set.')
         except IntegrityError:
             messages.error(request, 'Could not create student.')
         except ValidationError as exc:
@@ -2960,6 +3020,7 @@ def secondary_import_students(request):
                 profile.is_approved = True
                 profile.approved_by = request.user
                 profile.approved_at = timezone.now()
+                profile.email_verified = True
                 profile.save()
 
                 Student.objects.create(
@@ -2982,7 +3043,7 @@ def secondary_import_students(request):
         created_count += 1
 
     if created_count:
-        messages.success(request, f'Imported {created_count} student(s). Each student gets a verification email the first time they sign in.')
+        messages.success(request, f'Imported {created_count} student(s). They can sign in now with their email or student ID and the password from the file.')
     if errors:
         shown = errors[:10]
         extra = len(errors) - len(shown)
@@ -3149,8 +3210,8 @@ def secondary_add_teacher(request):
             profile.is_approved = True
             profile.approved_by = request.user
             profile.approved_at = timezone.now()
+            profile.email_verified = True  # the school vouches for accounts it creates
             profile.save()
-            email_sent = _send_edu_verification_email(request, profile)
 
             Staff.objects.create(
                 institution=creator_profile.institution,
@@ -3162,10 +3223,7 @@ def secondary_add_teacher(request):
                 photo=photo,
             )
 
-            if email_sent:
-                messages.success(request, f'Teacher created. ID: {username}. Verification email sent.')
-            else:
-                messages.success(request, f'Teacher created. ID: {username}. We could not send the verification email - share this ID with the teacher directly.')
+            messages.success(request, f'Teacher created. They can sign in now with {email} (or ID {username}) and the password you set.')
         except IntegrityError:
             messages.error(request, 'Could not create teacher.')
 
@@ -3216,8 +3274,8 @@ def tertiary_create_user(request):
             profile.approved_at = timezone.now()
             profile.faculty = Faculty.objects.filter(id=faculty_id).first() if faculty_id else None
             profile.department = Department.objects.filter(id=department_id).first() if department_id else None
+            profile.email_verified = True  # the school vouches for accounts it creates
             profile.save()
-            email_sent = _send_edu_verification_email(request, profile)
 
             if role == 'student':
                 if not _can_add_students(creator_profile.institution):
@@ -3241,10 +3299,7 @@ def tertiary_create_user(request):
                     department=profile.department.name if profile.department else '',
                 )
 
-            if email_sent:
-                messages.success(request, f'Account created successfully. ID: {username}. Verification email sent.')
-            else:
-                messages.success(request, f'Account created successfully. ID: {username}. We could not send the verification email - share this ID with the user directly.')
+            messages.success(request, f'Account created. They can sign in now with {email} (or ID {username}) and the password you set.')
         except IntegrityError:
             messages.error(request, 'Username already exists.')
         except ValidationError as exc:
@@ -3454,7 +3509,6 @@ def secondary_add_guardian(request):
 
     User = get_user_model()
     existing = User.objects.filter(email__iexact=guardian_email).first()
-    email_sent = None
     try:
         with transaction.atomic():
             if existing:
@@ -3482,6 +3536,7 @@ def secondary_add_guardian(request):
                 parent_profile.is_approved = True
                 parent_profile.approved_by = request.user
                 parent_profile.approved_at = timezone.now()
+                parent_profile.email_verified = True
                 parent_profile.save()
                 is_new_parent = True
 
@@ -3500,11 +3555,7 @@ def secondary_add_guardian(request):
         return register_redirect
 
     if is_new_parent:
-        email_sent = _send_edu_verification_email(request, Profile.objects.get(user=parent_user))
-        if email_sent:
-            messages.success(request, f'Guardian account created for {student.full_name}. Sign-in ID: {parent_user.username} (or their email). Verification email sent.')
-        else:
-            messages.success(request, f'Guardian account created for {student.full_name}. Sign-in ID: {parent_user.username} (or their email). We could not send the verification email - share these details with the guardian directly.')
+        messages.success(request, f'Guardian account created for {student.full_name}. They can sign in now with {guardian_email} (or ID {parent_user.username}) and the password you set.')
     elif link_created:
         messages.success(request, f'{student.full_name} was linked to the existing guardian account {guardian_email}.')
     else:

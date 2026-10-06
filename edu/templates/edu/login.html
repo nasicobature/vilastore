@@ -1,38 +1,42 @@
-{% extends 'edu/base.html' %}
+{% extends 'edu/auth_base.html' %}
 
-{% block content %}
-<section class="split">
+{% block top_link %}New school? <a href="{% url 'edu:register' %}" class="font-semibold text-primary hover:underline">Create a free account</a>{% endblock %}
+
+{% block form_card %}
+<div>
+  <h1 class="font-display text-3xl font-bold">Welcome back</h1>
+  <p class="text-muted-foreground mt-2">Sign in to your school portal.</p>
+</div>
+
+<form method="post" class="mt-8 space-y-5" novalidate>
+  {% csrf_token %}
   <div>
-    <p class="eyebrow">Step 2</p>
-    <h1>Login as a {{ institution|title }} role</h1>
-    <p class="lead">Select the dashboard experience that matches your responsibilities.</p>
-    <div class="hint">Use the credentials assigned by your administrator.</div>
+    <label for="login-username" class="block text-sm font-semibold mb-2">Email or ID</label>
+    <input id="login-username" type="text" name="username" value="{{ initial_username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus
+      placeholder="you@school.com or your ID"
+      class="w-full h-12 px-4 rounded-xl border border-input bg-card text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition" />
   </div>
-  <div class="panel">
-    <h3>Sign in</h3>
-    <p class="muted">Use your username and password to access the dashboard.</p>
-    <form method="post" class="form-stack">
-      {% csrf_token %}
-      <label>
-        <span>Username</span>
-        <input type="text" name="username" required />
-      </label>
-      <label>
-        <span>Password</span>
-        <input type="password" name="password" required />
-      </label>
-      <button class="button" type="submit">Sign in</button>
-    </form>
-    <div class="role-grid role-grid-compact">
-      {% for role in roles %}
-        <span class="role-card disabled">
-          <span class="role-pill">{{ role.label }}</span>
-          <span class="role-action">Available roles</span>
-        </span>
-      {% endfor %}
+
+  <div>
+    <div class="flex items-center justify-between mb-2">
+      <label for="login-password" class="block text-sm font-semibold">Password</label>
+      <a href="{% url 'edu:forgot_password' %}" class="text-sm font-medium text-primary hover:underline">Forgot password?</a>
     </div>
+    {% include 'edu/partials/password_field.html' with field_id='login-password' field_name='password' %}
   </div>
-</section>
+
+  <button type="submit" data-submit-label="Signing in…" class="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-70 transition">
+    <span data-submit-text>Sign in</span>
+    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+  </button>
+</form>
+
+<div class="mt-8 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground flex gap-3">
+  <i data-lucide="info" class="w-4 h-4 flex-shrink-0 mt-0.5 text-primary"></i>
+  <p>Staff, students and parents: use the email or ID and password your school gave you. You'll be taken straight to your school's portal.</p>
+</div>
+
+<p class="mt-6 text-center text-sm text-muted-foreground">
+  Looking for your school's own page? <a href="{% url 'edu:school_portal_lookup' %}" class="font-medium text-primary hover:underline">Find your school</a>
+</p>
 {% endblock %}
-
-
