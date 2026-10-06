@@ -77,8 +77,10 @@ class EduPortalRoutingTests(TestCase):
             self.assertContains(response, "Create my school portal")
             for field in ("institution_name", "admin_full_name", "admin_email", "admin_phone", "admin_password"):
                 self.assertContains(response, f'name="{field}"')
-            # Package choice moved to payment time; the pricing table is no longer part of sign-up.
-            self.assertNotContains(response, "edu-pricing-table")
+            # The school picks its plan on the same page (compact list, not the big pricing table).
+            self.assertContains(response, "Choose your plan")
+            self.assertEqual(response.content.decode().count('name="subscription_package"'), 7)
+            self.assertContains(response, 'name="subscription_package" value="starter" class="sr-only" checked')
 
     def test_registration_preselects_package_and_billing_from_pricing_link(self):
         response = self.client.get(reverse("edu:secondary_register"), {
@@ -87,8 +89,8 @@ class EduPortalRoutingTests(TestCase):
         })
 
         html = response.content.decode()
-        self.assertIn('name="subscription_package" value="enterprise-plus"', html)
-        self.assertIn('name="subscription_billing_cycle" value="session"', html)
+        self.assertIn('name="subscription_package" value="enterprise-plus" class="sr-only" checked', html)
+        self.assertIn('name="subscription_billing_cycle" value="session" class="sr-only" data-billing-cycle checked', html)
 
     def test_edu_landing_nav_has_one_school_login_link(self):
         response = self.client.get(reverse("edu:index"))

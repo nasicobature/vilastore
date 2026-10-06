@@ -17,7 +17,7 @@
 {% block form_card %}
 <div>
   <h1 class="font-display text-3xl font-bold">Create your school portal</h1>
-  <p class="text-muted-foreground mt-2">Free for {{ trial_days|default:3 }} days. You only choose a plan when you're ready to pay.</p>
+  <p class="text-muted-foreground mt-2">Free for {{ trial_days|default:3 }} days. No payment needed today.</p>
 </div>
 
 {% if duplicate_institution and duplicate_portal_url %}
@@ -29,8 +29,6 @@
 
 <form method="post" enctype="multipart/form-data" class="mt-8 space-y-5" data-school-register-form novalidate>
   {% csrf_token %}
-  <input type="hidden" name="subscription_package" value="{{ default_subscription_package }}" />
-  <input type="hidden" name="subscription_billing_cycle" value="{{ default_subscription_cycle }}" />
 
   <fieldset>
     <legend class="block text-sm font-semibold mb-2">Type of school</legend>
@@ -100,6 +98,47 @@
     {% include 'edu/partials/password_field.html' with field_id='reg-password' field_name='admin_password' autocomplete='new-password' minlength=6 placeholder='At least 6 characters' %}
   </div>
 
+  <fieldset data-plan-picker>
+    <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+      <legend class="block text-sm font-semibold">Choose your plan <span class="font-normal text-muted-foreground">(based on number of students)</span></legend>
+      <div class="inline-flex rounded-lg bg-muted p-1 text-xs font-semibold" role="radiogroup" aria-label="Billing">
+        <label class="billing-option cursor-pointer">
+          <input type="radio" name="subscription_billing_cycle" value="termly" class="sr-only" data-billing-cycle {% if default_subscription_cycle != 'session' %}checked{% endif %} />
+          <span class="block rounded-md px-3 py-1.5">Per term</span>
+        </label>
+        <label class="billing-option cursor-pointer">
+          <input type="radio" name="subscription_billing_cycle" value="session" class="sr-only" data-billing-cycle {% if default_subscription_cycle == 'session' %}checked{% endif %} />
+          <span class="block rounded-md px-3 py-1.5">Per session <span class="text-success">-10%</span></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="space-y-2">
+      {% for package in pricing_packages %}
+        <label class="plan-option block cursor-pointer">
+          <input type="radio" name="subscription_package" value="{{ package.code }}" class="sr-only" {% if package.code == default_subscription_package %}checked{% endif %} />
+          <span class="flex items-center gap-3 rounded-xl border-2 border-border bg-card px-4 py-3 transition">
+            <span class="plan-dot w-4 h-4 rounded-full border-2 border-input flex-shrink-0"></span>
+            <span class="flex-1 min-w-0">
+              <strong class="block text-sm">{{ package.name }}</strong>
+              <span class="block text-xs text-muted-foreground">{{ package.student_range }}</span>
+            </span>
+            <span class="text-right">
+              {% if package.is_custom %}
+                <strong class="block text-sm">Custom</strong>
+                <span class="block text-xs text-muted-foreground">we'll contact you</span>
+              {% else %}
+                <strong class="block text-sm" data-plan-price data-term="&#8358;{{ package.term_amount_display }}" data-session="&#8358;{{ package.session_amount_display }}">&#8358;{% if default_subscription_cycle == 'session' %}{{ package.session_amount_display }}{% else %}{{ package.term_amount_display }}{% endif %}</strong>
+                <span class="block text-xs text-muted-foreground" data-plan-period>{% if default_subscription_cycle == 'session' %}per session{% else %}per term{% endif %}</span>
+              {% endif %}
+            </span>
+          </span>
+        </label>
+      {% endfor %}
+    </div>
+    <p class="mt-2 text-xs text-muted-foreground">You won't be charged now. Pay for this plan when your {{ trial_days|default:3 }}-day free trial ends, and you can change it any time.</p>
+  </fieldset>
+
   <details class="group rounded-xl border border-border bg-card" {% if form.address or form.state or form.lga %}open{% endif %}>
     <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold">
       <span>Add school address &amp; logo <span class="font-normal text-muted-foreground">(optional)</span></span>
@@ -129,12 +168,18 @@
     <span data-submit-text>Create my school portal</span>
     <i data-lucide="arrow-right" class="w-4 h-4"></i>
   </button>
-  <p class="text-center text-xs text-muted-foreground">Your free trial starts now. No payment needed today.</p>
+  <p class="text-center text-xs text-muted-foreground">Your free trial starts now.</p>
 </form>
 
 <style>
   .school-type-option input:checked + span { border-color: hsl(var(--primary)); background-color: hsl(var(--primary) / 0.06); }
   .school-type-option input:focus-visible + span { box-shadow: 0 0 0 3px hsl(var(--primary) / 0.3); }
+  .plan-option input:checked + span { border-color: hsl(var(--primary)); background-color: hsl(var(--primary) / 0.06); }
+  .plan-option input:checked + span .plan-dot { border-color: hsl(var(--primary)); border-width: 5px; }
+  .plan-option input:focus-visible + span,
+  .billing-option input:focus-visible + span { box-shadow: 0 0 0 3px hsl(var(--primary) / 0.3); }
+  .billing-option input:checked + span { background: hsl(var(--card)); color: hsl(var(--foreground)); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+  .billing-option span { color: hsl(var(--muted-foreground)); }
 </style>
 <script>
   (function () {
@@ -203,6 +248,18 @@
       refresh();
     });
     if (editing) openEditor(); else refresh();
+
+    form.querySelectorAll('[data-billing-cycle]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        var session = input.value === 'session';
+        form.querySelectorAll('[data-plan-price]').forEach(function (price) {
+          price.textContent = session ? price.dataset.session : price.dataset.term;
+        });
+        form.querySelectorAll('[data-plan-period]').forEach(function (period) {
+          period.textContent = session ? 'per session' : 'per term';
+        });
+      });
+    });
   })();
 </script>
 {% endblock %}
